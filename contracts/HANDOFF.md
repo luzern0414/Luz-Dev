@@ -1,6 +1,6 @@
 # Design handoff consumer contract
 
-Luz Design owns `HANDOFF.json`; Luz Dev consumes it without redefining approved product or visual behavior. Schema version `1.0` is mirrored byte-for-byte at `contracts/handoff.schema.json` and must match `$LUZ_DESIGN_ROOT/contracts/handoff.schema.json`.
+Luz System owns `HANDOFF.json`; Luz Dev consumes it without redefining approved product or visual behavior. Schema version `1.0` is mirrored byte-for-byte at `contracts/handoff.schema.json` and must match `D:\Codes\Luz-System\references\handoff.schema.json`. The paired Luz Design package below supplies only theme tokens and the document checker.
 
 ## Resolve the paired Design package
 
@@ -85,4 +85,4 @@ Return to Design when implementation would change:
 
 ## Schema ownership
 
-Luz Design owns the contract. Luz Dev may propose fields through a reviewed schema change. Until both copies match and the producer manifest uses the change, implementation does not rely on an undocumented extension.
+Luz System owns the contract. Luz Dev may propose fields through a reviewed schema change. Until both copies match and the producer manifest uses the change, implementation does not rely on an undocumented extension.

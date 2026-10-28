@@ -14,7 +14,7 @@ from pathlib import Path
 
 SKILLS_HOME = Path(os.environ.get("LUZ_SKILLS_HOME", r"D:\Codes\skills"))
 CODES = Path(r"D:\Codes")
-LUZ_SKILLS = {"luz-dev": "Luz-Dev", "luz-design": "Luz-Design", "luz-crawl": "Luz-Crawl", "luz-writing": "Luz-Writing"}
+LUZ_SKILLS = {"luz-dev": "Luz-Dev", "luz-system": "Luz-System", "luz-design": "Luz-Design", "luz-crawl": "Luz-Crawl", "luz-writing": "Luz-Writing"}
 AGENT_HOMES = (Path.home() / ".claude" / "skills", Path.home() / ".codex" / "skills")
 
 

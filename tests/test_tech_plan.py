@@ -201,7 +201,7 @@ class DesignAndLaunchTests(unittest.TestCase):
             plan = complete(plan)
             plan["design"] = {}
             errors, _ = tech_plan.check_plan(plan)
-            self.assertTrue(any("Luz Design" in error for error in errors))
+            self.assertTrue(any("Luz System" in error for error in errors))
 
             session = make_session(base / "design")
             self.assertEqual(run(base, "design", "01", "--session", str(session)), 0)
@@ -219,7 +219,7 @@ class DesignAndLaunchTests(unittest.TestCase):
         plan = complete(plan)
         plan.pop("design")
         errors, _ = tech_plan.check_plan(plan)
-        self.assertFalse(any("Luz Design" in error for error in errors))
+        self.assertFalse(any("Luz System" in error for error in errors))
 
 
 class FeatureTests(unittest.TestCase):

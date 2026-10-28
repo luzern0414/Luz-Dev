@@ -657,7 +657,8 @@ def main(argv: list[str] | None = None) -> int:
         "One task, one folder",
         "check_document.py",
         "Luz-Crawl",
-        "$luz-design",
+        "$luz-system",
+        "luz-design",
     ):
         if required_phrase not in skill:
             errors.append(f"SKILL.md missing required workflow phrase: {required_phrase}")

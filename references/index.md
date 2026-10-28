@@ -8,9 +8,9 @@ The Design package is resolved by `--design-root`, then `LUZ_DESIGN_ROOT`, then 
 
 | Need | Where |
 |---|---|
-| The skill itself (frontend experience owner) | `$LUZ_DESIGN_ROOT/SKILL.md` |
+| The skill itself (visual standards and page layout) | `$LUZ_DESIGN_ROOT/SKILL.md` |
 | Theme tokens for generated pages | `references/themes.json` or `design/shared/themes/themes.json` inside the Design package (found automatically) |
-| Approved designs to implement | Luz Design session folders (`NNN-项目/` with `99-delivery/MANIFEST.json` and `APPROVALS.json`) |
+| Approved designs to implement | Luz System session folders in `D:\Codes\skill输出\Luz-System` (`NNN-项目/` with `99-delivery/MANIFEST.json` and `APPROVALS.json`) |
 | How to consume a session | `references/design-integration.md` + `scripts/design_intake.py` |
 
 ## Dev routes
@@ -23,7 +23,7 @@ The Design package is resolved by `--design-root`, then `LUZ_DESIGN_ROOT`, then 
 | Business-logic patterns (orders, inventory and oversell, pricing, coupons, wallets, bookings, after-sales, flash sales, jobs, cache, multi-store) | `references/patterns/README.md` |
 | Security and feature standards | Agents: `references/standards.json`; humans: `references/standards.html` |
 | WeChat Pay, refund, reconciliation | `backend/09-wechat-pay/MODULE.md` (rules `PAY-*`, `RFD-*`) |
-| Frontend from Luz Design | `references/design-integration.md` |
+| Frontend from Luz System | `references/design-integration.md` |
 | Operations and launch | `references/operations.md` + `assets/deploy/` |
 | Qualifications, filings, licences | `references/compliance.md` |
 | Agreements and consent | `references/legal-documents.md` + `assets/legal/` + `backend/27-legal` |

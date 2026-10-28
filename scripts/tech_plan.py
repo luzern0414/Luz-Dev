@@ -121,7 +121,7 @@ SECTION_LIBRARY: dict[str, dict[str, Any]] = {
         "nav": "前端",
         "title": "页面与前端接入",
         "todo": [
-            "前端由 Luz Design 负责：用 tech_plan.py design NN --session <会话目录> 登记已批准的设计会话；尚无设计时先用 $luz-design 完成设计与批准。",
+            "前端由 Luz System 负责：用 tech_plan.py design NN --session <会话目录> 登记已批准的设计会话；尚无设计时先用 $luz-system 完成设计与批准。",
             "接入方式：绑定表位置（packages/contracts/design-bindings.json）、前端工程与技术栈、令牌来源、结果页落点（references/design-integration.md、result-patterns.md）。",
         ],
     },
@@ -137,13 +137,13 @@ SECTION_LIBRARY: dict[str, dict[str, Any]] = {
     },
     "routes": {
         "nav": "接口",
-        "title": "接口总览",
+        "title": "接口约定",
         "todo": ["接口表：方法 | 路由 | 身份/权限 | 输入输出 | 错误码与幂等。"],
         "specDriven": True,
     },
     "data": {
         "nav": "数据",
-        "title": "数据库设计",
+        "title": "数据库约定",
         "todo": ["实体与关键字段、唯一约束、并发控制、金额单位、迁移与回滚。"],
         "specDriven": True,
     },
@@ -797,16 +797,16 @@ def check_plan(plan: Mapping[str, Any], stage: str = "review") -> tuple[list[str
             if not str(feature.get("name", "")).strip() or not str(feature.get("description", "")).strip():
                 errors.append(f"定制功能 {feature.get('id')} 缺少名称或说明")
 
-    # Luz Design frontend.
+    # Luz System frontend.
     if mode == "implementation" and FRONTEND_TYPES.intersection(plan.get("projectTypes", [])):
         design = plan.get("design") or {}
         if not design:
-            errors.append("包含前端但未登记 Luz Design 设计会话：运行 tech_plan.py design NN --session <会话目录>（或 --skip 原因）")
+            errors.append("包含前端但未登记 Luz System 设计会话：运行 tech_plan.py design NN --session <会话目录>（或 --skip 原因）")
         elif design.get("skip"):
             if not str(design["skip"]).strip():
-                errors.append("跳过 Luz Design 接入必须写明原因")
+                errors.append("跳过 Luz System 接入必须写明原因")
         elif stage in {"approve", "development", "delivery"} and design.get("errors"):
-            warnings.append("Luz Design 设计尚未全部批准：" + "；".join(design["errors"]))
+            warnings.append("Luz System 设计尚未全部批准：" + "；".join(design["errors"]))
 
     # Decisions.
     for decision in plan.get("decisions", []):
@@ -1369,6 +1369,9 @@ def render_block(block: Mapping[str, Any]) -> str:
     return ""
 
 
+TOOL_FACT = re.compile(r"Luz[- ]?(Crawl|Dev|Design|Writing)|LuzCrawl", re.IGNORECASE)  # how we research is not content
+
+
 def render_research(plan: Mapping[str, Any]) -> str:
     """Conclusions reused from knowledge/ are content; source lists, counts and tiers are not shown."""
     fact_ids = plan.get("research", {}).get("knowledgeFacts", [])
@@ -1377,30 +1380,41 @@ def render_research(plan: Mapping[str, Any]) -> str:
     facts = [f for f in kb.Knowledge().facts["facts"] if f["id"] in fact_ids]
     if not facts:
         return ""
-    rows = [[f["topic"], f["statement"]] for f in facts]
-    return "<h3>已核实的平台与法规要求</h3>" + table(["主题", "要求"], rows)
+    rows = [[f["topic"], f["statement"]] for f in facts if not TOOL_FACT.search(f["topic"] + f["statement"])]
+    return "<h3>已核实的平台与法规要求</h3>" + table(["主题", "要求"], rows) if rows else ""
+
+
+STATE_TAGS = {"done": ("已实现", "good"), "n/a": ("不适用", "plain"), "open": ("待定", "warn")}
 
 
 def render_checklist(plan: Mapping[str, Any]) -> str:
+    """One table grouped by domain; a status column appears only when some rule is not simply planned."""
     standards = load_standards()
     index = {rule["id"]: rule for rule in standards.get("rules", [])}
     domains = {domain["id"]: domain["name"] for domain in standards.get("domains", [])}
-    groups: dict[str, list[list[str]]] = {}
+    groups: dict[str, list[tuple[str, str, str]]] = {}
     for item in plan.get("checklist", {}).get("rules", []):
         rule = index.get(item.get("id"))
         if rule is None:
             continue
-        status = item.get("status", "open")
-        state = {"planned": tag("纳入", "good"), "done": tag("已实现", "good"), "n/a": tag("不适用", "plain")}.get(status, tag("待定", "warn"))
-        level = tag("必须", "strong") if rule.get("level") == "MUST" else tag("建议", "plain")
         groups.setdefault(rule.get("domain", "other"), []).append(
-            [f"{text(rule.get('title', ''))} {level}", state, text(item.get("note", "")) or "—"]
-        )
-    parts = []
+            (text(rule.get("title", "")), str(item.get("status", "open")), text(item.get("note", "")) or "—"))
+    if not groups:
+        return ""
+    with_state = any(status != "planned" for rows in groups.values() for _t, status, _n in rows)
+    columns = ["领域", "要求", "做法"] + (["状态"] if with_state else [])
+    body = []
     for domain_id, rows in groups.items():
-        parts.append(f"<h3>{html.escape(domains.get(domain_id, domain_id))}</h3>")
-        parts.append(table(["要求", "本项目", "做法"], rows, raw=True))
-    return "".join(parts)
+        for i, (title, status, note) in enumerate(rows):
+            cells = [f'<td rowspan="{len(rows)}">{html.escape(domains.get(domain_id, domain_id))}</td>'] if i == 0 else []
+            cells += [f'<td data-label="要求">{title}</td>', f'<td data-label="做法">{note}</td>']
+            if with_state:
+                label, tone = STATE_TAGS.get(status, ("纳入", "good"))
+                cells.append(f'<td class="c" data-label="状态">{tag(label, tone)}</td>')
+            body.append("<tr>" + "".join(cells) + "</tr>")
+    head = "".join(f'<th scope="col">{c}</th>' for c in columns)
+    return ("<h3>规范逐条落实</h3>"
+            f'<div class="table-wrap"><table class="dense grouped"><thead><tr>{head}</tr></thead><tbody>{"".join(body)}</tbody></table></div>')
 
 
 def render_features(plan: Mapping[str, Any]) -> str:
@@ -1412,11 +1426,10 @@ def render_features(plan: Mapping[str, Any]) -> str:
         spec = index.get(item.get("id"))
         if spec is None:
             continue
-        status = item.get("status", "open")
-        state = {"planned": tag("纳入", "good"), "done": tag("已实现", "good"), "n/a": tag("不适用", "plain")}.get(status, tag("待定", "warn"))
-        need = tag("必备", "strong") if spec.get("requirement") == "required" else tag("按需", "plain")
+        status = str(item.get("status", "open"))
+        label, tone = STATE_TAGS.get(status, ("纳入", "good"))
         groups.setdefault(spec.get("projectType"), []).append(
-            [text(spec.get("feature", "")), need, state, text(item.get("note", "")) or text(spec.get("acceptance", ""))]
+            [text(spec.get("feature", "")), text(item.get("note", "")) or text(spec.get("acceptance", "")), status, tag(label, tone)]
         )
     parts = []
     if groups:
@@ -1424,7 +1437,10 @@ def render_features(plan: Mapping[str, Any]) -> str:
         for project_type, rows in groups.items():
             if len(groups) > 1:
                 parts.append(f"<p><strong>{html.escape(type_names.get(project_type, str(project_type)))}</strong></p>")
-            parts.append(table(["功能", "要求", "本项目", "内容与验收"], rows, raw=True))
+            if any(row[2] != "planned" for row in rows):
+                parts.append(table(["功能", "内容与验收", "状态"], [[r[0], r[1], r[3]] for r in rows], raw=True))
+            else:
+                parts.append(table(["功能", "内容与验收"], [r[:2] for r in rows], raw=True))
     custom = plan.get("customFeatures", [])
     if custom:
         parts.append("<h3>定制功能</h3>")
@@ -1468,6 +1484,33 @@ def section_parts(plan: Mapping[str, Any], section: Mapping[str, Any]) -> list[t
 
 
 H3 = re.compile(r"<h3>")
+TABLE_HTML = re.compile(r"<table([^>]*)>(.*?)</table>", re.DOTALL)
+TAG_HTML = re.compile(r"<[^>]+>")
+SHORT_CELL = 10  # visible characters; short columns (status, numbers, codes, yes/no) are centred
+
+
+def finish_tables(markup: str) -> str:
+    """Centre short columns and label every cell, so a table reads as cards on a phone."""
+    def one(match: re.Match[str]) -> str:
+        attrs, inner = match.group(1), match.group(2)
+        if "grouped" in attrs:  # rowspan shifts columns; the grouped table only gets labels for its fixed cells
+            return match.group(0)
+        heads = [html.unescape(TAG_HTML.sub("", h)).strip() for h in re.findall(r"<th[^>]*>(.*?)</th>", inner, re.DOTALL)]
+        rows = re.findall(r"<tr>(.*?)</tr>", inner.split("</thead>", 1)[-1], re.DOTALL)
+        cells = [re.findall(r"<td>(.*?)</td>", row, re.DOTALL) for row in rows]
+        width = max((len(r) for r in cells), default=0)
+        short = [bool(cells) and all(len(html.unescape(TAG_HTML.sub("", r[c])).strip()) <= SHORT_CELL for r in cells if c < len(r))
+                 for c in range(width)]
+        short = [flag and c > 0 for c, flag in enumerate(short)]  # the first column names the object
+
+        def cell(c: int, value: str) -> str:
+            label = f' data-label="{html.escape(heads[c], quote=True)}"' if c < len(heads) and heads[c] else ""
+            cls = ' class="c"' if c < len(short) and short[c] else ""
+            return f"<td{cls}{label}>{value}</td>"
+        body = "".join("<tr>" + "".join(cell(c, v) for c, v in enumerate(r)) + "</tr>" for r in cells)
+        head = inner.split("<tbody>", 1)[0]
+        return f"<table{attrs}>{head}<tbody>{body}</tbody></table>"
+    return TABLE_HTML.sub(one, markup)
 
 
 def number_parts(parts: list[tuple[str, str, str]]) -> str:
@@ -1479,8 +1522,10 @@ def number_parts(parts: list[tuple[str, str, str]]) -> str:
         anchor = html.escape(anchor, quote=True)
         contents.append(f'<li><a href="#{anchor}">{index} {html.escape(title)}</a></li>')
         sections.append(f'<section id="{anchor}"><h2>{index} {html.escape(title)}</h2>{body}</section>')
-    toc = f'<section id="contents"><h2>目录</h2><ul class="toc">{"".join(contents)}</ul></section>' if len(parts) > 6 else ""
-    return toc + "".join(sections)
+    # Luz Design: no contents by default; past 8 sections a light list on the right of wide screens,
+    # after the body in document order, section names only, hidden on narrow screens.
+    toc = f'<div class="toc"><ol>{"".join(contents)}</ol></div>' if len(parts) > 8 else ""
+    return finish_tables("".join(sections)) + toc
 
 
 def ordered_sections(plan: Mapping[str, Any]) -> list[Mapping[str, Any]]:
@@ -1893,7 +1938,7 @@ def command_spec(args: argparse.Namespace) -> int:
 
 
 def command_design(args: argparse.Namespace) -> int:
-    """Register the Luz Design session this plan's frontend comes from (references/design-integration.md)."""
+    """Register the Luz System session this plan's frontend comes from (references/design-integration.md)."""
     plan, html_path, data_path = _load(args.plan, args.output_root)
     if args.skip:
         plan["design"] = {"skip": args.skip, "checkedAt": now_iso()}
@@ -2014,7 +2059,7 @@ def build_parser() -> argparse.ArgumentParser:
     feature.add_argument("--desc")
     feature.add_argument("--priority", default="P1", choices=("P0", "P1", "P2"))
     feature.add_argument("--module", action="append", help="涉及模块，可逗号分隔；会加入方案模块并更新核对表")
-    feature.add_argument("--source", default="用户需求", help="来源，例如 用户需求、Luz Design F-003")
+    feature.add_argument("--source", default="用户需求", help="来源，例如 用户需求、Luz System F-003")
     feature.add_argument("--remove", help="删除指定编号，如 CF-02")
     feature.add_argument("--none", help="本项目没有定制功能的说明")
     feature.set_defaults(func=command_feature)
@@ -2026,10 +2071,10 @@ def build_parser() -> argparse.ArgumentParser:
     spec_group.add_argument("--remove", help="删除指定 id 的模块设计")
     spec.set_defaults(func=command_spec)
 
-    design = with_plan("design", "登记 Luz Design 设计会话并核验批准与哈希")
+    design = with_plan("design", "登记 Luz System 设计会话并核验批准与哈希")
     group = design.add_mutually_exclusive_group(required=True)
-    group.add_argument("--session", help="Luz Design 会话目录，例如 D:\\Codes\\skill输出\\Luz-Design\\001-项目")
-    group.add_argument("--skip", help="不接入 Luz Design 的原因（例如纯后端任务）")
+    group.add_argument("--session", help="Luz System 会话目录，例如 D:\\Codes\\skill输出\\Luz-System\\001-项目")
+    group.add_argument("--skip", help="不接入 Luz System 的原因（例如纯后端任务）")
     design.set_defaults(func=command_design)
 
     adopt = sub.add_parser("adopt", help="把旧版 HTML 方案迁移为数据化方案")

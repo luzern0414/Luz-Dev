@@ -1,4 +1,4 @@
-"""Luz Design 会话接入：批准与哈希、ID 提取、绑定表、前端覆盖与原型数据残留检查。"""
+"""Luz System 会话接入：批准与哈希、ID 提取、绑定表、前端覆盖与原型数据残留检查。"""
 
 from __future__ import annotations
 
@@ -139,7 +139,7 @@ class DesignIntakeTests(unittest.TestCase):
             code, result = run("check", str(out), "--frontend", str(app))
             self.assertEqual(code, 1)
             self.assertTrue(any("mock" in e for e in result["errors"]))
-            self.assertTrue(any("A-099" in e and "回到 Luz Design" in e for e in result["errors"]))
+            self.assertTrue(any("A-099" in e and "回到 Luz System" in e for e in result["errors"]))
 
     def test_rebinding_keeps_filled_rows_and_flags_removed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

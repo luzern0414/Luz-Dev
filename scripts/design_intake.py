@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Consume a Luz Design session and keep the shipped frontend bound to it.
+"""Consume a Luz System session and keep the shipped frontend bound to it.
 
-A Luz Design session folder (``NNN-项目/``) holds hash-approved artifacts:
+A Luz System session folder (``D:\\Codes\\skill输出\\Luz-System\\NNN-项目``) holds hash-approved artifacts:
 ``99-delivery/MANIFEST.json``, ``99-delivery/APPROVALS.json``, the system architecture,
 system design and an interactive prototype whose elements carry stable IDs
 (P- pages, A- actions, D- entities, I- integrations, FL- flows, S- states …).
@@ -127,12 +127,12 @@ def merge_ids(target: dict, extra: dict) -> None:
 
 def inspect_session(session: Path) -> dict[str, Any]:
     session = session.resolve()
-    # Current Luz Design keeps every working file under raw/ and publishes one HTML at the session root;
+    # Luz System keeps every working file under raw/ and publishes one HTML at the session root;
     # earlier sessions kept 99-delivery/ at the root. Paths in the manifest are relative to the working folder.
     work = session / "raw" if (session / "raw" / "99-delivery" / "MANIFEST.json").is_file() else session
     manifest_path = work / "99-delivery" / "MANIFEST.json"
     if not manifest_path.is_file():
-        raise DesignError(f"不是 Luz Design 会话目录（缺少 raw/99-delivery/MANIFEST.json）: {session}")
+        raise DesignError(f"不是 Luz System 会话目录（缺少 raw/99-delivery/MANIFEST.json）: {session}")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     approvals_path = work / manifest.get("approvals_file", "99-delivery/APPROVALS.json")
     approvals = json.loads(approvals_path.read_text(encoding="utf-8")) if approvals_path.is_file() else {}
@@ -282,7 +282,7 @@ def check_bindings(bindings: dict[str, Any], frontend: Path | None) -> tuple[lis
             errors.append(f"正式代码仍引用原型模拟数据或 mock：{fixture}")
         unknown = sorted(key for key in scan["ids"] if key.startswith("A-") and key not in {row["id"] for row in bindings.get("actions", [])})
         for key in unknown:
-            errors.append(f"前端出现设计中不存在的操作 {key}；新增交互需先回到 Luz Design")
+            errors.append(f"前端出现设计中不存在的操作 {key}；新增交互需先回到 Luz System")
         coverage = {"actions": f"{len(active) - len(missing)}/{len(active)}", "pages": f"{len(pages) - len(missing_pages)}/{len(pages)}"}
     return errors, coverage
 

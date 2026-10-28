@@ -1,6 +1,6 @@
 # 智能体（agent）
 
-Luz Dev 的智能体开发部分：为小程序、App 与管理后台实现业务助手（LangGraph）；对话界面本身由 Luz Design 定义。
+Luz Dev 的智能体开发部分：为小程序、App 与管理后台实现业务助手（LangGraph）；对话界面本身由 Luz System 定义。
 
 ```
 agent/

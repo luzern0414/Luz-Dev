@@ -49,6 +49,6 @@ uvicorn app:app --app-dir backend --reload
 ## 职责边界
 
 - Luz Dev 负责 API、数据模型、事务、权限执行、审计、缓存、后台任务、部署与运维。
-- Luz Design 负责用户角色、流程、页面层级、视觉令牌、组件、交互状态、Figma/素材与 API intention。
+- Luz System 负责用户角色、流程、页面层级、组件、交互状态，Luz Design 负责视觉令牌、Figma/素材与 API intention。
 - 平台限制导致用户体验变化时，先向 Design 提供约束和选项并更新交接，不在后端或前端静默改写已批准体验。
 - 页面到 API 的绑定不作为后端设计的依据；以 `API.md` 和各模块 `MODULE.md` 的实际契约为准。

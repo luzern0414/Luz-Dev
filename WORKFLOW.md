@@ -14,7 +14,7 @@ Start from `knowledge/`: a new plan already carries the fresh sources and facts 
 
 ### 0b. Plan
 
-List the custom features (`tech_plan.py feature`). Register the Luz Design session for frontend work (`tech_plan.py design NN --session …`). Fill the launch section: qualifications and filings, agreements, deployment, launch checklist. Complete every other section. Work through the standards checklist: each applicable MUST rule is `planned` with how the plan satisfies it, or `n/a` with why. Each required feature baseline is in scope. Questions only the user can answer are recorded as decisions; blocking ones are marked. When the plan covers user-facing screens without an approved handoff, the screens section comes from $luz-design.
+List the custom features (`tech_plan.py feature`). Register the Luz System session for frontend work (`tech_plan.py design NN --session …`). Fill the launch section: qualifications and filings, agreements, deployment, launch checklist. Complete every other section. Work through the standards checklist: each applicable MUST rule is `planned` with how the plan satisfies it, or `n/a` with why. Each required feature baseline is in scope. Questions only the user can answer are recorded as decisions; blocking ones are marked. When the plan covers user-facing screens without an approved handoff, the screens section comes from $luz-design.
 
 **Gate:** `tech_plan.py submit NN` passes — no `todo` blocks or placeholder text, research thresholds met, custom features listed, design session registered for frontend plans, no unhandled MUST rule, no dangling source reference. The plan status becomes 待审核. Qualifications and filings that need the merchant are handed over now, because they take time.
 
@@ -59,9 +59,9 @@ Implement one end-to-end outcome through the required layers:
 
 **Gate:** happy path, invalid input, unauthorized access, duplicate request, dependency failure, and recovery are exercised.
 
-## 4. Frontend integration (Luz Design)
+## 4. Frontend integration (Luz System)
 
-The frontend experience comes from the approved Luz Design session (`references/design-integration.md`).
+The frontend experience comes from the approved Luz System session (`references/design-integration.md`).
 
 - `design_intake.py inspect --require architecture,system_design,prototype` passes: approvals and hashes match.
 - `design_intake.py bind` creates `packages/contracts/design-bindings.json`; every action is bound to an OpenAPI route, a navigation, a local interaction, or a platform capability; every entity and integration is mapped.

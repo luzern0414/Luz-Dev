@@ -1,12 +1,12 @@
-# 接入 Luz Design 前端
+# 接入 Luz System 前端设计
 
-分工：**Luz Design 负责前端的体验与界面**（模块范围、架构、系统设计、视觉、可交互原型，均经用户按哈希批准）；**Luz Dev 负责把它变成可上线的前端**：真实接口与数据、登录与权限、状态处理、构建、联调、发布。Luz Dev 不改变已批准的页面、流程、权限与层级；需要改动时退回 Luz Design。
+分工：**Luz System 负责系统设计与前端的体验和界面**（模块范围、架构、功能清单、界面、可交互原型与硬件，均经用户按哈希批准；视觉标准来自 Luz Design）；**Luz Dev 负责把它变成可上线的前端**：真实接口与数据、登录与权限、状态处理、构建、联调、发布。Luz Dev 不改变已批准的页面、流程、权限与层级；需要改动时退回 Luz System。
 
 工具：`scripts/design_intake.py`（测试 `tests/test_design_intake.py`）。
 
 ## 1. 设计产物与稳定 ID
 
-Luz Design 会话目录 `NNN-项目/`：
+Luz System 会话目录 `D:\Codes\skill输出\Luz-System\NNN-项目\`：
 
 | 文件 | 内容 |
 |---|---|
@@ -34,7 +34,7 @@ Luz Design 会话目录 `NNN-项目/`：
 
 ```powershell
 # 1) 核验：阶段已批准，且文件与批准时的哈希一致（原型还核验浏览器验收截图）
-python -X utf8 scripts/design_intake.py inspect "D:\Codes\skill输出\Luz-Design\001-健身房小程序和后台系统" --require architecture,system_design,prototype --out <方案数据目录>\design-intake.json
+python -X utf8 scripts/design_intake.py inspect "D:\Codes\skill输出\Luz-System\001-健身房小程序和后台系统" --require architecture,system_design,prototype --out <方案数据目录>\design-intake.json
 
 # 2) 生成绑定表：每个操作 / 实体 / 集成 / 页面一行
 python -X utf8 scripts/design_intake.py bind "<会话目录>" --out <项目>\packages\contracts\design-bindings.json
@@ -55,9 +55,9 @@ python -X utf8 scripts/design_intake.py check <绑定表> --frontend <项目>\ap
 | 保留 ID | 页面根元素与操作控件保留 `data-page-id`、`data-action-id`（或在组件中用常量标注），用于覆盖检查、埋点与自动化测试 |
 | 替换模拟数据 | 原型中的 `data-fixture-id` 与 DEMO 数据全部换成接口数据；正式代码不引用 mock 目录（PROC-001） |
 | 状态 | 原型中每个 `data-state-kind`（加载、空、错误、成功、禁用）都要由真实接口状态驱动，补齐超时、离线、无权限、登录过期 |
-| 令牌 | 颜色、字号、间距使用设计令牌（Luz Design 主题），不写死数值 |
-| 新增交互 | 前端出现设计中不存在的 `A-` 操作时检查失败；先回到 Luz Design 补设计并重新批准 |
-| 技术约束 | 实现中发现平台限制（例如支付必须先查单再展示结果）时，把约束与选项写给 Luz Design，由其更新设计 |
+| 令牌 | 颜色、字号、间距使用设计令牌（Luz Design 主题，经 Luz System 设计确定），不写死数值 |
+| 新增交互 | 前端出现设计中不存在的 `A-` 操作时检查失败；先回到 Luz System 补设计并重新批准 |
+| 技术约束 | 实现中发现平台限制（例如支付必须先查单再展示结果）时，把约束与选项写给 Luz System，由其更新设计 |
 | 结果页 | 支付、提交、异步任务的落点按 `references/result-patterns.md` |
 | 对照验收 | 关键页面截图与原型验收截图对照，差异写入实施记录 |
 
