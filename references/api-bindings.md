@@ -1,6 +1,6 @@
 # 小程序模块 ↔ 后端模块 ↔ 接口
 
-小程序界面语义在 `$LUZ_DESIGN_ROOT/references/system/miniprogram.md` 和项目 `HANDOFF.json`，后端模块在 `backend/NN-name/`，接口以 `backend/API.md` 附录 A 为准（状态列：已实现 / 设计 / 待建）。前端改接口前先改后端 `MODULE.md` 与 `API.md`，再改本表。前缀 `/api/v1/app` 省略。
+小程序界面语义在 Luz System `references/miniprogram-design.html` 和项目 `HANDOFF.json`，后端模块在 `backend/NN-name/`，接口以 `backend/API.md` 附录 A 为准（状态列：已实现 / 设计 / 待建）。前端改接口前先改后端 `MODULE.md` 与 `API.md`，再改本表。前缀 `/api/v1/app` 省略。
 
 | 小程序模块 | 后端模块 | 接口 |
 |---|---|---|

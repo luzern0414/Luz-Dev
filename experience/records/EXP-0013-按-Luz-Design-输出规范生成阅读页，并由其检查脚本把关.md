@@ -11,6 +11,9 @@ evidence: ["check: 方案 08、standards.html、knowledge/index.html 均通过 c
 reusable_assets: []
 supersedes: ""
 superseded_by: ""
+key: "plan-page-layout"
+uses: 1
+last_confirmed: "2026-10-26T17:09:53+08:00"
 ---
 
 # 按 Luz Design 输出规范生成阅读页，并由其检查脚本把关

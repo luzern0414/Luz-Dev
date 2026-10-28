@@ -15,3 +15,6 @@ build/
 coverage/
 playwright-report/
 .DS_Store
+# Experience store: personal data never goes into the public notes.json
+*.local.json
+experience/.record-experience.lock

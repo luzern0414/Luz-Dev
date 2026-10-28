@@ -1,6 +1,6 @@
 # 湘味小厨 · 后端需求清单
 
-对应前端需求：`$LUZ_DESIGN_ROOT/references/system/miniprogram.md` 与项目 `HANDOFF.json`（示例店名，上线前替换）。
+对应前端需求：Luz System `references/miniprogram-design.html` 与项目 `HANDOFF.json`（示例店名，上线前替换）。
 
 ## 1 基本信息
 

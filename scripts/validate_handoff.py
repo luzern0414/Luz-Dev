@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate a Luz Design HANDOFF.json against the paired schema and local references."""
+"""Validate a Luz System HANDOFF.json against the paired schema and local references."""
 
 from __future__ import annotations
 

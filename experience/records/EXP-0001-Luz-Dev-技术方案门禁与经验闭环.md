@@ -11,6 +11,9 @@ evidence: ["test:python -X utf8 -m unittest -v tests.test_skill_automation => 8 
 reusable_assets: ["scripts/create_tech_plan.py", "scripts/record_experience.py"]
 supersedes: ""
 superseded_by: ""
+key: "plan-gate-and-experience-lifecycle"
+uses: 1
+last_confirmed: "2026-10-26T11:49:31+08:00"
 ---
 
 # Luz Dev 技术方案门禁与经验闭环

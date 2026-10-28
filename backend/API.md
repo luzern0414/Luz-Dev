@@ -46,7 +46,7 @@
 
 筛选与排序的通用写法见 `SPEC.md` §3.4：`status=a,b`、`from=&to=`、`keyword=`、`sort=-created_at,amount`（字段白名单）。
 
-小程序商品列表默认 `limit=10`，与前端“每页 10 条”一致（见 `$LUZ_DESIGN_ROOT/references/system/miniprogram.md` 与 handoff 页面规范）。
+小程序商品列表默认 `limit=10`，与前端“每页 10 条”一致（见 Luz System `references/miniprogram-design.html` 与 handoff 页面规范）。
 
 ### 1.5 排序与筛选
 
@@ -295,7 +295,7 @@
 | GET / POST / PATCH / DELETE | `/api/v1/app/cart` · `/items` · `/items/{id}` · `POST /api/v1/app/cart/merge`（登录合并） · `DELETE /api/v1/app/cart`（清空） | access | yes(low) | 设计 / 待建 |
 | GET / POST | `/api/v1/app/favorites` · `DELETE /{product_id}` | access | yes(low) | 待建 |
 | POST | `/api/v1/app/media/presign`（上传预签名） | access | no | 待建 |
-| 全部 | `/api/v1/admin/products*` · `/categories*` · `/set-meals*` · `/stock*`（见 `$LUZ_DESIGN_ROOT/references/system/web-admin.md`） | `product:*` 等 | no | 待建 |
+| 全部 | `/api/v1/admin/products*` · `/categories*` · `/set-meals*` · `/stock*`（见 Luz System `references/admin-design.html`） | `product:*` 等 | no | 待建 |
 
 ### A.3 P3 地址与定位
 

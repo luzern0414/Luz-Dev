@@ -1,0 +1,70 @@
+{
+  "description": "Luz Dev 每次调用后沉淀的偏好、教训与有效信息。由 scripts/record_experience.py note 写入；同一 key 替换，不追加。",
+  "caps": {
+    "preference": 60,
+    "lesson": 120,
+    "fact": 120
+  },
+  "entries": [
+    {
+      "kind": "preference",
+      "key": "base-then-custom-features",
+      "text": "方案页在结论之后先列这类系统的基础功能（逐项标注包含或不适用），再列本项目的定制功能，然后才是调研、设计和架构。",
+      "why": "SKILL.md 方案结构；EXP-0012",
+      "created": "2026-10-28T14:32:05+08:00",
+      "last_confirmed": "2026-10-28T14:32:05+08:00",
+      "uses": 1,
+      "previous": null
+    },
+    {
+      "kind": "preference",
+      "key": "one-task-one-folder",
+      "text": "一个需求只建一个项目文件夹（skill输出/Luz-Dev/序号-主题/，成品 HTML 加 raw/）；后续修改用 revise 修订同一方案，只告诉用户一个要打开的 HTML。",
+      "why": "同一需求曾生成多个方案文件夹，用户不知道该看哪个（EXP-0013）",
+      "created": "2026-10-28T14:32:05+08:00",
+      "last_confirmed": "2026-10-28T14:32:05+08:00",
+      "uses": 1,
+      "previous": null
+    },
+    {
+      "kind": "preference",
+      "key": "plan-approved-before-build",
+      "text": "任何代码、数据、配置或部署改动之前，技术方案必须得到用户明确批准；批准绑定方案内容哈希，内容变化后要重新提交、重新批准。",
+      "why": "SKILL.md 强制技术方案门禁（tech_plan.py approve / gate）；EXP-0005",
+      "created": "2026-10-28T14:32:04+08:00",
+      "last_confirmed": "2026-10-28T14:32:04+08:00",
+      "uses": 1,
+      "previous": null
+    },
+    {
+      "kind": "preference",
+      "key": "process-info-off-page",
+      "text": "页面只放内容；来源与调研统计、审批状态与哈希、修订记录、时间戳、文件路径留在 raw/plan.json 和对话里，待决问题在对话里直接问用户。",
+      "why": "SKILL.md 阅读页规则；check_document.py 把过程信息判为错误（EXP-0013）",
+      "created": "2026-10-28T14:32:06+08:00",
+      "last_confirmed": "2026-10-28T14:32:06+08:00",
+      "uses": 1,
+      "previous": null
+    },
+    {
+      "kind": "preference",
+      "key": "reading-page-check-document",
+      "text": "方案页、规范页和知识库页按 Luz Design 阅读页规则生成，标题在首行、无应用外壳、字号只用 14/16/20/24/32，并通过 Luz Design 的 check_document.py，有 ERROR 不能提交。",
+      "why": "SKILL.md「Plan pages follow the Luz Design output rules」；EXP-0013",
+      "created": "2026-10-28T14:32:05+08:00",
+      "last_confirmed": "2026-10-28T14:32:05+08:00",
+      "uses": 1,
+      "previous": null
+    },
+    {
+      "kind": "preference",
+      "key": "real-backend-data-only",
+      "text": "生产页面只显示真实后端数据；原型里的模拟数据、DEMO 数据和 mock 引用必须全部换成接口数据。",
+      "why": "SKILL.md Engineering rules；design_intake.py check 拒绝原型数据残留",
+      "created": "2026-10-28T14:32:05+08:00",
+      "last_confirmed": "2026-10-28T14:32:05+08:00",
+      "uses": 1,
+      "previous": null
+    }
+  ]
+}

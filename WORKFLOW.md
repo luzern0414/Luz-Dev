@@ -110,7 +110,16 @@ For reviews and analyses, capture the finding, method, limitations, and evidence
 
 Record every reusable conclusion from this task's research as a fact in `knowledge/` (`knowledge.py fact`, citing its sources) so the next project does not search again. When the lesson is a general rule (a platform limit, a security requirement, a failure mode, a launch blocker), add or correct it in `references/standards.json` with its source and check date and rebuild `references/standards.html`, so every later plan receives it in its checklist.
 
-**Output:** an `experience/records/EXP-NNNN-主题.md` record, an updated `experience/INDEX.md`, new facts in `knowledge/`, any new or corrected standard rule, and any non-sensitive reusable candidate.
+**Output:** an `experience/records/EXP-NNNN-主题.md` record (or the existing record on the same `key`, updated in place), an updated `experience/INDEX.md`, new facts in `knowledge/`, any new or corrected standard rule, and any non-sensitive reusable candidate.
+
+### 每次调用后沉淀
+
+Mandatory on every call, whatever its outcome:
+
+1. At the start, `record_experience.py search <关键词>` and apply the matching preferences, lessons and facts.
+2. Before finishing, `record_experience.py note --kind preference|lesson|fact --key K --text "…" [--why "…"]` for each preference the user stated or corrected, each route, source, parameter or fix that proved effective or failed, and each rule correction. Write the general principle, not task details.
+3. Same topic, same key: the new statement replaces the old one (one `previous` kept). Caps: preferences 60, lessons 120, facts 120, active records 120; `prune` removes the least valuable, `check` fails on duplicates, private data and overflow.
+4. No personal or client data, local paths or credentials; those stay in a git-ignored `*.local.json`.
 
 **Gate:** candidate experience is not used as a default rule. Promotion requires tests, production evidence, or explicit user confirmation. Reusable code has a source, dependencies, tests, usage example, security boundary, and limitations. Deprecated records state why and what replaces them.
 
@@ -120,4 +129,4 @@ When scope changes after approval, run `tech_plan.py revise NN --note "…"`, up
 
 When a design change arrives, update the handoff or delta record first, identify affected source and endpoints, then implement and test the change. When implementation reveals a platform constraint, send the exact constraint and options back to Design before changing the user experience.
 
-When a task changes existing behavior, search prior experience again, write the new plan or append a revision, and create a new experience record even when the old record is superseded.
+When a task changes existing behavior, search prior experience again, write the new plan or append a revision, and record the experience under the existing topic `key` so the old record is updated in place; use a new key only for a genuinely new topic, and `deprecate` the old record with `--superseded-by` when a different topic replaces it.

@@ -1,6 +1,6 @@
 # Intelligent agent implementation
 
-Start with `../agent/README.md`, then read the service specification and event protocol. The agent interface reference is in the paired Design skill at `$LUZ_DESIGN_ROOT/references/system/agents.md`.
+Start with `../agent/README.md`, then read the service specification and event protocol. The agent interface design rules are in Luz System `references/agent-design.html`.
 
 ## Boundary
 

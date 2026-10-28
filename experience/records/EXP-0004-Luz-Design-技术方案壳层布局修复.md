@@ -1,16 +1,19 @@
 ---
 id: "EXP-0004"
 title: "Luz Design 技术方案壳层布局修复"
-status: candidate
+status: deprecated
 created: "2026-10-26T13:46:43+08:00"
-updated: "2026-10-26T13:46:43+08:00"
+updated: "2026-10-28T14:31:38+08:00"
 task_mode: "implementation"
 plan: "D:\\Codes\\skill输出\\_归档\\Luz-Dev\\04-闭环结果页规范页-Luz-Design-视觉重构\\04-闭环结果页规范页-Luz-Design-视觉重构.html"
 tags: ["admin-v2", "luz-design", "responsive-layout", "visual-regression"]
 evidence: ["test: tests.test_function_catalog 9/9 通过，新增 Admin shell 与重复侧栏偏移回归断言。", "test: tests.test_skill_automation 10/10 通过，新增技术方案 Admin v2 布局契约断言。", "test: tests.test_validate_handoff 8/8 通过。", "build: function-catalog.html 成功重建为 110660 字节，canonical JSON 集成测试通过。", "static: 03、04、技术方案母版和功能目录无重复 ID、无外部资源；内联 JavaScript 均通过 node --check。", "validate: validate_skill_package.py PASS，解析到 D:/Codes/Luz-Design。"]
 reusable_assets: ["assets/tech-plan/template.html", "assets/reference/function-catalog.template.html"]
 supersedes: ""
-superseded_by: ""
+superseded_by: EXP-0013
+key: "plan-page-layout"
+uses: 1
+last_confirmed: "2026-10-26T13:46:43+08:00"
 ---
 
 # Luz Design 技术方案壳层布局修复
@@ -51,5 +54,6 @@ superseded_by: ""
 ## 废弃与替代
 
 <!-- DEPRECATION_START -->
-_未废弃。_
+- 原因：方案页已改为 Luz Design 阅读页（无应用外壳），Admin v2 壳层布局不再适用
+- 替代经验：EXP-0013
 <!-- DEPRECATION_END -->

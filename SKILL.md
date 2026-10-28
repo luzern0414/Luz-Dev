@@ -74,11 +74,11 @@ Every HTML Luz Dev generates (plan pages, `references/standards.html`, `knowledg
 
 `tech_plan.py submit` runs Luz Design's own checker (`$LUZ_DESIGN_ROOT/scripts/check_document.py`, used read-only) on the page; any ERROR blocks submission. After it passes, still apply Luz Design's deletion test to every visible element. Luz Dev never edits the Luz Design or Luz-Crawl skills.
 
-Colour tokens come from the paired Luz Design theme file at every render (`references/themes.json` or `design/shared/themes/themes.json`, theme `ai-agent`; bundled snapshot as fallback); the page style is `assets/shared/luz-reading.css`.
+Colour tokens come from the paired Luz Design theme file at every render (`references/themes.json`, theme `ai-agent`; older layouts are found automatically; bundled snapshot as fallback); the page style is `assets/shared/luz-reading.css`.
 
 Headings are numbered when rendered (2, 2.1 …) and a contents list follows the title on long plans. Plan content blocks: `p`, `h3`, `list`, `table` (`dense` for number-heavy tables), `callout`, `cards`, `kv`, `code`, `svg` (scripts and event attributes are rejected), and `todo` (blocks submission). Inline text supports `` `code` ``, `**bold**` and `[text](https://…)`; `[S#]` source markers stay in the data and are not shown.
 
-The paired Design package is resolved by `--design-root`, then `LUZ_DESIGN_ROOT`, then `../Luz-Design`. Luz Dev depends only on its `SKILL.md`, its theme file, and the design sessions it produces — not on its internal layout, which changes between releases. Luz-Crawl is resolved by `--crawl-root`, then `LUZ_CRAWL_ROOT`, then `../Luz-Crawl`.
+The paired Design package is resolved by `--design-root`, then `LUZ_DESIGN_ROOT`, then `../Luz-Design`. Luz Dev depends only on Luz Design's `SKILL.md`, its theme file and `scripts/check_document.py` — not on its internal layout, which changes between releases. Approved design sessions come from Luz System (`D:\Codes\skill输出\Luz-System`). Luz-Crawl is resolved by `--crawl-root`, then `LUZ_CRAWL_ROOT`, then `../Luz-Crawl`.
 
 ## Frontend: integrating Luz System
 
@@ -133,7 +133,7 @@ Read only what the task needs.
 
 ## Start every task
 
-1. Create the plan draft with project types, archetype and modules; search `experience/INDEX.md` for verified reusable logic.
+1. Create the plan draft with project types, archetype and modules; run `record_experience.py search` and apply the stored preferences and lessons; search `experience/INDEX.md` for verified reusable logic.
 2. Run the Luz-Crawl research and import it.
 3. Register the Luz System session (or the reason there is none).
 4. Read the pattern documents the plan lists and query `references/function-catalog.json`; for completion flows also read `references/result-patterns.md`.
@@ -227,11 +227,32 @@ Knowledge flows one way: **experience record (evidence) → verified → standar
 At the end of every task, including a review, diagnosis or blocked task, record what was learned:
 
 ```powershell
-python -X utf8 scripts/record_experience.py record --title "支付回调幂等处理" --task-mode implementation --plan "D:\Codes\skill输出\Luz-Dev\06-健身房下单小程序技术方案.html" --summary "使用持久化事件标识过滤重复回调。" --tag payment --tag idempotency
+python -X utf8 scripts/record_experience.py record --key payment-callback-idempotency --title "支付回调幂等处理" --task-mode implementation --plan "D:\Codes\skill输出\Luz-Dev\06-健身房下单小程序\06-健身房下单小程序.html" --summary "使用持久化事件标识过滤重复回调。" --tag payment --tag idempotency
 python -X utf8 scripts/record_experience.py promote EXP-0001 --evidence "test:test_payment_callback_replay"
 ```
 
 Records begin as `candidate`; promote only with tests, production evidence, or explicit user confirmation; `deprecate` with a reason and replacement. Never promote credentials, merchant data, volatile prices, or unverified code.
+
+Every record has a topic `key` (default: derived from the title). Recording a key that an active record already uses **updates that record in place** — new summary, merged evidence and tags, the old summary kept once as `previous`, status back to `candidate` unless the new statement is verified — instead of adding a second EXP number. At most 120 active records; above that the least valuable candidates are deprecated automatically.
+
+## 每次调用后沉淀
+
+Mandatory for every call, including reviews, diagnoses and blocked tasks.
+
+1. **Start:** `python -X utf8 scripts/record_experience.py search <关键词>` — apply every matching preference, lesson and fact, and read matching records.
+2. **Before finishing**, write what this call taught, as a general principle, not task trivia:
+   - a preference the user stated or corrected → `note --kind preference`;
+   - a route, source, parameter or fix that worked or failed → `note --kind fact` or `note --kind lesson`;
+   - a correction to a rule → `note --kind lesson`, and the rule itself in `references/standards.json`.
+
+   ```powershell
+   python -X utf8 scripts/record_experience.py note --kind preference --key one-task-one-folder --text "一个需求只建一个项目文件夹，后续修改只修订同一方案。" --why "用户找不到该看哪个方案"
+   ```
+
+3. **Replace, never pile up.** Reuse the existing key for the same topic; a new statement replaces the old one (one `previous` kept for audit). A statement identical to another key's is refused. Caps: preferences 60, lessons 120, facts 120 in `experience/notes.json`; `prune` drops the least valuable first (unconfirmed for 180 days, then fewest uses, then oldest). `check` fails on duplicate keys, duplicate statements, private data and overflow; `validate_skill_package.py` runs it.
+4. **Public repository:** no personal names, phone numbers, WeChat IDs, client or company names, local paths or credentials in notes or records. Anything personal stays in a git-ignored `*.local.json`.
+
+Sourced research conclusions still go to `knowledge/` (`knowledge.py fact`); long task write-ups with evidence go to `record`.
 
 ## Validation
 

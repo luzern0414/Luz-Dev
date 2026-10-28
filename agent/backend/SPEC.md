@@ -1,6 +1,6 @@
 # 智能体后端规范（LangGraph）v2
 
-本文是智能体服务的唯一规范。前端对话界面见 `$LUZ_DESIGN_ROOT/references/system/agents.md`，前后端事件协议见 `../shared/protocol.md`，每个项目的定制清单按 `../requirements/_template.md` 填写为 `../requirements/<项目名>.md`。后端接口以 `backend/API.md` 为准，工具只能调用其中标注 `agent: yes` 的接口。
+本文是智能体服务的唯一规范。前端对话界面见 Luz System `references/agent-design.html`，前后端事件协议见 `../shared/protocol.md`，每个项目的定制清单按 `../requirements/_template.md` 填写为 `../requirements/<项目名>.md`。后端接口以 `backend/API.md` 为准，工具只能调用其中标注 `agent: yes` 的接口。
 
 阅读顺序：§0 边界 → §1 架构 → §2 图 → §3 意图 → §6 工具 → §7 确认 → §8 降级 → §9 核验 → §11 流式 → §17 实现顺序。生成项目时先填 `requirements/<项目名>.md`，再按 §17 的顺序实现。
 

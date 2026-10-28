@@ -26,7 +26,7 @@
 | `admin_store_scopes` | user_id, store_id | 复合主键 | 门店范围；空表示全部门店 |
 | `audit_logs` | id, actor_id, action, resource, resource_id, before_json, after_json, ip, trace_id, created_at | 只允许 INSERT | 审计 |
 
-## 3 权限码清单（全集，与 `$LUZ_DESIGN_ROOT/references/system/web-admin.md` 及 handoff 权限语义一致；新增先登记此表）
+## 3 权限码清单（全集，与 Luz System `references/admin-design.html` 及 handoff 权限语义一致；新增先登记此表）
 
 | 权限码 | 含义 | 所属模块 |
 |---|---|---|

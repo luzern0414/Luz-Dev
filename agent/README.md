@@ -6,7 +6,7 @@ Luz Dev 的智能体开发部分：为小程序、App 与管理后台实现业�
 agent/
   README.md               本文件
   shared/protocol.md      前后端事件协议 v2（SSE / WebSocket / 轮询，事件、确认、错误码）
-  $LUZ_DESIGN_ROOT/references/system/agents.md  对话界面规范（入口、消息类型、流式、确认面板、状态机）
+  Luz-System/references/agent-design.html  对话界面规范（入口、消息类型、流式、确认面板、状态机）
   backend/SPEC.md         服务规范 v2（图、意图、记忆、知识库、工具、确认、降级熔断、核验、Pydantic、流式、API、安全、观测、评测、实现顺序）
   backend/code/           参考实现（v1：plan / run_tool / confirm / unknown_tool 四节点，脚本化模型，10 项测试）
   requirements/_template.md   项目定制清单模板（填好后即项目的 AGENT.md）
@@ -16,7 +16,7 @@ agent/
 
 1. `backend/SPEC.md` §0–§2（边界与图）→ §3 意图 → §6 工具 → §7 确认 → §8 降级 → §9 核验
 2. `shared/protocol.md`
-3. `$LUZ_DESIGN_ROOT/references/system/agents.md`
+3. Luz System `references/agent-design.html`
 4. 新项目：复制 `requirements/_template.md` 填写，再按 `backend/SPEC.md` §17 的顺序实现
 
 ## 职责边界

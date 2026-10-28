@@ -15,4 +15,4 @@
 - 失败模式与恢复：HTML 与 canonical JSON 漂移时停止发布并重新构建；导入失败时保留既有草稿；XSS 风险通过 textContent 与 script-close 转义阻断；模板新增控件后同步静态契约测试和包校验。
 - 测试与证据：tests/test_function_catalog.py 6 项通过；tests/test_skill_automation.py 9 项通过；validate_skill_package.py 检查 canonical JSON、HTML 内嵌数据、编辑控件、安全渲染和无外部依赖。
 - 可复用代码：references/function-catalog.json、scripts/build_function_catalog.py、assets/reference/function-catalog.template.html。
-- 维护责任与复查条件：Luz Design Admin 规范、目录 schema、必选业务模块、页面控件或运行环境变化时重新验证并更新 EXP-0002。
+- 维护责任与复查条件：Luz System 后台设计规范（admin-design.html）、目录 schema、必选业务模块、页面控件或运行环境变化时重新验证并更新 EXP-0002。

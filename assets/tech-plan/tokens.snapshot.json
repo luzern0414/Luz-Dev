@@ -1,6 +1,6 @@
 {
   "version": "Luz-Design themes.json 2026-10-23.v3 · ai-agent · Admin v2",
-  "note": "Fallback only. tech_plan.py reads $LUZ_DESIGN_ROOT/design/shared/themes/themes.json first and overrides matching tokens; derived Admin v2 tokens (surface-2, surface-3, line-strong, focus, shadows, radii) stay here.",
+  "note": "Fallback only. tech_plan.py reads the paired Luz-Design references/themes.json first and overrides matching tokens; derived Admin v2 tokens (surface-2, surface-3, line-strong, focus, shadows, radii) stay here.",
   "tokens": {
     "canvas": "#F4F5FA",
     "surface": "#FFFFFF",

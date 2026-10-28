@@ -9,7 +9,7 @@ The Design package is resolved by `--design-root`, then `LUZ_DESIGN_ROOT`, then 
 | Need | Where |
 |---|---|
 | The skill itself (visual standards and page layout) | `$LUZ_DESIGN_ROOT/SKILL.md` |
-| Theme tokens for generated pages | `references/themes.json` or `design/shared/themes/themes.json` inside the Design package (found automatically) |
+| Theme tokens for generated pages | `references/themes.json` inside the Design package (older layouts are found automatically) |
 | Approved designs to implement | Luz System session folders in `D:\Codes\skill输出\Luz-System` (`NNN-项目/` with `99-delivery/MANIFEST.json` and `APPROVALS.json`) |
 | How to consume a session | `references/design-integration.md` + `scripts/design_intake.py` |
 

@@ -7,8 +7,8 @@
 | 项 | 值 |
 |---|---|
 | 项目名 | |
-| 前端 | 项目 `HANDOFF.json` + `$LUZ_DESIGN_ROOT/references/system/miniprogram.md` |
-| 管理后台 | 项目 `HANDOFF.json` + `$LUZ_DESIGN_ROOT/references/system/web-admin.md`（如有） |
+| 前端 | 项目 `HANDOFF.json` + Luz System `references/miniprogram-design.html` |
+| 管理后台 | 项目 `HANDOFF.json` + Luz System `references/admin-design.html`（如有） |
 | 部署环境 | 开发 / 测试 / 生产 |
 | 数据库 | SQLite（仅开发）/ MySQL 8 / PostgreSQL 14 |
 | 时区 | Asia/Shanghai |

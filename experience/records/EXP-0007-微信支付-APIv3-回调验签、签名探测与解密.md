@@ -11,6 +11,9 @@ evidence: ["test: backend/09-wechat-pay/code/tests/test_apiv3.py 17 项通过（
 reusable_assets: ["backend/09-wechat-pay/code/wechat_pay/apiv3.py"]
 supersedes: ""
 superseded_by: ""
+key: "wechat-pay-v3-callback"
+uses: 1
+last_confirmed: "2026-10-26T15:58:56+08:00"
 ---
 
 # 微信支付 APIv3 回调验签、签名探测与解密

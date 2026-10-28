@@ -438,6 +438,18 @@ def validate_experience_root(experience_root: Path) -> list[str]:
             errors.append(f"{playbook.name}: playbook must cite a source experience")
         if SECRET_PATTERN.search(text):
             errors.append(f"{playbook.name}: possible secret material")
+
+    # Keyed preference / lesson / fact entries and record de-duplication (record_experience.py check).
+    scripts_dir = str(Path(__file__).resolve().parent)
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    import record_experience
+
+    try:
+        store_errors, _ = record_experience.check_store(experience_root)
+    except ValueError as exc:
+        store_errors = [str(exc)]
+    errors.extend(f"experience store: {error}" for error in store_errors)
     return errors
 
 
@@ -481,7 +493,7 @@ def validate_design_target(design_root: Path, dev_schema_path: Path = DEV_SCHEMA
             errors.append(f"paired Design target is not the luz-design skill: {design_root}")
 
     # Luz Design reorganises its internals between releases. Luz Dev depends only on a stable contract:
-    # the luz-design skill, a theme file (any known location), and design sessions consumed by design_intake.py.
+    # the luz-design skill and a theme file (any known location). Design sessions come from Luz System (design_intake.py).
     root_text = str(ROOT / "scripts")
     if root_text not in sys.path:
         sys.path.insert(0, root_text)

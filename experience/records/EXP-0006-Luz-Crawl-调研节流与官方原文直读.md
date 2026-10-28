@@ -11,6 +11,9 @@ evidence: ["run: 合集 009 官方原文直读 17 页读取 14 页，自动导�
 reusable_assets: ["references/research.md", "references/research-sources.json"]
 supersedes: ""
 superseded_by: ""
+key: "crawl-throttle-official-sources"
+uses: 1
+last_confirmed: "2026-10-26T15:58:55+08:00"
 ---
 
 # Luz-Crawl 调研节流与官方原文直读

@@ -72,9 +72,9 @@ Also report:
 
 Implementation owns language, libraries, data structures, transaction boundaries, caching, deployment, and internal module design while observable behavior and approved UI remain within contract.
 
-## Return to Design before shipping
+## Return to Luz System before shipping
 
-Return to Design when implementation would change:
+Return to Luz System when implementation would change:
 
 - A screen's purpose, hierarchy, primary action, or navigation
 - A visible state or recovery path

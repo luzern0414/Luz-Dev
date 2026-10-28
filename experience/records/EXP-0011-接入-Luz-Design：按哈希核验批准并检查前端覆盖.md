@@ -11,6 +11,9 @@ evidence: ["test: tests.test_design_intake 5/5；真实健身房会话 inspect�
 reusable_assets: ["scripts/design_intake.py"]
 supersedes: ""
 superseded_by: ""
+key: "design-intake-hash-check"
+uses: 1
+last_confirmed: "2026-10-26T16:52:19+08:00"
 ---
 
 # 接入 Luz Design：按哈希核验批准并检查前端覆盖
