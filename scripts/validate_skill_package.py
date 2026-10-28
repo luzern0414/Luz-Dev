@@ -113,6 +113,7 @@ REQUIRED = [
     "agent/shared/protocol.md",
     "experience/README.md",
     "experience/INDEX.md",
+    "experience/notes.json",
     "experience/reusable/README.md",
     "experience/playbooks/README.md",
     "experience/reusable/scripts/README.md",

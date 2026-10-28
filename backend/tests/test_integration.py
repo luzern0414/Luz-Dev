@@ -63,19 +63,19 @@ def test_full_order_flow(client):
 
     # 1 创建订单（带幂等键）
     body = {"items": [{"sku_id": 1, "qty": 2}]}
-    first = client.post("/api/v1/app/orders", json=body, headers={**auth(token), "Idempotency-Key": "k-100"}).json()
+    first = client.post("/api/v1/app/orders", json=body, headers={**auth(token), "Idempotency-Key": "order-k-100"}).json()
     assert first["code"] == 0
     order_id = first["data"]["order_id"]
     assert first["data"]["total_cents"] == 8800 * 2
     assert stock_of() == 3
 
     # 2 同一幂等键重放：返回同一订单，库存不再扣减
-    replay = client.post("/api/v1/app/orders", json=body, headers={**auth(token), "Idempotency-Key": "k-100"}).json()
+    replay = client.post("/api/v1/app/orders", json=body, headers={**auth(token), "Idempotency-Key": "order-k-100"}).json()
     assert replay["data"]["order_id"] == order_id
     assert stock_of() == 3
 
     # 3 发起支付
-    pay = client.post(f"/api/v1/app/orders/{order_id}/pay", headers={**auth(token), "Idempotency-Key": "p-1"}).json()
+    pay = client.post(f"/api/v1/app/orders/{order_id}/pay", headers={**auth(token), "Idempotency-Key": "pay-0001"}).json()
     assert pay["code"] == 0
     out_trade_no = pay["data"]["out_trade_no"]
     amount = pay["data"]["amount_cents"]
@@ -112,7 +112,7 @@ def test_other_users_order_is_not_found(client):
     owner = login(client, "owner")
     other = login(client, "other")
     created = client.post("/api/v1/app/orders", json={"items": [{"sku_id": 1, "qty": 1}]},
-                          headers={**auth(owner), "Idempotency-Key": "own-1"}).json()["data"]
+                          headers={**auth(owner), "Idempotency-Key": "own-0001"}).json()["data"]
     resp = client.get(f"/api/v1/app/orders/{created['order_id']}", headers=auth(other))
     assert resp.json()["code"] == 4040
 
@@ -120,10 +120,10 @@ def test_other_users_order_is_not_found(client):
 def test_oversell_rejected_over_http(client):
     token = login(client)
     ok_resp = client.post("/api/v1/app/orders", json={"items": [{"sku_id": 1, "qty": 5}]},
-                          headers={**auth(token), "Idempotency-Key": "big-1"}).json()
+                          headers={**auth(token), "Idempotency-Key": "big-0001"}).json()
     assert ok_resp["code"] == 0
     fail = client.post("/api/v1/app/orders", json={"items": [{"sku_id": 1, "qty": 1}]},
-                       headers={**auth(token), "Idempotency-Key": "big-2"})
+                       headers={**auth(token), "Idempotency-Key": "big-0002"})
     assert fail.status_code == 409 and fail.json()["code"] == 4091
     assert stock_of() == 0
 

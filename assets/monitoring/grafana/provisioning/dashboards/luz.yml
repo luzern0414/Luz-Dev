@@ -1,0 +1,10 @@
+# 仪表盘目录（只读挂载）；界面改动不会落盘，修改请改 JSON 后重新部署。
+apiVersion: 1
+providers:
+  - name: luz
+    folder: Luz
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards

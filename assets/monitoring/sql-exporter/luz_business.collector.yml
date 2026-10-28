@@ -1,0 +1,76 @@
+# 业务异步链路指标。表结构见 backend/00-framework/code/luzback/outbox.py、scheduler.py 与 09-wechat-pay/models.py。
+# 时间列假定为 UTC；DSN 里设置 TimeZone=UTC，使 timestamp 与 timestamptz 两种列类型的 now() 差值都正确。
+collector_name: luz_business
+min_interval: 30s
+
+metrics:
+  # ---------------------------------------------------------------- 发件箱
+  - metric_name: luz_outbox_pending_events
+    type: gauge
+    help: "Outbox events not yet delivered (status=pending)."
+    values: [pending]
+    query_ref: outbox
+  - metric_name: luz_outbox_oldest_pending_age_seconds
+    type: gauge
+    help: "Age in seconds of the oldest undelivered outbox event."
+    values: [oldest_age]
+    query_ref: outbox
+  - metric_name: luz_outbox_failed_events
+    type: gauge
+    help: "Outbox events that exhausted retries (status=failed, dead letters)."
+    values: [failed]
+    query_ref: outbox
+
+  # ---------------------------------------------------------------- 定时任务（scheduler_runs）
+  - metric_name: luz_job_last_success_timestamp_seconds
+    type: gauge
+    help: "Unix time of the last successful run per scheduled job."
+    key_labels: [job_name]
+    values: [last_success]
+    query_ref: jobs
+  - metric_name: luz_job_failed_runs_1h
+    type: gauge
+    help: "Failed runs per scheduled job in the last hour."
+    key_labels: [job_name]
+    values: [failures_1h]
+    query_ref: jobs
+
+  # ---------------------------------------------------------------- 支付
+  - metric_name: luz_payment_pending_overdue
+    type: gauge
+    help: "Payments still pending 30 minutes after creation (close/query jobs not catching up)."
+    values: [pending_overdue]
+    query_ref: payments
+  - metric_name: luz_payment_needs_manual
+    type: gauge
+    help: "Payments flagged for manual handling."
+    values: [needs_manual]
+    query_ref: payments
+
+queries:
+  - query_name: outbox
+    query: |
+      SELECT
+        count(*) FILTER (WHERE status = 'pending')                                   AS pending,
+        coalesce(extract(epoch FROM now() - min(occurred_at) FILTER (WHERE status = 'pending')), 0) AS oldest_age,
+        count(*) FILTER (WHERE status = 'failed')                                    AS failed
+      FROM outbox_events
+      WHERE status IN ('pending', 'failed')
+
+  - query_name: jobs
+    query: |
+      SELECT
+        job                                                                          AS job_name,
+        coalesce(extract(epoch FROM max(finished_at) FILTER (WHERE status = 'ok')), 0) AS last_success,
+        count(*) FILTER (WHERE status = 'error' AND started_at > now() - interval '1 hour') AS failures_1h
+      FROM scheduler_runs
+      WHERE started_at > now() - interval '14 days'
+      GROUP BY job
+
+  - query_name: payments
+    query: |
+      SELECT
+        count(*) FILTER (WHERE status = 'pending' AND created_at < now() - interval '30 minutes') AS pending_overdue,
+        count(*) FILTER (WHERE needs_manual)                                                      AS needs_manual
+      FROM payment_records
+      WHERE status = 'pending' OR needs_manual

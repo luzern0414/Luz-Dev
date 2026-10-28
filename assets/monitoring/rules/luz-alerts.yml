@@ -1,0 +1,286 @@
+# Luz 告警规则（references/operations.md §4）。原则：对症状告警、能行动才呼人；critical → 电话/短信，warning → 群消息。
+# 每条告警带 runbook（项目 docs/runbooks/ 或 assets/deploy/RUNBOOK.md 对应章节）。
+# 校验：promtool check rules luz-alerts.yml；单测可写 promtool test rules。
+# 标注“需应用暴露”的指标目前应用尚未输出，对应规则在指标出现前不会触发（不产生误报）。
+groups:
+  # ================================================================ 可用性：99.9% SLO 多窗口多燃烧率
+  - name: luz-availability
+    rules:
+      - alert: ApiErrorBudgetBurnFast
+        # 1h 内消耗 2% 月度预算（燃烧率 14.4）
+        expr: |
+          luz:slo_errors:ratio_rate1h > (14.4 * 0.001)
+          and luz:slo_errors:ratio_rate5m > (14.4 * 0.001)
+          and luz:http_requests:rate5m > 0.2
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "[{{ $externalLabels.env }}] API 错误预算快速燃烧：1h 5xx 比例 {{ $value | humanizePercentage }}"
+          runbook: RUNBOOK.md#2-回滚
+      - alert: ApiErrorBudgetBurnMedium
+        # 6h 内消耗 5% 预算（燃烧率 6）
+        expr: |
+          luz:slo_errors:ratio_rate6h > (6 * 0.001)
+          and luz:slo_errors:ratio_rate30m > (6 * 0.001)
+          and luz:http_requests:rate5m > 0.2
+        for: 15m
+        labels: { severity: critical }
+        annotations:
+          summary: "[{{ $externalLabels.env }}] API 错误预算持续燃烧：6h 5xx 比例 {{ $value | humanizePercentage }}"
+      - alert: ApiErrorBudgetBurnSlow
+        # 3d 内消耗 10% 预算（燃烧率 1）：工单处理，不呼人
+        expr: |
+          luz:slo_errors:ratio_rate3d > (1 * 0.001)
+          and luz:slo_errors:ratio_rate6h > (1 * 0.001)
+        for: 1h
+        labels: { severity: warning }
+        annotations:
+          summary: "[{{ $externalLabels.env }}] API 3 天 5xx 比例 {{ $value | humanizePercentage }}，超出 99.9% SLO"
+      - alert: ApiHigh5xxRatio
+        # 与 release.sh 回滚阈值一致：5xx > 2% 持续 5 分钟
+        expr: luz:slo_errors:ratio_rate5m > 0.02 and luz:http_requests:rate5m > 1
+        for: 5m
+        keep_firing_for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "[{{ $externalLabels.env }}] API 5xx 比例 {{ $value | humanizePercentage }} 超过 2%"
+          runbook: RUNBOOK.md#2-回滚
+      - alert: ApiAllInstancesDown
+        expr: sum(up{job="luz-api"}) == 0 or absent(up{job="luz-api"})
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "[{{ $externalLabels.env }}] 没有可抓取的 api 实例"
+      - alert: ApiInstanceDown
+        expr: up{job="luz-api"} == 0
+        for: 3m
+        labels: { severity: warning }
+        annotations:
+          summary: "api 实例 {{ $labels.instance }} 抓取失败"
+      - alert: ExternalProbeFailed
+        expr: probe_success{job="blackbox-https"} == 0
+        for: 3m
+        labels: { severity: critical }
+        annotations:
+          summary: "[{{ $externalLabels.env }}] 外部探测 {{ $labels.instance }} 失败（DNS / TLS / nginx / api 链路）"
+      - alert: UnhandledErrorsSpike
+        expr: sum(increase(unhandled_errors_total{job="luz-api"}[10m])) > 10
+        labels: { severity: warning }
+        annotations:
+          summary: "10 分钟内未处理异常 {{ $value }} 次，按 trace_id 查日志"
+
+  # ================================================================ 延迟：按路由 p95（直方图）
+  - name: luz-latency
+    rules:
+      - alert: ApiReadLatencyHigh
+        expr: |
+          luz:route:http_request_duration_seconds:p95_5m{method="GET",route!~"/api/v1/admin/(reports|exports).*"} > 0.3
+          and on (method, route) luz:route:http_requests:rate5m > 0.05
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "GET {{ $labels.route }} p95 {{ $value | humanizeDuration }} > 300ms"
+      - alert: ApiWriteLatencyHigh
+        expr: |
+          luz:route:http_request_duration_seconds:p95_5m{method=~"POST|PUT|PATCH|DELETE",route!~"/api/v1/admin/(reports|exports).*"} > 0.8
+          and on (method, route) luz:route:http_requests:rate5m > 0.05
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.method }} {{ $labels.route }} p95 {{ $value | humanizeDuration }} > 800ms"
+      - alert: ApiLatencyCritical
+        # 整体读 p95 > 1s 或写 p95 > 2s：用户已明显感知
+        expr: |
+          (luz:read:http_request_duration_seconds:p95_5m > 1 or luz:write:http_request_duration_seconds:p95_5m > 2)
+          and on () luz:http_requests:rate5m > 1
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: "[{{ $externalLabels.env }}] API p95 {{ $value | humanizeDuration }}，严重变慢"
+      - alert: PaymentNotifySlow
+        # 微信要求 5 秒内应答，超过 3 秒就有超时重试风险
+        expr: luz:route:http_request_duration_seconds:p95_5m{route=~"/api/v1/(payments/notify|webhooks)/.*"} > 3
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "支付回调 {{ $labels.route }} p95 {{ $value | humanizeDuration }}，接近 5 秒应答上限"
+
+  # ================================================================ 饱和度与资源
+  - name: luz-saturation
+    rules:
+      - alert: HostCpuHigh
+        expr: 1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.85
+        for: 15m
+        labels: { severity: warning }
+        annotations: { summary: "主机 CPU 使用率 {{ $value | humanizePercentage }}" }
+      - alert: HostMemoryLow
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
+        for: 10m
+        labels: { severity: critical }
+        annotations: { summary: "主机可用内存仅 {{ $value | humanizePercentage }}" }
+      - alert: DiskSpaceLow
+        expr: |
+          node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"} < 0.15
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "{{ $labels.mountpoint }} 剩余 {{ $value | humanizePercentage }}" }
+      - alert: DiskWillFillIn24h
+        expr: predict_linear(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"}[6h], 24 * 3600) < 0
+        for: 30m
+        labels: { severity: critical }
+        annotations: { summary: "{{ $labels.mountpoint }} 按当前速度 24 小时内写满（WAL 归档、日志、备份）" }
+      - alert: ApiTailLatencyRising
+        # 1 分钟 p99 是饱和的早期信号（SRE 四个黄金信号）
+        expr: luz:http_request_duration_seconds:p99_1m > 2 and on () luz:http_requests:rate5m > 1
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "API 1m p99 {{ $value | humanizeDuration }}，可能接近饱和" }
+      - alert: PostgresConnectionsHigh
+        # 指标名以 postgres_exporter v0.20 为准，升级后核对
+        expr: sum(pg_stat_activity_count) / max(pg_settings_max_connections) > 0.8
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "PostgreSQL 连接数已用 {{ $value | humanizePercentage }}" }
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations: { summary: "PostgreSQL 不可连接" }
+
+  # ================================================================ 异步：发件箱、定时任务、支付积压（sql-exporter 从业务表查询）
+  - name: luz-async
+    rules:
+      - alert: OutboxLagHigh
+        expr: luz_outbox_oldest_pending_age_seconds > 300
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "发件箱最老未投递事件已等待 {{ $value | humanizeDuration }}（积压 {{ with query \"luz_outbox_pending_events\" }}{{ . | first | value }}{{ end }} 条）"
+          runbook: 检查 worker 容器健康与日志；docker compose ps worker
+      - alert: OutboxDeadLetters
+        expr: luz_outbox_failed_events > 0
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "发件箱有 {{ $value }} 条投递失败（死信），需人工 requeue" }
+      - alert: JobFailures
+        expr: luz_job_failed_runs_1h >= 3
+        labels: { severity: warning }
+        annotations: { summary: "任务 {{ $labels.job_name }} 1 小时内失败 {{ $value }} 次" }
+      - alert: FrequentJobStale
+        # 分钟级任务（关单、查单、退款查询、发件箱补偿）：15 分钟没有成功
+        expr: time() - luz_job_last_success_timestamp_seconds{job_name!~".*(daily|reconcile|bill|report).*"} > 900
+        for: 5m
+        labels: { severity: critical }
+        annotations: { summary: "任务 {{ $labels.job_name }} 已 {{ $value | humanizeDuration }} 未成功" }
+      - alert: DailyJobStale
+        # 日级任务（对账、账单、日报）：超过 2 个周期 + 余量（50 小时）
+        expr: time() - luz_job_last_success_timestamp_seconds{job_name=~".*(daily|reconcile|bill|report).*"} > 50 * 3600
+        labels: { severity: critical }
+        annotations: { summary: "日任务 {{ $labels.job_name }} 已 {{ $value | humanizeDuration }} 未成功" }
+      - alert: PaymentPendingTooLong
+        # 待支付超过 30 分钟仍未关闭：关单 / 查单任务异常
+        expr: luz_payment_pending_overdue > 0
+        for: 15m
+        labels: { severity: warning }
+        annotations: { summary: "{{ $value }} 笔支付单待确认超过 30 分钟，检查关单与查单任务" }
+      - alert: PaymentPendingBacklog
+        expr: luz_payment_pending_overdue > 20
+        for: 15m
+        labels: { severity: critical }
+        annotations: { summary: "{{ $value }} 笔支付单长时间待确认，可能影响用户资金" }
+      - alert: PaymentNeedsManual
+        expr: luz_payment_needs_manual > 0
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "{{ $value }} 笔支付需人工处理（关单/退款异常）" }
+
+  # ================================================================ 备份与 WAL 归档（backup.sh / verify-restore.sh 写 textfile 指标）
+  - name: luz-backup
+    rules:
+      - alert: BackupTooOld
+        expr: time() - luz_backup_last_success_timestamp_seconds{kind="pg_dump"} > 26 * 3600
+        labels: { severity: critical }
+        annotations:
+          summary: "数据库每日备份已 {{ $value | humanizeDuration }} 未成功"
+          runbook: RUNBOOK.md#3-恢复
+      - alert: BackupMetricMissing
+        expr: absent(luz_backup_last_success_timestamp_seconds{kind="pg_dump"})
+        for: 1h
+        labels: { severity: warning }
+        annotations: { summary: "没有备份指标：检查 cron、backup.sh 与 node_exporter textfile 目录" }
+      - alert: BaseBackupTooOld
+        expr: time() - luz_backup_last_success_timestamp_seconds{kind="basebackup"} > 8 * 86400
+        labels: { severity: warning }
+        annotations: { summary: "基础备份已 {{ $value | humanizeDuration }} 未成功，PITR 恢复时间会变长" }
+      - alert: WalOffsiteStale
+        expr: time() - luz_backup_last_success_timestamp_seconds{kind="wal_offsite"} > 15 * 60
+        labels: { severity: critical }
+        annotations: { summary: "WAL 异地外传已 {{ $value | humanizeDuration }} 未成功，RPO 正在扩大" }
+      - alert: WalArchiveFailing
+        expr: increase(pg_stat_archiver_failed_count[10m]) > 0
+        labels: { severity: critical }
+        annotations: { summary: "PostgreSQL WAL 归档失败（archive_command），pg_wal 会持续增长" }
+      - alert: WalArchiveIdle
+        expr: pg_stat_archiver_last_archive_age > 3600
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "1 小时没有新的 WAL 归档（库空闲属正常；有写入时需排查）" }
+      - alert: BackupRestoreTestStale
+        expr: time() - luz_backup_last_success_timestamp_seconds{kind="restore_test"} > 8 * 86400
+        labels: { severity: warning }
+        annotations: { summary: "恢复校验已 {{ $value | humanizeDuration }} 未成功（verify-restore.sh）" }
+      - alert: BackupStepFailed
+        expr: luz_backup_last_status == 0
+        labels: { severity: warning }
+        annotations: { summary: "备份步骤 {{ $labels.kind }} 最近一次失败，查看 /var/log/luz/backup.log" }
+
+  # ================================================================ 证书
+  - name: luz-certificates
+    rules:
+      - alert: CertExpiringSoon
+        expr: (probe_ssl_earliest_cert_expiry - time()) / 86400 < 21
+        for: 1h
+        labels: { severity: warning }
+        annotations: { summary: "{{ $labels.instance }} 证书 {{ $value | humanize }} 天后到期，自动续期可能失败" }
+      - alert: CertExpiringCritical
+        expr: (probe_ssl_earliest_cert_expiry - time()) / 86400 < 7
+        labels: { severity: critical }
+        annotations: { summary: "{{ $labels.instance }} 证书 {{ $value | humanize }} 天后到期" }
+
+  # ================================================================ 安全
+  - name: luz-security
+    rules:
+      - alert: LoginRateLimitSpike
+        # 应用层登录限流命中（rate_limited_total 由 luzback.app 输出）
+        expr: sum(rate(rate_limited_total{job="luz-api",rule=~"login|admin_login|sms"}[5m])) > 1
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "登录/短信限流持续命中 {{ $value | humanize }}/s，疑似爆破或刷短信" }
+      - alert: PaymentNotifySignatureFailures
+        # 需应用暴露 luz_payment_notify_verify_failed_total
+        expr: sum(increase(luz_payment_notify_verify_failed_total[10m])) > 5
+        labels: { severity: critical }
+        annotations: { summary: "10 分钟内支付回调验签失败 {{ $value }} 次：证书/密钥轮换或伪造回调" }
+
+  # ================================================================ 元监控
+  - name: luz-meta
+    rules:
+      - alert: Watchdog
+        # 永远触发：Alertmanager 把它持续发给外部“死人开关”，收不到即说明监控链路本身坏了
+        expr: vector(1)
+        labels: { severity: none }
+        annotations: { summary: "监控链路心跳" }
+      - alert: ExporterDown
+        expr: up{job=~"node|postgres|luz-sql|blackbox|alertmanager"} == 0
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "{{ $labels.job }} 抓取失败，相关告警失效" }
+      - alert: PrometheusRuleFailures
+        expr: increase(prometheus_rule_evaluation_failures_total[10m]) > 0
+        labels: { severity: warning }
+        annotations: { summary: "Prometheus 规则计算失败" }
+      - alert: AlertmanagerNotificationsFailing
+        expr: rate(alertmanager_notifications_failed_total[5m]) > 0
+        for: 10m
+        labels: { severity: critical }
+        annotations: { summary: "Alertmanager 通知发送失败（{{ $labels.integration }}）" }

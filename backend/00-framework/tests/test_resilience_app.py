@@ -148,5 +148,26 @@ def test_app_rate_rule_and_system_endpoints():
     assert client.get("/healthz").json()["data"]["status"] == "up"
     ready = client.get("/readyz")
     assert ready.status_code in (200, 503) and "database" in ready.json()["data"]
-    metrics = client.get("/metrics").text
+    assert client.get("/metrics").status_code == 404  # 外网地址看不到监控端点
+    internal = TestClient(client.app, raise_server_exceptions=False, client=("10.0.0.8", 5000))
+    metrics = internal.get("/metrics").text
     assert "http_requests_total" in metrics and 'rule="login"' in metrics
+    assert 'http_request_duration_seconds_bucket' in metrics and 'le="+Inf"' in metrics
+
+
+def test_client_ip_trusts_only_configured_proxies():
+    from starlette.requests import Request
+
+    from luzback.app import client_ip
+
+    app = _app()
+
+    def request(peer: str, xff: str) -> Request:
+        scope = {"type": "http", "headers": [(b"x-forwarded-for", xff.encode())], "client": (peer, 1), "app": app}
+        return Request(scope)
+
+    # 直连的客户端伪造 X-Forwarded-For：忽略，取对端地址
+    assert client_ip(request("203.0.113.9", "1.2.3.4")) == "203.0.113.9"
+    # 经过本机 nginx：取最右边的不可信地址，最左边伪造的值不被采用
+    assert client_ip(request("127.0.0.1", "1.2.3.4, 198.51.100.7")) == "198.51.100.7"
+    assert client_ip(request("127.0.0.1", "198.51.100.7")) == "198.51.100.7"

@@ -1,0 +1,15 @@
+# blackbox_exporter 探测模块。probe_ssl_earliest_cert_expiry 用于证书到期告警（21 天 warning / 7 天 critical）。
+modules:
+  https_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      method: GET
+      preferred_ip_protocol: ip4
+      valid_status_codes: []          # 默认 2xx
+      fail_if_not_ssl: true
+      follow_redirects: false
+      tls_config:
+        insecure_skip_verify: false
+      headers:
+        User-Agent: luz-blackbox

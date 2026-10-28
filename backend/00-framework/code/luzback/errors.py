@@ -43,7 +43,7 @@ _HTTP_STATUS = {
     ErrorCode.CONFLICT: 409,
     ErrorCode.OUT_OF_STOCK: 409,
     ErrorCode.DUPLICATE_REQUEST: 409,
-    ErrorCode.IDEMPOTENCY_MISMATCH: 409,
+    ErrorCode.IDEMPOTENCY_MISMATCH: 422,  # draft-ietf-httpapi-idempotency-key-header：同键不同请求体为 422
     ErrorCode.BUSINESS_RULE: 422,
     ErrorCode.STORE_CLOSED: 422,
     ErrorCode.OUT_OF_RANGE: 422,

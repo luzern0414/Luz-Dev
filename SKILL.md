@@ -7,7 +7,18 @@ description: Use when taking a Luz product from approved design to production �
 
 Luz Dev takes a Luz product from approved design to a running, compliant production system. **Luz System owns the system design and the user-facing experience** (module scope, architecture, function list, product UI, interactive prototype and on-site hardware — each approved by the user against a content hash); **Luz Design owns the visual standards and the layout of every page and document** (theme tokens, reading-page rules, `check_document.py`). **Luz Dev owns everything needed to ship it**: research, technical plan, backend and business logic, integrating the approved frontend with real APIs and data, deployment and operations, qualifications and filings, licences, user agreements and consent, and launch acceptance.
 
-The order is fixed: **research → plan → user approval → build → integrate → launch → record experience.** No code, data, configuration, deployment, or external state changes before the user approves the plan.
+The order is fixed: **research → plan report (HTML) → user approval → frontend address → build → integrate → launch → record experience.** No code, data, configuration, deployment, or external state changes before the user approves the plan and, for any project with a mini-program, admin or app, gives the frontend address.
+
+## How the four Luz skills work together
+
+| Step | Skill | Produces | Luz Dev uses it as |
+|---|---|---|---|
+| 1 System design | **Luz-System** (`D:\Codes\Luz-System`) | Requirements, module scope, architecture, function list, product UI and interactive prototype, hardware list — each hash-approved, in `skill输出\Luz-System\NNN-项目\` | The frontend address: `tech_plan.py design NN --session <会话目录>` checks approvals and SHA-256; its pages, actions and entities become the API contract (`design_intake.py bind`) |
+| 2 Visual and page layout | **Luz-Design** (`D:\Codes\Luz-Design`) | Theme tokens, reading-page and document rules, `scripts/check_document.py` | Every Luz Dev page (plan report, standards, knowledge base) is rendered with its tokens and must pass its checker before submission |
+| 3 Development | **Luz Dev** (this skill) | Plan report, backend assembled from the standard modules in `backend/`, integration, deployment, launch | — |
+| Throughout | **Luz-Crawl** (`D:\Codes\Luz-Crawl`) | Real pages for research, one task folder per request (`begin "主题" --new`, then `--out`) | `tech_plan.py research NN --run` and `knowledge/` |
+
+Luz Dev never edits the other three skills. A user-visible change (flow, page, permission, hierarchy) goes back to Luz-System; a visual or layout question goes to Luz-Design.
 
 Knowledge lives in four places, each with tested or verified content:
 
@@ -48,7 +59,7 @@ Edit `raw/plan.json`, then re-render; never hand-edit the HTML. The page opens w
 
 2. **Check the knowledge base, then research with Luz-Crawl — the whole system.** A new plan already contains the fresh sources and facts in `knowledge/` for its modules (marked “知识库”); research only fetches what is missing or past its review period, and every newly read source is written back to `knowledge/` automatically. Read `references/research.md`, then run `python -X utf8 scripts/tech_plan.py research NN --run --batch 15 --pause 6` in the background. It reads comparable systems, every module's design practice, the official pages of external platforms, and the regulations behind qualifications and agreements. Every implementation, operations and analysis plan also researches the **baseline tracks** whatever its modules — Web and API security, admin login and session security, HTTPS and web-server hardening, container deployment, CI/CD and rollback, server and network security, monitoring and alerting, backup and recovery, secrets and dependency security, data protection and 等级保护 (`research-sources.json` → `baselineTracks`); review plans cover the security tracks. Review is refused until each track has a read source, and an official or standard one where the track requires it (OWASP, Docker, PostgreSQL, nginx, Mozilla). The findings go into the plan's 安全与规范 and 上线、运维与合规 chapters as concrete settings (headers, TLS versions, rate limits, lockout thresholds, backup schedule, alert rules) with `[S#]`. Sources are imported with tier and read state; implementation plans need at least one comparable open-source system read. Searches that hit a site cooldown are retried on the next `--run`. If Luz-Crawl is unavailable, stop and tell the user; implementation research is skipped only with explicit user consent (`--skip "原因" --user-consent`).
 
-3. **Register the design.** For frontend work, `tech_plan.py design NN --session <Luz System 会话目录>` verifies that architecture, system design and prototype are approved and unchanged since approval, and records page / action / entity counts. Without an approved design, ask the user to complete it with **$luz-system** first; a backend-only task records `--skip "原因"`.
+3. **Read the system design if it exists.** When the user already has a Luz-System session for this product, read its architecture and function list so the plan's modules, APIs and tables match it. The frontend address itself is registered after approval (step 9).
 
 4. **List the custom features** — everything the user asked for beyond the base features: `tech_plan.py feature NN --name "人脸入场" --desc "会员刷脸入场，可用会员码替代" --priority P0 --module face` (modules named here join the plan and its checklist). A plan with none records `--none "原因"`.
 
@@ -56,11 +67,11 @@ Edit `raw/plan.json`, then re-render; never hand-edit the HTML. The page opens w
 
 6. **Complete the plan** in `plan.json`. Start business modules from the pattern documents the plan lists; adapt them to what research found and state deviations. Fill the “上线、运维与合规” section: qualifications and filings, agreements, environments and deployment, launch checklist. Replace every `todo` block; mark each checklist item (`tech_plan.py mark NN PAY-005 --status planned --note "做法"`, or `n/a` with a reason); record questions only the user or merchant can answer as decisions (`tech_plan.py decide NN D1 --question … --option … --blocking`). Then `tech_plan.py render NN`.
 
-7. **Submit for review**: `tech_plan.py submit NN`. It refuses while a section is incomplete, research is below threshold, custom features are not listed, a MUST rule is unhandled, a frontend plan has no design session, or a `[S#]` reference is missing. Give the user the HTML path and the open decisions.
+7. **Submit for review**: `tech_plan.py submit NN`. It refuses while a section is incomplete, research is below threshold, custom features are not listed, a MUST rule is unhandled, or a `[S#]` reference is missing; a frontend plan without a frontend address only gets a reminder. Give the user the HTML path and the open decisions.
 
 8. **Approve only on the user's explicit approval**: `tech_plan.py approve NN --note "用户原话"`. Never approve on the user's behalf, from silence, or from an earlier approval of a different plan. Blocking decisions must be decided first.
 
-9. **Gate before building**: `tech_plan.py gate NN` before the first change and before each later batch. It fails if the plan is not approved or changed after approval.
+9. **Get the frontend address, then gate.** After approval, ask the user for the frontend address — the Luz-System session folder (`D:\Codes\skill输出\Luz-System\NNN-项目`) and, when frontend code already exists, its directories — and register it: `tech_plan.py design NN --session <会话目录> [--frontend <小程序目录> --frontend <后台目录>]`. The session must have architecture, system design and prototype approved and unchanged; without one, send the user to **$luz-system** first. A backend-only task records `--skip "原因"`. Then run `tech_plan.py gate NN` before the first change and before each later batch: it fails if the plan is not approved, was changed after approval, or (frontend projects) has no registered, approved frontend address.
 
 10. **Revise, never drift**: `tech_plan.py revise NN --note "变化与原因"`, update, re-submit, re-approve before building the changed part.
 
@@ -237,22 +248,15 @@ Every record has a topic `key` (default: derived from the title). Recording a ke
 
 ## 每次调用后沉淀
 
-Mandatory for every call, including reviews, diagnoses and blocked tasks.
+Mandatory for every call, including reviews, diagnoses and blocked tasks. One store, `experience/notes.json`, with the same shape and commands in Luz-System, Luz-Design, Luz-Dev and Luz-Writing:
 
-1. **Start:** `python -X utf8 scripts/record_experience.py search <关键词>` — apply every matching preference, lesson and fact, and read matching records.
-2. **Before finishing**, write what this call taught, as a general principle, not task trivia:
-   - a preference the user stated or corrected → `note --kind preference`;
-   - a route, source, parameter or fix that worked or failed → `note --kind fact` or `note --kind lesson`;
-   - a correction to a rule → `note --kind lesson`, and the rule itself in `references/standards.json`.
+- **Start:** `python -X utf8 scripts/record_experience.py search <关键词> [--kind preference|lesson|fact]` and apply what matches.
+- **Before finishing:** `python -X utf8 scripts/record_experience.py note --kind preference|lesson|fact --key <主题> --text "<一句话原则>" [--why "<依据>"]` — preference: what the user stated or corrected; fact: a route, source or parameter that worked or failed; lesson: a rule correction or fix. The general principle, not task trivia.
+- **Fields:** `key`, `kind`, `text`, `why` (optional), `uses`, `first_seen`, `last_confirmed` (YYYY-MM-DD), `previous` (`{text, replaced_at}`, only after a replacement).
+- **Replace, never pile up:** the same key replaces the text (one `previous` kept, `uses` +1); the same statement under another key confirms that note. Caps: preference 60, lesson 120, fact 120; over a cap the fewest uses, then the oldest confirmation, go first. `list [--kind]` shows notes; `prune` enforces caps and lists notes unconfirmed for 180 days; `check` fails on duplicate keys or statements, missing fields, overflow and private data.
+- **Public repository:** no phone numbers, emails, WeChat IDs, user-home paths, credentials, personal or client names; `note` refuses them.
 
-   ```powershell
-   python -X utf8 scripts/record_experience.py note --kind preference --key one-task-one-folder --text "一个需求只建一个项目文件夹，后续修改只修订同一方案。" --why "用户找不到该看哪个方案"
-   ```
-
-3. **Replace, never pile up.** Reuse the existing key for the same topic; a new statement replaces the old one (one `previous` kept for audit). A statement identical to another key's is refused. Caps: preferences 60, lessons 120, facts 120 in `experience/notes.json`; `prune` drops the least valuable first (unconfirmed for 180 days, then fewest uses, then oldest). `check` fails on duplicate keys, duplicate statements, private data and overflow; `validate_skill_package.py` runs it.
-4. **Public repository:** no personal names, phone numbers, WeChat IDs, client or company names, local paths or credentials in notes or records. Anything personal stays in a git-ignored `*.local.json`.
-
-Sourced research conclusions still go to `knowledge/` (`knowledge.py fact`); long task write-ups with evidence go to `record`.
+Here also: `search` without `--kind` (or with `--kind record`) also returns matching EXP records; a rule correction also goes into `references/standards.json`; sourced research conclusions go to `knowledge/` (`knowledge.py fact`) and long task write-ups with evidence to `record`; `prune` also deprecates active records above 120; `validate_skill_package.py` runs `check`.
 
 ## Validation
 

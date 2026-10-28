@@ -1,0 +1,34 @@
+# 复制到 /etc/luz/redis.conf：chown root:999 /etc/luz/redis.conf && chmod 640 /etc/luz/redis.conf
+# 口令只写在这个文件里（不放 compose 命令行，避免出现在 ps / docker inspect）。
+# 与 api.env 的 LUZ_REDIS_URL=redis://:<password>@redis:6379/0 保持一致。
+
+bind 0.0.0.0
+protected-mode yes
+port 6379
+requirepass <随机 32 字节以上，openssl rand -hex 32>
+
+# 危险命令改名或禁用（应用不使用）
+rename-command FLUSHALL ""
+rename-command FLUSHDB ""
+rename-command DEBUG ""
+rename-command CONFIG ""
+
+# 持久化：RDB + AOF 同时开启（Redis 官方建议）；AOF everysec 最多丢 1 秒写入
+dir /data
+appendonly yes
+appendfsync everysec
+save 3600 1 300 100 60 10000
+
+# 内存：Redis 存放分布式锁、限流计数、幂等与排队等状态，不能被淘汰 → noeviction（写满时报错而不是静默丢锁）。
+# 若某实例只做纯缓存，改为 allkeys-lru。
+maxmemory 512mb
+maxmemory-policy noeviction
+
+# 连接
+timeout 300
+tcp-keepalive 60
+maxclients 2000
+
+# 日志写 stdout，由 docker 日志驱动收集
+logfile ""
+loglevel notice

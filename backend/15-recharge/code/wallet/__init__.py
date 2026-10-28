@@ -1,151 +1,55 @@
-"""储值钱包：本金与赠送金分账、不可变流水、幂等、条件扣减（references/patterns/accounts.md）。
+"""储值钱包（15-recharge）：本金 / 赠送金分账、充值批次、不可变流水、幂等、条件扣减、按批次退款、对账。
 
-- 余额只通过本模块变动；每次变动写一条流水（唯一约束 ref + kind），重复请求不会重复记账。
-- 扣减用条件 UPDATE（principal >= p AND bonus >= b），并发下不会出现负余额。
-- 消费拆分策略：proportional（按本金 / 赠送金余额比例，默认，退卡时双方都容易核对）或 principal_first。
-- 冲回（订单退款）按原消费流水的拆分原路退回。
-- 退卡只退剩余本金，赠送金作废；冷静期等规则由调用方按方案判断后调用。
-金额单位为分；本模块不 commit。
+对外（其他模块只从这里导入）：
+- 入账 / 消费 / 冲回：recharge、grant_bonus、consume、reverse、refund_card、split、ledger_matches_balance
+- 充值单与支付：create_recharge_order、handle_event（payment.* 发件箱消费入口）、on_payment_succeeded
+- 退款：quote_refund、request_refund、approve_refund、reject_refund、complete_offline_refund
+- 预付限额扩展点：PrepaidPolicy、PRESETS、policy_for、set_policy_resolver、register_outstanding_provider
+- 适配层：set_payment_port、FakePaymentPort、parse_paid、parse_refund_result、current_staff、require_permission、
+  set_grants_resolver、set_member_resolver、set_store_timezone_resolver、find_member、store_timezone
+金额单位为分；用例函数不 commit（接口层 / 事件消费 / 任务负责提交）。
 """
-from __future__ import annotations
+from .models import (
+    BatchAllocation, RechargeBatch, RechargePlan, WalletAccount, WalletLedger, WalletMismatch, WalletRefund,
+)
+from .ports import (
+    FakePaymentPort, MemberRef, PaidEvent, RefundResultEvent, StaffContext, WechatPayPort, assert_store_scope,
+    current_staff, find_member, parse_paid, parse_refund_result, payment_port, phone_lookup_hash, require_permission,
+    set_grants_resolver, set_member_resolver, set_payment_port, set_store_timezone_resolver, set_user_token_decoder,
+    store_timezone, current_user,
+)
+from .prepaid import (
+    CATEGORY_COUNT, CATEGORY_PERIOD, CATEGORY_STORED_VALUE, CONSERVATIVE, PRESETS, PrepaidPolicy, custom_policy,
+    member_outstanding_cents, policy_for, register_outstanding_provider, set_policy_resolver,
+)
+from .rules import CAUSE_CUSTOMER, CAUSE_MERCHANT, PRINCIPAL_FIRST, PROPORTIONAL, lpr_interest, split
+from .service import (
+    BIZ_TYPE, adjust, approve_refund, complete_offline_refund, consume, create_recharge_order, grant_bonus, handle_event,
+    ledger_matches_balance, on_payment_succeeded, quote_refund, recharge, refund_card, reject_refund, request_refund,
+    reverse,
+)
 
-from datetime import datetime, timezone
+PERMISSIONS = (
+    ("wallet:read", "储值账户、充值单、流水查看"),
+    ("wallet:config", "充值档位配置与上下架"),
+    ("wallet:adjust", "余额调整（原因必填，审计）"),
+    ("wallet:recharge", "门店线下充值"),
+    ("wallet:consume", "门店扣款 / 冲回"),
+    ("wallet:refund", "充值退款发起、审批、线下退款确认"),
+    ("wallet:export", "导出"),
+    ("wallet:reconcile", "对账查看与执行"),
+)
 
-from sqlalchemy import DateTime, Integer, String, UniqueConstraint, select, update
-from sqlalchemy.orm import Mapped, Session, mapped_column
-
-from luzback import AppError, Base, ErrorCode
-
-PROPORTIONAL = "proportional"
-PRINCIPAL_FIRST = "principal_first"
-
-
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-class WalletAccount(Base):
-    __tablename__ = "wallet_accounts"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(Integer, unique=True)
-    principal_cents: Mapped[int] = mapped_column(Integer, default=0)
-    bonus_cents: Mapped[int] = mapped_column(Integer, default=0)
-    status: Mapped[str] = mapped_column(String(16), default="active")  # active | closed
-
-
-class WalletLedger(Base):
-    __tablename__ = "wallet_ledger"
-    __table_args__ = (UniqueConstraint("ref", "kind", name="uq_wallet_ledger_ref_kind"),)
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    account_id: Mapped[int] = mapped_column(Integer, index=True)
-    kind: Mapped[str] = mapped_column(String(16))  # recharge | consume | reverse | card_refund
-    principal_delta: Mapped[int] = mapped_column(Integer)
-    bonus_delta: Mapped[int] = mapped_column(Integer)
-    ref: Mapped[str] = mapped_column(String(64))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
-
-
-def _account(db: Session, user_id: int, create: bool = False) -> WalletAccount:
-    account = db.execute(select(WalletAccount).where(WalletAccount.user_id == user_id)).scalar_one_or_none()
-    if account is None:
-        if not create:
-            raise AppError(ErrorCode.NOT_FOUND, "wallet not found")
-        account = WalletAccount(user_id=user_id)
-        db.add(account)
-        db.flush()
-    if account.status != "active":
-        raise AppError(ErrorCode.BUSINESS_RULE, "wallet closed")
-    return account
-
-
-def _existing(db: Session, ref: str, kind: str) -> WalletLedger | None:
-    return db.execute(select(WalletLedger).where(WalletLedger.ref == ref, WalletLedger.kind == kind)).scalar_one_or_none()
-
-
-def _apply(db: Session, account: WalletAccount, kind: str, ref: str, principal: int, bonus: int) -> WalletLedger:
-    """principal / bonus 为变化量；扣减时由条件保证不为负。"""
-    result = db.execute(
-        update(WalletAccount)
-        .where(WalletAccount.id == account.id, WalletAccount.status == "active",
-               WalletAccount.principal_cents + principal >= 0, WalletAccount.bonus_cents + bonus >= 0)
-        .values(principal_cents=WalletAccount.principal_cents + principal, bonus_cents=WalletAccount.bonus_cents + bonus)
-    )
-    if result.rowcount != 1:
-        raise AppError(ErrorCode.INSUFFICIENT_BALANCE, "insufficient balance")
-    entry = WalletLedger(account_id=account.id, kind=kind, principal_delta=principal, bonus_delta=bonus, ref=ref)
-    db.add(entry)
-    db.flush()
-    db.refresh(account)
-    return entry
-
-
-def recharge(db: Session, user_id: int, ref: str, principal_cents: int, bonus_cents: int = 0) -> WalletLedger:
-    """充值（支付成功后调用，ref 用支付单号）。幂等。"""
-    if principal_cents <= 0 or bonus_cents < 0:
-        raise AppError(ErrorCode.BAD_REQUEST, "invalid recharge amount")
-    found = _existing(db, ref, "recharge")
-    if found is not None:
-        return found
-    return _apply(db, _account(db, user_id, create=True), "recharge", ref, principal_cents, bonus_cents)
-
-
-def split(amount: int, principal: int, bonus: int, policy: str = PROPORTIONAL) -> tuple[int, int]:
-    """把消费金额拆成 (本金, 赠送金)。"""
-    if amount <= 0:
-        raise AppError(ErrorCode.BAD_REQUEST, "amount must be positive")
-    if amount > principal + bonus:
-        raise AppError(ErrorCode.INSUFFICIENT_BALANCE, "insufficient balance")
-    if policy == PRINCIPAL_FIRST:
-        from_principal = min(amount, principal)
-        return from_principal, amount - from_principal
-    if policy != PROPORTIONAL:
-        raise ValueError(f"unknown policy {policy}")
-    from_bonus = amount * bonus // (principal + bonus)  # 赠送金向下取整，本金多扣不超过 1 分
-    from_principal = amount - from_bonus
-    if from_principal > principal:  # 极端取整时回退到赠送金
-        from_bonus += from_principal - principal
-        from_principal = principal
-    return from_principal, from_bonus
-
-
-def consume(db: Session, user_id: int, ref: str, amount_cents: int, policy: str = PROPORTIONAL) -> WalletLedger:
-    """余额支付。幂等：同一 ref 重复调用返回原流水。"""
-    found = _existing(db, ref, "consume")
-    if found is not None:
-        return found
-    account = _account(db, user_id)
-    principal, bonus = split(amount_cents, account.principal_cents, account.bonus_cents, policy)
-    return _apply(db, account, "consume", ref, -principal, -bonus)
-
-
-def reverse(db: Session, user_id: int, ref: str) -> WalletLedger:
-    """订单退款：按原消费拆分原路退回钱包。幂等。"""
-    found = _existing(db, ref, "reverse")
-    if found is not None:
-        return found
-    original = _existing(db, ref, "consume")
-    if original is None:
-        raise AppError(ErrorCode.NOT_FOUND, "consume record not found")
-    return _apply(db, _account(db, user_id), "reverse", ref, -original.principal_delta, -original.bonus_delta)
-
-
-def refund_card(db: Session, user_id: int, ref: str) -> int:
-    """退卡：退还剩余本金（返回金额，调用方原路退款），赠送金作废，账户关闭。幂等。"""
-    found = _existing(db, ref, "card_refund")
-    if found is not None:
-        return -found.principal_delta
-    account = _account(db, user_id)
-    principal, bonus = account.principal_cents, account.bonus_cents
-    _apply(db, account, "card_refund", ref, -principal, -bonus)
-    db.execute(update(WalletAccount).where(WalletAccount.id == account.id).values(status="closed"))
-    return principal
-
-
-def ledger_matches_balance(db: Session, user_id: int) -> bool:
-    """对账：流水累加必须等于账户余额。"""
-    account = db.execute(select(WalletAccount).where(WalletAccount.user_id == user_id)).scalar_one()
-    rows = db.execute(select(WalletLedger.principal_delta, WalletLedger.bonus_delta)
-                      .where(WalletLedger.account_id == account.id)).all()
-    return (sum(r[0] for r in rows), sum(r[1] for r in rows)) == (account.principal_cents, account.bonus_cents)
+__all__ = [
+    "BatchAllocation", "RechargeBatch", "RechargePlan", "WalletAccount", "WalletLedger", "WalletMismatch", "WalletRefund",
+    "FakePaymentPort", "MemberRef", "PaidEvent", "RefundResultEvent", "StaffContext", "WechatPayPort",
+    "assert_store_scope", "current_staff", "find_member", "parse_paid", "parse_refund_result", "payment_port",
+    "phone_lookup_hash", "require_permission", "set_grants_resolver", "set_member_resolver", "set_payment_port",
+    "set_store_timezone_resolver", "set_user_token_decoder", "store_timezone", "current_user",
+    "CATEGORY_COUNT", "CATEGORY_PERIOD", "CATEGORY_STORED_VALUE", "CONSERVATIVE", "PRESETS", "PrepaidPolicy",
+    "custom_policy", "member_outstanding_cents", "policy_for", "register_outstanding_provider", "set_policy_resolver",
+    "CAUSE_CUSTOMER", "CAUSE_MERCHANT", "PRINCIPAL_FIRST", "PROPORTIONAL", "lpr_interest", "split",
+    "BIZ_TYPE", "adjust", "approve_refund", "complete_offline_refund", "consume", "create_recharge_order", "grant_bonus",
+    "handle_event", "ledger_matches_balance", "on_payment_succeeded", "quote_refund", "recharge", "refund_card",
+    "reject_refund", "request_refund", "reverse", "PERMISSIONS",
+]

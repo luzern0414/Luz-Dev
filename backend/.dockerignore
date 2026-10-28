@@ -1,0 +1,56 @@
+# 生产镜像构建上下文（backend/）排除清单：不带测试、缓存、本地配置与任何秘密进镜像。
+# 白名单思路：新增顶层目录前确认是否需要进入镜像。
+
+# 版本控制与 CI
+.git
+.github
+.gitignore
+
+# Python 缓存与本地环境
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.coverage
+**/htmlcov
+**/.venv
+**/venv
+*.egg-info
+
+# 测试（CI 从源码跑测试，镜像不需要）
+**/tests
+**/conftest.py
+**/test_*.py
+
+# 部署文件与本地配置（Dockerfile 本身由 -f 指定，不需要进上下文）
+deploy/
+**/.env
+**/.env.*
+**/*.env
+!**/*.env.example
+
+# 秘密与备份产物：任何情况下都不能进镜像
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*.crt
+**/*.dump
+**/*.sql.gz
+**/*.gpg
+**/*.age
+
+# 本地数据库与日志
+**/*.db
+**/*.sqlite3
+**/*.log
+
+# 文档（运行时不读取）；requirements/ 是需求说明不是依赖
+**/*.md
+requirements/
+
+# 编辑器
+.idea
+.vscode
+**/.DS_Store

@@ -1,3 +1,5 @@
+# 本地开发环境（不是生产模板；生产见 assets/deploy/docker-compose.prod.yml）。
+# 开发构建用 tag 版基础镜像（PYTHON_IMAGE 覆盖 Dockerfile 中的 digest 占位）；生产 CI 构建使用固定 digest。
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -33,14 +35,15 @@ services:
     volumes: ["minio:/data"]
 
   migrate:
-    build: { context: .., dockerfile: deploy/Dockerfile }
+    build: { context: .., dockerfile: deploy/Dockerfile, args: { PYTHON_IMAGE: "python:3.12-slim-bookworm" } }
     command: ["alembic", "upgrade", "head"]
+    healthcheck: { disable: true }   # 镜像自带 HEALTHCHECK 探 api 端口，非 api 进程关闭
     env_file: [.env.dev]
     depends_on:
       postgres: { condition: service_healthy }
 
   api:
-    build: { context: .., dockerfile: deploy/Dockerfile }
+    build: { context: .., dockerfile: deploy/Dockerfile, args: { PYTHON_IMAGE: "python:3.12-slim-bookworm" } }
     command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
     env_file: [.env.dev]
     ports: ["8000:8000"]
@@ -54,15 +57,17 @@ services:
       retries: 10
 
   worker:
-    build: { context: .., dockerfile: deploy/Dockerfile }
+    build: { context: .., dockerfile: deploy/Dockerfile, args: { PYTHON_IMAGE: "python:3.12-slim-bookworm" } }
     command: ["python", "-m", "jobs", "worker"]
+    healthcheck: { disable: true }   # 镜像自带 HEALTHCHECK 探 api 端口，非 api 进程关闭
     env_file: [.env.dev]
     depends_on:
       api: { condition: service_healthy }
 
   scheduler:
-    build: { context: .., dockerfile: deploy/Dockerfile }
+    build: { context: .., dockerfile: deploy/Dockerfile, args: { PYTHON_IMAGE: "python:3.12-slim-bookworm" } }
     command: ["python", "-m", "jobs", "scheduler"]
+    healthcheck: { disable: true }   # 镜像自带 HEALTHCHECK 探 api 端口，非 api 进程关闭
     env_file: [.env.dev]
     depends_on:
       api: { condition: service_healthy }

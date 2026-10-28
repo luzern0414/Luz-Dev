@@ -3,6 +3,8 @@
 """
 from __future__ import annotations
 
+import hmac
+import ipaddress
 import logging
 import threading
 import time
@@ -26,8 +28,14 @@ from .security import SECURITY_HEADERS, new_request_id, new_trace_id
 logger = logging.getLogger("luzback.app")
 
 
+BUCKETS = (0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0)  # 秒；可算 P50/P95/P99
+
+
 class Metrics:
-    """进程内计数器，/metrics 以 Prometheus 文本格式输出；生产可换官方客户端。"""
+    """进程内计数器与延迟直方图，/metrics 以 Prometheus 文本格式输出。
+
+    计数只覆盖本进程：部署时一个容器一个进程、多副本横向扩展（FastAPI 部署指南），由 Prometheus 按实例汇总。
+    """
 
     def __init__(self):
         self._lock = threading.Lock()
@@ -35,12 +43,17 @@ class Metrics:
         self.duration_sum: dict[tuple[str, str], float] = defaultdict(float)
         self.duration_count: dict[tuple[str, str], int] = defaultdict(int)
         self.counters: dict[str, int] = defaultdict(int)
+        self.buckets: dict[tuple[str, str], list[int]] = defaultdict(lambda: [0] * len(BUCKETS))
 
     def observe(self, method: str, route: str, status: int, seconds: float) -> None:
         with self._lock:
             self.requests[(method, route, status)] += 1
             self.duration_sum[(method, route)] += seconds
             self.duration_count[(method, route)] += 1
+            counts = self.buckets[(method, route)]
+            for i, bound in enumerate(BUCKETS):
+                if seconds <= bound:
+                    counts[i] += 1
 
     def inc(self, name: str, value: int = 1) -> None:
         with self._lock:
@@ -51,9 +64,12 @@ class Metrics:
         with self._lock:
             for (method, route, status), count in sorted(self.requests.items()):
                 lines.append(f'http_requests_total{{method="{method}",route="{route}",status="{status}"}} {count}')
-            lines.append("# TYPE http_request_duration_seconds summary")
+            lines.append("# TYPE http_request_duration_seconds histogram")
             for (method, route), total in sorted(self.duration_sum.items()):
                 count = self.duration_count[(method, route)]
+                for bound, value in zip(BUCKETS, self.buckets[(method, route)]):
+                    lines.append(f'http_request_duration_seconds_bucket{{method="{method}",route="{route}",le="{bound}"}} {value}')
+                lines.append(f'http_request_duration_seconds_bucket{{method="{method}",route="{route}",le="+Inf"}} {count}')
                 lines.append(f'http_request_duration_seconds_sum{{method="{method}",route="{route}"}} {total:.6f}')
                 lines.append(f'http_request_duration_seconds_count{{method="{method}",route="{route}"}} {count}')
             for name, value in sorted(self.counters.items()):
@@ -61,11 +77,40 @@ class Metrics:
         return "\n".join(lines) + "\n"
 
 
+def _networks(cidrs: Iterable[str]) -> list:
+    out = []
+    for cidr in cidrs:
+        try:
+            out.append(ipaddress.ip_network(cidr, strict=False))
+        except ValueError:
+            logger.warning("invalid network in settings: %s", cidr)
+    return out
+
+
+def _in(address: str, networks: list) -> bool:
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return False
+    return any(ip.version == net.version and ip in net for net in networks)
+
+
 def client_ip(request: Request) -> str:
-    forwarded = request.headers.get("X-Forwarded-For", "")
-    if forwarded:
-        return forwarded.split(",")[0].strip()[:64]
-    return (request.client.host if request.client else "unknown")[:64]
+    """真实客户端地址。
+
+    只有 TCP 对端在可信代理网段（LUZ_TRUSTED_PROXIES，即 nginx）时才读 X-Forwarded-For，
+    并从右往左跳过可信代理，取第一个不可信地址——最左边的值可由客户端伪造，不能用于限流、锁定和审计。
+    """
+    peer = request.client.host if request.client else "unknown"
+    settings = getattr(request.app.state, "settings", None) or get_settings()
+    trusted = _networks(settings.trusted_proxies)
+    if not _in(peer, trusted):
+        return peer[:64]
+    hops = [h.strip() for h in request.headers.get("X-Forwarded-For", "").split(",") if h.strip()]
+    for hop in reversed(hops):
+        if not _in(hop, trusted):
+            return hop[:64]
+    return (hops[0] if hops else peer)[:64]
 
 
 def _envelope(code: ErrorCode, message: str, data=None, status: int | None = None, retry_after: int | None = None) -> JSONResponse:
@@ -86,7 +131,8 @@ def create_app(
     settings = settings or get_settings()
     rules = list(rate_rules)
     metrics = Metrics()
-    app = FastAPI(title=title, docs_url="/docs" if not settings.is_prod else None, redoc_url=None)
+    app = FastAPI(title=title, docs_url="/docs" if not settings.is_prod else None, redoc_url=None,
+                  openapi_url="/openapi.json" if not settings.is_prod else None)  # 生产不公开接口文档
     app.state.settings = settings
     app.state.metrics = metrics
     app.state.breakers = breakers or BreakerRegistry()
@@ -130,7 +176,8 @@ def create_app(
         response.headers["X-Trace-Id"] = trace_id
         for name, value in SECURITY_HEADERS.items():
             response.headers.setdefault(name, value)
-        route = getattr(request.scope.get("route"), "path", request.url.path)
+        # 未匹配路由（扫描、404）统一记为 unmatched，避免原始路径让标签无限增长
+        route = getattr(request.scope.get("route"), "path", "unmatched")
         metrics.observe(request.method, route, response.status_code, time.perf_counter() - started)
         return response
 
@@ -184,9 +231,16 @@ def create_app(
         return JSONResponse(status_code=200 if ok else 503,
                             content={"code": 0 if ok else int(ErrorCode.SERVICE_UNAVAILABLE), "message": "ok" if ok else "not ready", "data": checks})
 
-    @app.get("/metrics", tags=["system"], response_class=PlainTextResponse)
-    def metrics_endpoint() -> str:
-        return metrics.render()
+    @app.get("/metrics", tags=["system"], response_class=PlainTextResponse, include_in_schema=False)
+    def metrics_endpoint(request: Request) -> PlainTextResponse:
+        """只对内网或持有 LUZ_METRICS_TOKEN 的抓取方开放；对外返回 404，不暴露端点存在。"""
+        token = settings.metrics_token
+        auth = request.headers.get("Authorization", "")
+        allowed = (token and hmac.compare_digest(auth, f"Bearer {token}")) or _in(
+            request.client.host if request.client else "", _networks(settings.internal_networks))
+        if not allowed:
+            return PlainTextResponse("not found", status_code=404)
+        return PlainTextResponse(metrics.render(), media_type="text/plain; version=0.0.4")
 
     for router in routers:
         app.include_router(router)

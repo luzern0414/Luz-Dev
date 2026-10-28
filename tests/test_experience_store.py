@@ -35,69 +35,71 @@ def run(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     return result
 
 
+def note(key: str, text: str, kind: str = "preference", uses: int = 1, day: str = "2026-01-01") -> dict:
+    return {"key": key, "kind": kind, "text": text, "uses": uses, "first_seen": day, "last_confirmed": day}
+
+
 class NoteUpsertTests(unittest.TestCase):
     def test_same_key_replaces_and_keeps_one_previous(self) -> None:
-        entries: list[dict] = []
-        action, _ = rx.upsert_note(entries, kind="preference", key="table-header", text="表头左对齐")
-        self.assertEqual(action, "created")
-        action, entry = rx.upsert_note(entries, kind="preference", key="table-header", text="表头居中")
+        doc = rx.new_notes_doc()
+        action, _, _ = rx.upsert_note(doc, "preference", "table-header", "表头左对齐")
+        self.assertEqual(action, "added")
+        action, entry, _ = rx.upsert_note(doc, "preference", "table-header", "表头居中")
         self.assertEqual(action, "replaced")
-        action, entry = rx.upsert_note(entries, kind="preference", key="table-header", text="表头与数据都居中")
-        self.assertEqual(len(entries), 1)
+        action, entry, _ = rx.upsert_note(doc, "preference", "table-header", "表头与数据都居中", on="2026-10-01")
+        self.assertEqual(len(doc["notes"]), 1)
         self.assertEqual(entry["text"], "表头与数据都居中")
-        self.assertEqual(entry["previous"]["text"], "表头居中")
-        self.assertEqual(entry["uses"], 3)
+        self.assertEqual(entry["previous"], {"text": "表头居中", "replaced_at": "2026-10-01"})
+        self.assertEqual((entry["uses"], entry["last_confirmed"]), (3, "2026-10-01"))
 
     def test_same_text_only_confirms(self) -> None:
-        entries: list[dict] = []
-        rx.upsert_note(entries, kind="fact", key="crawl-batch", text="调研每批 15 个检索，间隔 6 秒")
-        action, entry = rx.upsert_note(entries, kind="fact", key="crawl-batch", text="调研每批15个检索，间隔6秒。")
+        doc = rx.new_notes_doc()
+        rx.upsert_note(doc, "fact", "crawl-batch", "调研每批 15 个检索，间隔 6 秒")
+        action, entry, _ = rx.upsert_note(doc, "fact", "crawl-batch", "调研每批15个检索，间隔6秒。")
         self.assertEqual(action, "confirmed")
-        self.assertIsNone(entry["previous"])
+        self.assertNotIn("previous", entry)
         self.assertEqual(entry["uses"], 2)
 
-    def test_same_text_under_new_key_is_rejected(self) -> None:
-        entries: list[dict] = []
-        rx.upsert_note(entries, kind="lesson", key="callback-verify", text="支付成功只认验签后的回调或主动查询")
-        with self.assertRaises(ValueError):
-            rx.upsert_note(entries, kind="lesson", key="pay-success", text="支付成功只认验签后的回调或主动查询。")
+    def test_same_text_under_new_key_confirms_the_existing_note(self) -> None:
+        doc = rx.new_notes_doc()
+        rx.upsert_note(doc, "lesson", "callback-verify", "支付成功只认验签后的回调或主动查询")
+        action, entry, _ = rx.upsert_note(doc, "lesson", "pay-success", "支付成功只认验签后的回调或主动查询。")
+        self.assertEqual((action, entry["key"], entry["uses"]), ("confirmed", "callback-verify", 2))
+        self.assertEqual(len(doc["notes"]), 1)
 
     def test_private_data_is_rejected(self) -> None:
-        for text in ("联系 13812345678 确认", "方案在 C:\\Users\\me\\plan.html", "token: abc"):
+        for text in ("联系 13812345678 确认", r"方案在 C:\Users\me\plan.html", "token: abc", "邮件 dev@example.com",
+                     "微信号：abc_12345"):
             with self.assertRaises(ValueError, msg=text):
-                rx.upsert_note([], kind="preference", key="private", text=text)
+                rx.upsert_note(rx.new_notes_doc(), "preference", "private", text)
 
     def test_invalid_key_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
-            rx.upsert_note([], kind="preference", key="Has Space", text="x")
+            rx.upsert_note(rx.new_notes_doc(), "preference", "Has Space", "x")
 
 
 class NoteCapTests(unittest.TestCase):
-    def test_prune_drops_stale_then_least_used(self) -> None:
+    def test_prune_drops_fewest_uses_then_oldest(self) -> None:
         cap = rx.NOTE_CAPS["preference"]
-        entries = [
-            {"kind": "preference", "key": f"p{i}", "text": f"偏好 {i}", "uses": 5, "last_confirmed": rx.now()}
-            for i in range(cap)
-        ]
-        entries.append({"kind": "preference", "key": "stale", "text": "很久没确认", "uses": 50, "last_confirmed": "2020-01-01T00:00:00+08:00"})
-        entries.append({"kind": "preference", "key": "rare", "text": "很少用", "uses": 1, "last_confirmed": rx.now()})
-        errors, _ = rx.check_notes(entries)
-        self.assertTrue(any("超过上限" in error for error in errors))
-        removed = rx.prune_notes(entries)
-        self.assertEqual([item["key"] for item in removed], ["stale", "rare"])
-        self.assertEqual(len(entries), cap)
-        errors, _ = rx.check_notes(entries)
-        self.assertEqual(errors, [])
+        doc = rx.new_notes_doc()
+        doc["notes"] = [note(f"p{i}", f"偏好 {i}", uses=5, day="2026-10-01") for i in range(cap - 1)]
+        doc["notes"] += [note("rare-old", "很少用且旧", day="2025-01-01"), note("rare-new", "很少用但新", day="2026-10-01"),
+                         note("popular-old", "常用但旧", uses=50, day="2020-01-01")]
+        self.assertTrue(any("exceed the cap" in error for error in rx.check_notes(doc)))
+        removed = rx.prune_notes(doc)
+        self.assertEqual([item["key"] for item in removed], ["rare-old", "rare-new"])
+        self.assertEqual(len(doc["notes"]), cap)
+        self.assertEqual(rx.check_notes(doc), [])
+        self.assertEqual([n["key"] for n in rx.stale_notes(doc)], ["popular-old"])
 
-    def test_check_flags_duplicate_keys_and_texts(self) -> None:
-        entries = [
-            {"kind": "preference", "key": "a", "text": "表头居中", "uses": 1, "last_confirmed": rx.now()},
-            {"kind": "preference", "key": "a", "text": "数据居中", "uses": 1, "last_confirmed": rx.now()},
-            {"kind": "lesson", "key": "b", "text": "表头 居中。", "uses": 1, "last_confirmed": rx.now()},
-        ]
-        errors, _ = rx.check_notes(entries)
-        self.assertTrue(any("key 重复" in error for error in errors))
-        self.assertTrue(any("内容重复" in error for error in errors))
+    def test_check_flags_duplicate_keys_texts_and_old_shape(self) -> None:
+        doc = rx.new_notes_doc()
+        doc["notes"] = [note("a", "表头居中"), note("a", "数据居中"), note("b", "表头 居中。", "lesson")]
+        errors = rx.check_notes(doc)
+        self.assertTrue(any("duplicate note key a" in error for error in errors))
+        self.assertTrue(any("repeats the statement of a" in error for error in errors))
+        old = {"description": "x", "caps": rx.NOTE_CAPS, "entries": [{**note("c", "旧格式"), "created": "2026-01-01T00:00:00+08:00"}]}
+        self.assertTrue(any("top-level fields" in error for error in rx.check_notes(old)))
 
 
 class CliStoreTests(unittest.TestCase):
@@ -117,12 +119,15 @@ class CliStoreTests(unittest.TestCase):
             self.assertEqual(payload["action"], "replaced")
             self.assertEqual(payload["previous"], "先批准方案再开发")
             store = json.loads((experience / "notes.json").read_text(encoding="utf-8"))
-            self.assertEqual(len(store["entries"]), 1)
+            self.assertEqual(list(store), ["schema_version", "caps", "notes"])
+            self.assertEqual(len(store["notes"]), 1)
             index = (experience / "INDEX.md").read_text(encoding="utf-8")
             self.assertIn("方案批准并通过哈希门禁后才开发", index)
             self.assertNotIn("先批准方案再开发 |", index)
             found = json.loads(run("search", "哈希", *common).stdout)
             self.assertEqual([item["key"] for item in found["notes"]], ["plan-first"])
+            listed = json.loads(run("list", "--kind", "preference", *common).stdout)
+            self.assertEqual([item["key"] for item in listed["notes"]], ["plan-first"])
             self.assertEqual(json.loads(run("check", *common).stdout)["ok"], True)
 
     def test_record_with_existing_key_updates_in_place(self) -> None:
@@ -200,6 +205,25 @@ class RepositoryStoreTests(unittest.TestCase):
     def test_committed_store_passes_check(self) -> None:
         errors, _ = rx.check_store(ROOT / "experience")
         self.assertEqual(errors, [])
+
+    def test_committed_notes_file_matches_shared_spec(self) -> None:
+        """experience/notes.json has the shape shared by Luz-System, Luz-Design, Luz-Dev and Luz-Writing."""
+        path = ROOT / "experience" / "notes.json"
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(list(doc), ["schema_version", "caps", "notes"])
+        self.assertEqual(doc["schema_version"], "1.0")
+        self.assertEqual(doc["caps"], {"preference": 60, "lesson": 120, "fact": 120})
+        allowed = {"key", "kind", "text", "why", "uses", "first_seen", "last_confirmed", "previous"}
+        for n in doc["notes"]:
+            self.assertLessEqual({"key", "kind", "text", "uses", "first_seen", "last_confirmed"}, set(n), n.get("key"))
+            self.assertLessEqual(set(n), allowed, n.get("key"))
+            self.assertIn(n["kind"], ("preference", "lesson", "fact"))
+            self.assertRegex(n["first_seen"], r"^\d{4}-\d{2}-\d{2}$")
+            self.assertRegex(n["last_confirmed"], r"^\d{4}-\d{2}-\d{2}$")
+            if "previous" in n:
+                self.assertEqual(set(n["previous"]), {"text", "replaced_at"})
+        self.assertEqual(len({n["key"] for n in doc["notes"]}), len(doc["notes"]))
+        self.assertEqual(rx.check_notes(doc), [])
 
 
 if __name__ == "__main__":

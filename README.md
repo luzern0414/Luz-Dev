@@ -69,7 +69,9 @@ python -X utf8 scripts/validate_skill_package.py --design-root ../Luz-Design
 
 ## 经验沉淀
 
-每次调用结束前，都会记录你提出或纠正的偏好、证明有效或失败的做法和参数、对规则的修正，只记通用原则，不记任务细节。条目按主题 key 存放：同一主题再次记录会替换旧内容，只保留一次旧版本用于追溯，不会越积越多。偏好最多 60 条、教训和有效信息各 120 条、有效经验记录 120 条，超出时先清理长期未确认、使用最少的条目；检查脚本会拦下重复主题、重复内容和个人信息。
+Luz-System、Luz-Design、Luz-Dev、Luz-Writing 四个技能用同一套经验沉淀：经验库是 `experience/notes.json`，每条有主题键 `key`、类别 `kind`（偏好 preference、教训 lesson、有效信息 fact）、一句话原则 `text`、可选依据 `why`、确认次数 `uses`、首次记录 `first_seen`、最近确认 `last_confirmed`，被替换过的再带一条旧说法 `previous`。开始时用 `search` 查，结束前用 `note` 写，另有 `list`、`prune`、`check`（本仓库脚本 `scripts/record_experience.py`）。同一主题再写会替换旧说法，同一句话换了键只算再确认一次；偏好最多 60 条，教训和有效信息各 120 条，超出时先删确认最少、最久没确认的，180 天没确认的会列出来。仓库公开，手机号、邮箱、微信号、个人目录路径和密钥写不进去，检查也会拦下。
+
+本仓库另有完整任务经验记录 `experience/records/EXP-*.md`（`record`、`promote`、`deprecate`，有效记录最多 120 条），`search` 会一并检索。
 
 ## 目录结构
 

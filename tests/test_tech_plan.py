@@ -200,8 +200,12 @@ class DesignAndLaunchTests(unittest.TestCase):
                 self.assertIn(rule, rules)
             plan = complete(plan)
             plan["design"] = {}
-            errors, _ = tech_plan.check_plan(plan)
-            self.assertTrue(any("Luz System" in error for error in errors))
+            # 前端地址在方案批准后才给：审核时只提醒，开发门禁才拒绝
+            errors, warnings = tech_plan.check_plan(plan)
+            self.assertFalse(any("前端地址" in error for error in errors))
+            self.assertTrue(any("前端地址" in warning for warning in warnings))
+            errors, _ = tech_plan.check_plan(plan, "development")
+            self.assertTrue(any("前端地址" in error for error in errors))
 
             session = make_session(base / "design")
             self.assertEqual(run(base, "design", "01", "--session", str(session)), 0)
@@ -213,13 +217,21 @@ class DesignAndLaunchTests(unittest.TestCase):
             _, data_path = tech_plan.find_plan("01", base)
             self.assertTrue((data_path.parent / "design-intake.json").is_file())
 
+            frontend = base / "apps" / "miniprogram"
+            frontend.mkdir(parents=True)
+            self.assertEqual(run(base, "design", "01", "--session", str(session), "--frontend", str(frontend)), 0)
+            self.assertEqual(load(base)["design"]["frontend"], [{"path": str(frontend), "exists": True}])
+            run(base, "design", "01", "--frontend", str(base / "missing"))
+            errors, _ = tech_plan.check_plan(load(base), "development")
+            self.assertTrue(any("前端目录不存在" in error for error in errors))
+
     def test_backend_only_plan_has_no_design_requirement(self) -> None:
         plan = tech_plan.new_plan_data(number="01", topic="t", mode="implementation", summary="s",
                                        project_types=["backend"], modules=[], output_root=Path("."))
         plan = complete(plan)
         plan.pop("design")
         errors, _ = tech_plan.check_plan(plan)
-        self.assertFalse(any("Luz System" in error for error in errors))
+        self.assertFalse(any("前端地址" in error for error in errors))
 
 
 class FeatureTests(unittest.TestCase):

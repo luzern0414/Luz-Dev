@@ -75,15 +75,25 @@
 
 响应统一 `{code, message, data}`；`code = 0` 成功。请求头：`Authorization: Bearer`、`Idempotency-Key`（写接口必带）、`X-Trace-Id`（可选，网关生成）、`X-Client: miniprogram|h5|admin|staff|agent`、`X-Client-Version`。响应头回显 `X-Trace-Id`、`X-Request-Id`。
 
-### 3.4 分页、筛选、排序
+### 3.4 分页、筛选、排序、搜索与导出
+
+所有列表接口用 `luzback.listing.ListSpec` 声明可筛选、可排序、可搜索的字段，导出用 `luzback.export.export_csv` 复用同一份声明。不在接口里手写分页和 WHERE 拼接。
 
 | 端 | 分页 | 响应 |
 |---|---|---|
-| 顾客端列表 | 游标：`?cursor=<opaque>&limit=10`（上限 20）；游标为 base64 的 `(sort_value, id)` | `{items, next_cursor, has_more, total?}`（`total` 只在首页且 ≤ 10000 时给） |
-| 后台列表 | 页码：`?page=1&page_size=20`（上限 100） | `{items, page, page_size, total}` |
+| 顾客端列表 | 游标：`?cursor=<opaque>&limit=10`（上限 20）；游标签名防篡改，绑定排序与筛选条件，3 天后失效 | `{items, next_cursor, has_more}` |
+| 后台列表 | 页码：`?page=1&page_size=20`（上限 100；`page × page_size ≤ 10000`，更深的翻页要求缩小筛选） | `{items, page, page_size, total}` |
 
-- 筛选参数：`status=a,b`（多值逗号）、`from=&to=`（ISO 8601，门店时区）、`keyword=`、`store_id=`；排序 `sort=-created_at,amount`（`-` 降序，字段白名单）。
-- 所有列表默认按 `created_at desc, id desc`；游标与排序字段一致。
+| 规则 | 约定 |
+|---|---|
+| 等于 / 多值 | `status=paid`、`status=paid,refunded`（逗号分隔，最多 50 个）；枚举字段只接受声明的值 |
+| 数值区间 | `amount_cents_min` / `amount_cents_max`，两端包含；`min > max` 返回 4001 |
+| 时间区间 | `created_at_from` / `created_at_to`：只写日期时按门店时区整天计算，`to` 当天包含；带时刻时 `from` 包含、`to` 不包含；可声明最长跨度（报表与导出 31 天） |
+| 空值 | `field_null=true|false`；空字符串视为未传 |
+| 关键词 | `keyword` 在声明的列里模糊匹配，转义 `%` `_`，1–50 个字符，前后空格忽略 |
+| 排序 | `sort=-created_at,amount_cents`，字段白名单，最多 3 个；自动追加 `id` 同向排序保证稳定；NULL 一律排在最后；默认 `-created_at` |
+| 未知参数 | 返回 4001，拼错的筛选条件不会被静默忽略 |
+| 导出 | 与列表同一筛选；≤ 5000 行同步，超过转异步任务；单次上限 20 万行（4225）；UTF-8 BOM；防公式注入；敏感字段脱敏；写审计 |
 
 ### 3.5 字段约定
 

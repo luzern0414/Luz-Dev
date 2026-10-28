@@ -1,0 +1,52 @@
+# Luz 记录规则：把告警与面板要用的昂贵查询预先算好。
+# 应用指标来源：luzback.app.Metrics（每进程计数；每容器一个进程，按实例汇总）
+#   http_requests_total{method,route,status}、http_request_duration_seconds_bucket{method,route,le}
+#   桶边界 0.005 0.01 0.025 0.05 0.1 0.25 0.5 1 2.5 5 10（秒）
+# SLO：可用性 99.9%（月度错误预算 0.1%）；错误 = 5xx；系统端点不计入。
+groups:
+  - name: luz-slo
+    interval: 30s
+    rules:
+      - record: luz:http_requests:rate5m
+        expr: sum(rate(http_requests_total{job="luz-api",route!~"/(healthz|readyz|metrics)"}[5m]))
+
+      # 各窗口错误率（多窗口多燃烧率告警用：5m/1h、30m/6h、6h/3d）
+      - record: luz:slo_errors:ratio_rate5m
+        expr: |
+          sum(rate(http_requests_total{job="luz-api",route!~"/(healthz|readyz|metrics)",status=~"5.."}[5m]))
+          / clamp_min(sum(rate(http_requests_total{job="luz-api",route!~"/(healthz|readyz|metrics)"}[5m])), 1e-9)
+      - record: luz:slo_errors:ratio_rate30m
+        expr: |
+          sum(rate(http_requests_total{job="luz-api",route!~"/(healthz|readyz|metrics)",status=~"5.."}[30m]))
+          / clamp_min(sum(rate(http_requests_total{job="luz-api",route!~"/(healthz|readyz|metrics)"}[30m])), 1e-9)
+      - record: luz:slo_errors:ratio_rate1h
+        expr: |
+          sum(rate(http_requests_total{job="luz-api",route!~"/(healthz|readyz|metrics)",status=~"5.."}[1h]))
+          / clamp_min(sum(rate(http_requests_total{job="luz-api",route!~"/(healthz|readyz|metrics)"}[1h])), 1e-9)
+      - record: luz:slo_errors:ratio_rate6h
+        expr: |
+          sum(rate(http_requests_total{job="luz-api",route!~"/(healthz|readyz|metrics)",status=~"5.."}[6h]))
+          / clamp_min(sum(rate(http_requests_total{job="luz-api",route!~"/(healthz|readyz|metrics)"}[6h])), 1e-9)
+      - record: luz:slo_errors:ratio_rate3d
+        expr: |
+          sum(rate(http_requests_total{job="luz-api",route!~"/(healthz|readyz|metrics)",status=~"5.."}[3d]))
+          / clamp_min(sum(rate(http_requests_total{job="luz-api",route!~"/(healthz|readyz|metrics)"}[3d])), 1e-9)
+
+  - name: luz-latency
+    interval: 30s
+    rules:
+      # 每路由流量与 p95 / p99（histogram_quantile 必须先 sum by (le)，才能跨实例聚合）
+      - record: luz:route:http_requests:rate5m
+        expr: sum by (method, route) (rate(http_requests_total{job="luz-api",route!~"/(healthz|readyz|metrics)"}[5m]))
+      - record: luz:route:http_request_duration_seconds:p95_5m
+        expr: histogram_quantile(0.95, sum by (le, method, route) (rate(http_request_duration_seconds_bucket{job="luz-api",route!~"/(healthz|readyz|metrics)"}[5m])))
+      - record: luz:route:http_request_duration_seconds:p99_5m
+        expr: histogram_quantile(0.99, sum by (le, method, route) (rate(http_request_duration_seconds_bucket{job="luz-api",route!~"/(healthz|readyz|metrics)"}[5m])))
+      # 读 / 写两类整体 p95（与 k6 阈值同口径：读 p95 < 300ms，写 p95 < 800ms）
+      - record: luz:read:http_request_duration_seconds:p95_5m
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job="luz-api",method="GET",route!~"/(healthz|readyz|metrics)"}[5m])))
+      - record: luz:write:http_request_duration_seconds:p95_5m
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job="luz-api",method=~"POST|PUT|PATCH|DELETE",route!~"/api/v1/(payments/notify|webhooks)/.*"}[5m])))
+      # 饱和度早期信号：1 分钟窗口 p99
+      - record: luz:http_request_duration_seconds:p99_1m
+        expr: histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{job="luz-api",route!~"/(healthz|readyz|metrics)"}[1m])))

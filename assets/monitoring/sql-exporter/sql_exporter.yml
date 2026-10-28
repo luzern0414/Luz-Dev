@@ -1,0 +1,20 @@
+# sql_exporter（burningalchemist/sql_exporter）配置：从业务表直接查询异步链路健康度，不依赖应用进程是否在线。
+# 连接串通过环境变量 SQLEXPORTER_TARGET_DSN 提供（/etc/luz/monitoring.env），不写在本文件：
+#   SQLEXPORTER_TARGET_DSN=postgres://luz_monitor:<pwd>@postgres:5432/luz?sslmode=disable&options=-c%20TimeZone%3DUTC
+# 只读监控账号（在库里执行一次）：
+#   CREATE ROLE luz_monitor LOGIN PASSWORD '<pwd>' CONNECTION LIMIT 3;
+#   GRANT pg_monitor TO luz_monitor;                                   -- postgres_exporter 共用
+#   GRANT SELECT ON outbox_events, scheduler_runs, payment_records TO luz_monitor;
+#   ALTER ROLE luz_monitor SET statement_timeout = '5s';
+global:
+  scrape_timeout: 20s
+  scrape_timeout_offset: 500ms
+  min_interval: 30s            # 结果缓存 30 秒，Prometheus 多次抓取不会重复打库
+  max_connections: 2
+  max_idle_connections: 1
+
+target:
+  collectors: [luz_*]
+
+collector_files:
+  - "*.collector.yml"

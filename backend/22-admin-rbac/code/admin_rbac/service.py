@@ -1,812 +1,778 @@
-"""admin_rbac 用例：登录 / MFA / 刷新 / 登出、口令、员工、角色、权限解析、门店范围、审计查询。
+"""admin_rbac 管理用例：种子与首个超级管理员、员工、角色、权限码、审计与登录日志查询导出。
 
-规则（MODULES-DESIGN 22 §规则）：
-- 登录失败 `failed_attempts + 1` 为单条条件 UPDATE（CASE 到阈值即写 locked_until）；锁定返回 4290 带剩余秒；成功清零。
-- 锁到期后首次登录先条件清零（WHERE locked_until <= now），避免旧计数立刻再次锁定。
-- mfa_enabled 的账号先拿 kind=mfa 的 5 分钟令牌，/auth/mfa 验 TOTP（漂移 ±1）后签发 access(kind=admin) + refresh(kind=admin_refresh)。
-- access 令牌带 rv；停用 / 改密 / 重置 MFA / 登出 都 refresh_version + 1，现有 access 与 refresh 立即失效。
-- 权限码按 (user_id, refresh_version) 缓存 60 秒；本进程内的角色 / 权限写入立即清缓存。
-- 不能改自己的角色与门店范围；不能停用自己；编辑自己持有的角色时，新权限集必须是自己当前权限的子集。
-- 所有后台写操作同事务写审计；每次登录尝试写登录日志（保留 180 天）。
+写用例不 commit（由 api 层 run_idempotent 统一提交，失败整体回滚）；只读与导出用例自行 commit 审计行。
+防越权（MODULE.md §4 R5.x）：
+- 不能改自己的角色 / 门店范围，不能停用 / 删除 / 重置自己（改密走本人接口）。
+- 只能授予自己持有的权限码与门店；只有超级管理员能授予超级管理员角色。
+- 只能管理“权限与门店范围都不超过自己”的员工；范围外的员工按不存在处理（4040）。
+- 任何操作后必须至少保留一名在职超级管理员（4220）。
 """
 from __future__ import annotations
 
-import threading
-import time
-from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+import secrets
+from collections.abc import Iterable, Mapping
+from datetime import timedelta
 from typing import Any
 
-from sqlalchemy import case, delete, func, or_, select, update
+from sqlalchemy import Select, delete, exists, func, select, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, object_session
+from sqlalchemy.orm import Session
 
-from luzback import AppError, ErrorCode, create_token, decode_token, get_settings, utcnow, write_audit
+from luzback import AppError, ErrorCode, Field, ListSpec, enqueue_event, write_audit
 from luzback.audit import AuditLog
-from luzback.crypto import FieldCipher
-from luzback.pagination import parse_page
-from luzback.security import (
-    check_password_policy, hash_password, mask_phone, password_needs_rehash, random_token, totp_secret, totp_verify,
-    verify_password,
-)
+from luzback.export import export_csv
+from luzback.security import mask_phone
 
+from . import config
+from .access import (  # noqa: F401  # assert_permission / store_scope 供旧适配器 `admin_rbac.service.*` 使用
+    REASON_PASSWORD_CHANGE, Staff, assert_permission, audit, build_staff, load_grants, load_staff, log_sensitive_read,
+    store_scope,
+)
+from .auth import cipher, clear_mfa, clear_throttle, decode_access, revoke_sessions, validate_session  # noqa: F401
 from .models import (
-    STATUS_ACTIVE, STATUS_DISABLED, TOKEN_KIND_ACCESS, TOKEN_KIND_MFA, TOKEN_KIND_REFRESH, AdminLoginLog, AdminPermission,
-    AdminRole, AdminRolePermission, AdminStoreScope, AdminUser, AdminUserRole,
+    STAFF_STATUSES, AdminSession, STATUS_ACTIVE, STATUS_DISABLED, AdminLoginLog, AdminLoginThrottle, AdminRole, AdminRolePermission,
+    AdminStoreScope, AdminUser, AdminUserRole,
 )
-from .seed import ALL_CODES, DEFAULT_ROLES, PERMISSIONS, expand_codes
+from .passwords import hash_secret
+from .permissions import WILDCARD, expand, registered, registered_codes, sync_permissions
+from .rules import aware, field_error, validate_phone, validate_username
+from .seed import BUILTIN_ROLES, SUPER_ADMIN
 
-MFA_TOKEN_TTL_SECONDS = 300
-PERMISSION_CACHE_TTL_SECONDS = 60
-PASSWORD_REMIND_DAYS = 90
-LOGIN_LOG_RETENTION_DAYS = 180
-INITIAL_PASSWORD_BYTES = 9  # token_urlsafe(9) → 12 位，再拼数字保证策略通过
-
-clock = time.monotonic  # 测试可替换
+# ---------- 兼容层：其他模块的旧适配器（先 decode_token(kind="admin") 再调用这里）----------
 
 
-@dataclass(frozen=True)
-class Actor:
-    """执行后台写操作的员工及请求上下文（写审计 / 登录日志用）。"""
-
-    id: int
-    ip: str | None = None
-    user_agent: str | None = None
-    trace_id: str | None = None
-
-
-def _actor(actor: Actor | int) -> Actor:
-    return actor if isinstance(actor, Actor) else Actor(id=int(actor))
-
-
-def _cipher() -> FieldCipher:
-    return FieldCipher(get_settings().field_encryption_key)
-
-
-def aware(dt: datetime | None) -> datetime | None:
-    if dt is None:
-        return None
-    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+def load_active_staff(db: Session, staff_id: int, rv: Any = None) -> Staff:
+    """按令牌声明取员工：rv（= sid，会话 id）存在时完整校验服务端会话（撤销、空闲 / 绝对超时、在职）；
+    受限会话（首登改密 / 必须绑定 MFA）→ 4011。返回 Staff（.id / .has / .store_scope / .permissions）。"""
+    if rv is not None:
+        try:
+            sess = db.get(AdminSession, int(rv))
+        except (TypeError, ValueError):
+            sess = None
+        user = validate_session(db, sess, staff_id=int(staff_id))
+        staff = build_staff(db, user, session_id=sess.id, auth_at=sess.auth_at, amr=sess.amr)
+    else:
+        staff = load_staff(db, int(staff_id))
+    if staff.restricted_reason:
+        raise AppError(ErrorCode.MFA_REQUIRED, "complete account security setup first", data={"reason": staff.restricted_reason})
+    return staff
 
 
-def _audit(db: Session, actor: Actor, action: str, resource: str, resource_id: Any, before=None, after=None, reason=None) -> None:
-    write_audit(db, "staff", actor.id, action, resource, resource_id, before=before, after=after, reason=reason,
-                ip=actor.ip, user_agent=actor.user_agent, trace_id=actor.trace_id)
+def grants_of(db: Session, staff: Staff | AdminUser) -> tuple[frozenset[str], list[int] | None]:
+    """(权限码, 门店范围)；门店范围 None = 全部门店，[] = 无门店（注意：不是“全部”）。"""
+    st = staff if isinstance(staff, Staff) else build_staff(db, staff)
+    return st.permissions, st.store_scope
 
 
 # ---------- 种子 ----------
 
+
 def ensure_seed(db: Session) -> dict[str, int]:
-    """幂等写入权限码全集与默认角色；返回新增数量。已存在的角色不覆盖其权限（允许项目调整）。"""
-    existing = set(db.execute(select(AdminPermission.code)).scalars().all())
-    added_perms = 0
-    for code, module, description in PERMISSIONS:
-        if code not in existing:
-            db.add(AdminPermission(code=code, module=module, description=description))
-            added_perms += 1
-    db.flush()
-    names = set(db.execute(select(AdminRole.name)).scalars().all())
+    """幂等：同步权限码注册表；补齐缺失的内置角色（已存在的不覆盖，允许项目调整）。"""
+    added_perms = sync_permissions(db)
+    existing = set(db.execute(select(AdminRole.builtin_code).where(AdminRole.builtin_code.is_not(None))).scalars().all())
     added_roles = 0
-    for name, description, patterns in DEFAULT_ROLES:
-        if name in names:
+    for code, name, description, patterns, mfa in BUILTIN_ROLES:
+        if code in existing:
             continue
-        role = AdminRole(name=name, description=description, builtin=True)
+        role = AdminRole(name=name, builtin_code=code, description=description, builtin=True, mfa_required=mfa,
+                         created_by="system")
         db.add(role)
         db.flush()
-        for code in expand_codes(patterns):
-            db.add(AdminRolePermission(role_id=role.id, code=code))
+        if code != SUPER_ADMIN:
+            for perm in expand(patterns):
+                db.add(AdminRolePermission(role_id=role.id, code=perm))
         added_roles += 1
     db.commit()
     return {"permissions": added_perms, "roles": added_roles}
 
 
-def bootstrap_admin(db: Session, username: str, password: str, name: str = "管理员") -> AdminUser:
-    """首个系统管理员（部署脚本调用）：存在则返回现有账号，不改密码。"""
-    ensure_seed(db)
-    user = db.execute(select(AdminUser).where(AdminUser.username == username)).scalar_one_or_none()
-    if user is not None:
-        return user
-    check_password_policy(password, get_settings().password_min_length)
-    user = AdminUser(username=username, password_hash=hash_password(password), name=name, must_change_password=True,
-                     created_by="system")
-    db.add(user)
+def _super_role(db: Session, lock: bool = False) -> AdminRole:
+    stmt = select(AdminRole).where(AdminRole.builtin_code == SUPER_ADMIN)
+    if lock:
+        stmt = stmt.with_for_update()
+    role = db.execute(stmt).scalar_one_or_none()
+    if role is None:
+        raise AppError(ErrorCode.CONFLICT, "roles not seeded; run ensure_seed first")
+    return role
+
+
+def _active_super_admins(db: Session) -> int:
+    role = _super_role(db)
+    return db.execute(select(func.count()).select_from(AdminUser).join(AdminUserRole, AdminUserRole.user_id == AdminUser.id)
+                      .where(AdminUserRole.role_id == role.id, AdminUser.status == STATUS_ACTIVE,
+                             AdminUser.deleted_at.is_(None))).scalar_one()
+
+
+def _assert_super_admin_remains(db: Session) -> None:
     db.flush()
-    role = db.execute(select(AdminRole).where(AdminRole.name == "系统管理员")).scalar_one()
-    db.add(AdminUserRole(user_id=user.id, role_id=role.id))
-    write_audit(db, "system", "bootstrap", "staff.create", "staff", user.id, after={"username": username, "roles": [role.id]})
-    db.commit()
-    return user
-
-
-# ---------- 令牌 ----------
-
-def issue_tokens(user: AdminUser) -> dict:
-    s = get_settings()
-    subject = str(user.id)
-    return {
-        "staff_id": user.id,
-        "access_token": create_token(subject, s.jwt_secret, s.admin_access_ttl_seconds, kind=TOKEN_KIND_ACCESS,
-                                     extra={"role": "staff", "rv": user.refresh_version}, issuer=s.jwt_issuer),
-        "refresh_token": create_token(subject, s.jwt_secret, s.admin_refresh_ttl_seconds, kind=TOKEN_KIND_REFRESH,
-                                      extra={"rv": user.refresh_version}, issuer=s.jwt_issuer),
-        "expires_in": s.admin_access_ttl_seconds,
-        "must_change_password": user.must_change_password,
-        "mfa_required": False,
-    }
-
-
-def decode_access(token: str) -> dict:
-    s = get_settings()
-    return decode_token(token, s.jwt_secret, kind=TOKEN_KIND_ACCESS, issuer=s.jwt_issuer)
-
-
-def assert_fresh(claims: dict) -> None:
-    """敏感操作要求 15 分钟内签发的 access（iat）；否则 4010 + reason=fresh_required，前端引导重新登录。"""
-    s = get_settings()
-    if utcnow().timestamp() - float(claims.get("iat", 0)) > s.fresh_window_seconds:
-        raise AppError(ErrorCode.UNAUTHORIZED, "please login again to continue", data={"reason": "fresh_required"})
-
-
-def load_active_staff(db: Session, staff_id: int, rv: int | None = None) -> AdminUser:
-    """按令牌取员工：不存在 / 已删除 / 已停用 / 版本不符 → 4010（令牌视为已撤销）。"""
-    user = db.get(AdminUser, staff_id)
-    if user is None or user.deleted_at is not None or user.status != STATUS_ACTIVE:
-        raise AppError(ErrorCode.UNAUTHORIZED, "session revoked")
-    if rv is not None and user.refresh_version != rv:
-        raise AppError(ErrorCode.UNAUTHORIZED, "session revoked")
-    return user
-
-
-# ---------- 登录 ----------
-
-def _log_login(db: Session, user: AdminUser | None, username: str, actor_ip: str | None, user_agent: str | None,
-               success: bool, reason: str, now: datetime) -> None:
-    db.add(AdminLoginLog(user_id=user.id if user else None, username=username[:32], ip=actor_ip,
-                         user_agent=(user_agent or "")[:500] or None, success=success, reason=reason, created_at=now))
-
-
-def _register_failure(db: Session, user: AdminUser, now: datetime) -> int:
-    """失败计数 +1；到阈值时同一条 UPDATE 写入 locked_until。返回剩余锁定秒数（0 表示未锁）。"""
-    s = get_settings()
-    lock_until = now + timedelta(seconds=s.login_lock_seconds)
-    db.execute(
-        update(AdminUser).where(AdminUser.id == user.id).values(
-            failed_attempts=AdminUser.failed_attempts + 1,
-            locked_until=case((AdminUser.failed_attempts + 1 >= s.login_max_failures, lock_until), else_=AdminUser.locked_until),
-        )
-    )
-    db.refresh(user)
-    locked_until = aware(user.locked_until)
-    if locked_until is not None and locked_until > now:
-        return max(1, int((locked_until - now).total_seconds()))
-    return 0
-
-
-def _assert_not_locked(db: Session, user: AdminUser, username: str, ip: str | None, ua: str | None, now: datetime) -> None:
-    locked_until = aware(user.locked_until)
-    if locked_until is None:
-        return
-    if locked_until > now:
-        remaining = max(1, int((locked_until - now).total_seconds()))
-        _log_login(db, user, username, ip, ua, False, "locked", now)
-        db.commit()
-        raise AppError(ErrorCode.RATE_LIMITED, "account locked, try again later", data={"locked_seconds": remaining},
-                       retry_after=remaining)
-    # 锁已到期：条件清零，重新计数
-    db.execute(update(AdminUser).where(AdminUser.id == user.id, AdminUser.locked_until <= now)
-               .values(failed_attempts=0, locked_until=None))
-    db.refresh(user)
-
-
-def _fail(db: Session, user: AdminUser, username: str, ip: str | None, ua: str | None, reason: str, now: datetime,
-          message: str) -> AppError:
-    remaining = _register_failure(db, user, now)
-    _log_login(db, user, username, ip, ua, False, "locked" if remaining else reason, now)
-    db.commit()
-    if remaining:
-        return AppError(ErrorCode.RATE_LIMITED, "too many failures, account locked", data={"locked_seconds": remaining},
-                        retry_after=remaining)
-    s = get_settings()
-    return AppError(ErrorCode.UNAUTHORIZED, message, data={"attempts_left": max(0, s.login_max_failures - user.failed_attempts)})
-
-
-def _succeed(db: Session, user: AdminUser, username: str, ip: str | None, ua: str | None, reason: str, now: datetime,
-             password: str | None = None) -> None:
-    values: dict[str, Any] = {"failed_attempts": 0, "locked_until": None, "last_login_at": now}
-    if password is not None and password_needs_rehash(user.password_hash):
-        values["password_hash"] = hash_password(password)
-    db.execute(update(AdminUser).where(AdminUser.id == user.id).values(**values))
-    _log_login(db, user, username, ip, ua, True, reason, now)
-    db.commit()
-    db.refresh(user)
-
-
-def login(db: Session, username: str, password: str, ip: str | None = None, user_agent: str | None = None,
-          now: datetime | None = None) -> dict:
-    """账号密码登录。未知账号与密码错误同为 4010（不区分原因）；停用 4030；锁定 4290。"""
-    now = now or utcnow()
-    username = (username or "").strip()
-    user = db.execute(select(AdminUser).where(AdminUser.username == username, AdminUser.deleted_at.is_(None))).scalar_one_or_none()
-    if user is None:
-        _log_login(db, None, username, ip, user_agent, False, "unknown_user", now)
-        db.commit()
-        raise AppError(ErrorCode.UNAUTHORIZED, "invalid username or password")
-    if user.status != STATUS_ACTIVE:
-        _log_login(db, user, username, ip, user_agent, False, "disabled", now)
-        db.commit()
-        raise AppError(ErrorCode.FORBIDDEN, "account disabled")
-    _assert_not_locked(db, user, username, ip, user_agent, now)
-    if not verify_password(password or "", user.password_hash):
-        raise _fail(db, user, username, ip, user_agent, "bad_password", now, "invalid username or password")
-    if user.mfa_enabled:
-        s = get_settings()
-        _log_login(db, user, username, ip, user_agent, True, "password_ok", now)
-        db.commit()
-        return {
-            "staff_id": user.id,
-            "mfa_required": True,
-            "mfa_token": create_token(str(user.id), s.jwt_secret, MFA_TOKEN_TTL_SECONDS, kind=TOKEN_KIND_MFA,
-                                      extra={"rv": user.refresh_version}, issuer=s.jwt_issuer),
-            "expires_in": MFA_TOKEN_TTL_SECONDS,
-        }
-    _succeed(db, user, username, ip, user_agent, "ok", now, password=password)
-    return issue_tokens(user)
-
-
-def verify_mfa(db: Session, mfa_token: str, code: str, ip: str | None = None, user_agent: str | None = None,
-               now: datetime | None = None) -> dict:
-    """第二步：kind=mfa 令牌 + TOTP。错码计入失败次数（同样会锁定）。"""
-    now = now or utcnow()
-    s = get_settings()
-    claims = decode_token(mfa_token, s.jwt_secret, kind=TOKEN_KIND_MFA, issuer=s.jwt_issuer)
-    user = load_active_staff(db, int(claims["sub"]), claims.get("rv"))
-    if not user.mfa_enabled or not user.mfa_secret_enc:
-        raise AppError(ErrorCode.CONFLICT, "mfa not enabled")
-    _assert_not_locked(db, user, user.username, ip, user_agent, now)
-    secret = _cipher().decrypt(user.mfa_secret_enc)
-    if not totp_verify(secret, code or "", at=now.timestamp()):
-        raise _fail(db, user, user.username, ip, user_agent, "bad_mfa", now, "invalid mfa code")
-    _succeed(db, user, user.username, ip, user_agent, "mfa", now)
-    return issue_tokens(user)
-
-
-def refresh_tokens(db: Session, refresh_token: str) -> dict:
-    """刷新轮换：rv 条件 UPDATE，旧令牌（含旧 access）立即失效；重放 4010。"""
-    s = get_settings()
-    claims = decode_token(refresh_token, s.jwt_secret, kind=TOKEN_KIND_REFRESH, issuer=s.jwt_issuer)
-    user = load_active_staff(db, int(claims["sub"]), claims.get("rv"))
-    rows = db.execute(
-        update(AdminUser).where(AdminUser.id == user.id, AdminUser.refresh_version == user.refresh_version)
-        .values(refresh_version=AdminUser.refresh_version + 1)
-    ).rowcount
-    if rows != 1:
-        db.rollback()
-        raise AppError(ErrorCode.UNAUTHORIZED, "refresh token already used")
-    db.commit()
-    db.refresh(user)
-    return issue_tokens(user)
-
-
-def logout(db: Session, staff_id: int) -> None:
-    db.execute(update(AdminUser).where(AdminUser.id == staff_id).values(refresh_version=AdminUser.refresh_version + 1))
-    write_audit(db, "staff", staff_id, "staff.logout", "staff", staff_id)
-    invalidate_permissions(staff_id)
-    db.commit()
-
-
-# ---------- 口令与 MFA（本人） ----------
-
-def change_password(db: Session, actor: Actor | int, old_password: str, new_password: str, now: datetime | None = None) -> dict:
-    """改密：旧密码必须正确；新密码满足策略且不同于旧密码；撤销其他会话（rv + 1）。"""
-    actor = _actor(actor)
-    now = now or utcnow()
-    s = get_settings()
-    user = db.get(AdminUser, actor.id)
-    if user is None:
-        raise AppError(ErrorCode.NOT_FOUND, "staff not found")
-    if not verify_password(old_password or "", user.password_hash):
-        raise AppError(ErrorCode.BAD_REQUEST, "old password is incorrect", data={"errors": [{"field": "old_password", "message": "incorrect"}]})
-    check_password_policy(new_password, s.password_min_length)
-    if new_password == old_password:
-        raise AppError(ErrorCode.BAD_REQUEST, "new password must differ from the old one")
-    db.execute(update(AdminUser).where(AdminUser.id == user.id).values(
-        password_hash=hash_password(new_password), must_change_password=False, password_changed_at=now,
-        refresh_version=AdminUser.refresh_version + 1, updated_by=str(actor.id)))
-    _audit(db, actor, "staff.password.change", "staff", user.id)
-    db.commit()
-    db.refresh(user)
-    invalidate_permissions(user.id)
-    return issue_tokens(user)
-
-
-def enroll_mfa(db: Session, actor: Actor | int) -> dict:
-    """生成 TOTP 密钥（加密存储，未确认前 mfa_enabled 仍为 False）；返回密钥与 otpauth URI 供扫码。"""
-    actor = _actor(actor)
-    user = db.get(AdminUser, actor.id)
-    if user is None:
-        raise AppError(ErrorCode.NOT_FOUND, "staff not found")
-    if user.mfa_enabled:
-        raise AppError(ErrorCode.CONFLICT, "mfa already enabled; reset first")
-    secret = totp_secret()
-    user.mfa_secret_enc = _cipher().encrypt(secret)
-    user.updated_by = str(actor.id)
-    _audit(db, actor, "staff.mfa.enroll", "staff", user.id)
-    db.commit()
-    issuer = get_settings().service_name
-    return {"secret": secret, "otpauth_uri": f"otpauth://totp/{issuer}:{user.username}?secret={secret}&issuer={issuer}&digits=6&period=30"}
-
-
-def confirm_mfa(db: Session, actor: Actor | int, code: str, now: datetime | None = None) -> dict:
-    actor = _actor(actor)
-    now = now or utcnow()
-    user = db.get(AdminUser, actor.id)
-    if user is None:
-        raise AppError(ErrorCode.NOT_FOUND, "staff not found")
-    if user.mfa_enabled:
-        raise AppError(ErrorCode.CONFLICT, "mfa already enabled")
-    if not user.mfa_secret_enc:
-        raise AppError(ErrorCode.CONFLICT, "enroll first")
-    if not totp_verify(_cipher().decrypt(user.mfa_secret_enc), code or "", at=now.timestamp()):
-        raise AppError(ErrorCode.BAD_REQUEST, "invalid mfa code", data={"errors": [{"field": "code", "message": "invalid"}]})
-    rows = db.execute(update(AdminUser).where(AdminUser.id == user.id, AdminUser.mfa_enabled.is_(False))
-                      .values(mfa_enabled=True, updated_by=str(actor.id))).rowcount
-    if rows != 1:
-        db.rollback()
-        raise AppError(ErrorCode.CONFLICT, "mfa already enabled")
-    _audit(db, actor, "staff.mfa.confirm", "staff", user.id, after={"mfa_enabled": True})
-    db.commit()
-    db.refresh(user)
-    return {"mfa_enabled": True}
-
-
-# ---------- 权限与门店范围 ----------
-
-_perm_lock = threading.Lock()
-_perm_cache: dict[tuple[int, int], tuple[float, frozenset[str], list[int] | None]] = {}
-
-
-def invalidate_permissions(staff_id: int | None = None) -> None:
-    with _perm_lock:
-        if staff_id is None:
-            _perm_cache.clear()
-        else:
-            for key in [k for k in _perm_cache if k[0] == staff_id]:
-                _perm_cache.pop(key, None)
-
-
-def _load_grants(db: Session, staff_id: int) -> tuple[frozenset[str], list[int] | None]:
-    codes = db.execute(
-        select(AdminRolePermission.code).join(AdminUserRole, AdminUserRole.role_id == AdminRolePermission.role_id)
-        .where(AdminUserRole.user_id == staff_id)
-    ).scalars().all()
-    stores = db.execute(select(AdminStoreScope.store_id).where(AdminStoreScope.user_id == staff_id).order_by(AdminStoreScope.store_id)).scalars().all()
-    return frozenset(codes), (list(stores) or None)
-
-
-def grants_of(db: Session, staff: AdminUser) -> tuple[frozenset[str], list[int] | None]:
-    """权限码与门店范围，按 (id, refresh_version) 缓存 60 秒；桩对象（测试）直接读其 _permissions / _store_scope。"""
-    stub = getattr(staff, "_permissions", None)
-    if stub is not None:
-        return frozenset(stub), getattr(staff, "_store_scope", None)
-    key = (staff.id, staff.refresh_version)
-    now = clock()
-    with _perm_lock:
-        hit = _perm_cache.get(key)
-        if hit is not None and hit[0] > now:
-            return hit[1], hit[2]
-    codes, stores = _load_grants(db, staff.id)
-    with _perm_lock:
-        _perm_cache[key] = (now + PERMISSION_CACHE_TTL_SECONDS, codes, stores)
-    return codes, stores
-
-
-def permissions_of(db: Session, staff: AdminUser) -> frozenset[str]:
-    return grants_of(db, staff)[0]
-
-
-def store_scope(staff: AdminUser) -> list[int] | None:
-    """None = 全部门店；否则为可访问门店 id 列表。无会话的桩对象读 _store_scope（默认全部）。"""
-    stub = getattr(staff, "_store_scope", None)
-    if stub is not None or getattr(staff, "_permissions", None) is not None:
-        return list(stub) if stub is not None else None
-    db = object_session(staff)
-    if db is None:
-        return None
-    return grants_of(db, staff)[1]
-
-
-def assert_in_scope(staff: AdminUser, store_id: int | None) -> None:
-    """门店越界 4031。store_id 为 None / 0（全局对象）只允许全门店员工访问。"""
-    scope = store_scope(staff)
-    if scope is None:
-        return
-    if not store_id or int(store_id) not in scope:
-        raise AppError(ErrorCode.SCOPE_FORBIDDEN, "store out of scope", data={"store_id": store_id})
-
-
-def assert_permission(db: Session, staff: AdminUser, code: str) -> None:
-    codes = permissions_of(db, staff)
-    if code not in codes and "*" not in codes:
-        raise AppError(ErrorCode.FORBIDDEN, f"permission required: {code}", data={"required": code})
-
-
-# ---------- 本人信息 ----------
-
-def _roles_of(db: Session, staff_id: int) -> list[dict]:
-    rows = db.execute(select(AdminRole).join(AdminUserRole, AdminUserRole.role_id == AdminRole.id)
-                      .where(AdminUserRole.user_id == staff_id).order_by(AdminRole.id)).scalars().all()
-    return [{"id": r.id, "name": r.name} for r in rows]
-
-
-def me(db: Session, staff: AdminUser, now: datetime | None = None) -> dict:
-    now = now or utcnow()
-    codes, stores = grants_of(db, staff)
-    changed_at = aware(staff.password_changed_at) or aware(staff.created_at) or now
-    age_days = (now - changed_at).days
-    return {
-        "staff_id": staff.id,
-        "username": staff.username,
-        "name": staff.name,
-        "roles": _roles_of(db, staff.id),
-        "permissions": sorted(codes),
-        "store_scope": stores,
-        "mfa_enabled": staff.mfa_enabled,
-        "must_change_password": staff.must_change_password,
-        "password_age_days": age_days,
-        "password_expires_in_days": PASSWORD_REMIND_DAYS - age_days,
-        "last_login_at": staff.last_login_at,
-    }
-
-
-# ---------- 员工管理 ----------
-
-def _staff_dict(db: Session, user: AdminUser, with_roles: bool = True) -> dict:
-    phone = _cipher().decrypt(user.phone_enc) if user.phone_enc else None
-    data = {
-        "id": user.id, "username": user.username, "name": user.name, "phone": mask_phone(phone), "status": user.status,
-        "mfa_enabled": user.mfa_enabled, "must_change_password": user.must_change_password,
-        "locked_until": aware(user.locked_until), "last_login_at": user.last_login_at, "created_at": user.created_at,
-    }
-    if with_roles:
-        data["roles"] = _roles_of(db, user.id)
-        data["store_scope"] = db.execute(select(AdminStoreScope.store_id).where(AdminStoreScope.user_id == user.id)
-                                         .order_by(AdminStoreScope.store_id)).scalars().all() or None
-    return data
-
-
-def _get_staff(db: Session, staff_id: int) -> AdminUser:
-    user = db.get(AdminUser, staff_id)
-    if user is None or user.deleted_at is not None:
-        raise AppError(ErrorCode.NOT_FOUND, "staff not found")
-    return user
-
-
-def _validate_roles(db: Session, role_ids: list[int]) -> list[int]:
-    role_ids = sorted(set(int(r) for r in role_ids))
-    if not role_ids:
-        return []
-    found = set(db.execute(select(AdminRole.id).where(AdminRole.id.in_(role_ids))).scalars().all())
-    missing = [r for r in role_ids if r not in found]
-    if missing:
-        raise AppError(ErrorCode.BAD_REQUEST, "unknown role", data={"errors": [{"field": "role_ids", "message": f"unknown: {missing}"}]})
-    return role_ids
-
-
-def _validate_phone(phone: str | None) -> str | None:
-    if phone is None or phone == "":
-        return None
-    phone = phone.strip()
-    if not (len(phone) == 11 and phone.isdigit() and phone[0] == "1"):
-        raise AppError(ErrorCode.BAD_REQUEST, "invalid phone", data={"errors": [{"field": "phone", "message": "invalid"}]})
-    return phone
-
-
-def _initial_password() -> str:
-    return random_token(INITIAL_PASSWORD_BYTES) + "9a"
-
-
-def create_staff(db: Session, actor: Actor | int, username: str, name: str, role_ids: list[int], store_ids: list[int] | None = None,
-                 phone: str | None = None, password: str | None = None) -> dict:
-    """新建员工：初始密码一次性返回（未传则随机生成），must_change_password=True。"""
-    actor = _actor(actor)
-    s = get_settings()
-    username = (username or "").strip()
-    if not (3 <= len(username) <= 32) or not all(c.isalnum() or c in "._-" for c in username):
-        raise AppError(ErrorCode.BAD_REQUEST, "username must be 3-32 chars of letters, digits, . _ -",
-                       data={"errors": [{"field": "username", "message": "invalid"}]})
-    initial = password or _initial_password()
-    check_password_policy(initial, s.password_min_length)
-    role_ids = _validate_roles(db, role_ids)
-    phone = _validate_phone(phone)
-    cipher = _cipher()
-    user = AdminUser(username=username, password_hash=hash_password(initial), name=(name or "").strip()[:32],
-                     phone_enc=cipher.encrypt(phone) if phone else None, phone_hash=cipher.lookup_hash(phone) if phone else None,
-                     must_change_password=True, created_by=str(actor.id), updated_by=str(actor.id))
+    if _active_super_admins(db) < 1:
+        raise AppError(ErrorCode.BUSINESS_RULE, "at least one active super admin must remain",
+                       data={"reason": "last_super_admin"})
+
+
+def _temp_password() -> str:
+    return secrets.token_urlsafe(15)  # 20 位，约 120 bit，满足无 MFA 时 ≥ 15 位
+
+
+def bootstrap_super_admin(db: Session, username: str, name: str = "") -> dict:
+    """部署时创建首个超级管理员（已有在职超级管理员 → 4090）。返回一次性临时口令，首登必须改密并绑定 MFA。"""
+    ensure_seed(db)
+    if _active_super_admins(db) > 0:
+        raise AppError(ErrorCode.CONFLICT, "a super admin already exists")
+    uname = validate_username(username)
+    at = config.now()
+    temp = _temp_password()
+    user = AdminUser(username=uname, password_hash=hash_secret(temp), name=(name or "")[:32], all_stores=True,
+                     must_change_password=True, temp_password_expires_at=at + timedelta(seconds=config.get_config().temp_password_ttl_seconds),
+                     created_by="system", updated_by="system")
     db.add(user)
     try:
         db.flush()
     except IntegrityError as exc:
         db.rollback()
         raise AppError(ErrorCode.CONFLICT, "username already exists") from exc
-    for role_id in role_ids:
-        db.add(AdminUserRole(user_id=user.id, role_id=role_id))
-    for store_id in sorted(set(store_ids or [])):
-        db.add(AdminStoreScope(user_id=user.id, store_id=int(store_id)))
-    _audit(db, actor, "staff.create", "staff", user.id,
-           after={"username": username, "name": user.name, "phone": mask_phone(phone), "roles": role_ids, "store_scope": store_ids or None})
+    db.add(AdminUserRole(user_id=user.id, role_id=_super_role(db).id))
+    write_audit(db, "system", "bootstrap", "staff.create", "staff", user.id, after={"username": uname, "role": SUPER_ADMIN})
     db.commit()
-    data = _staff_dict(db, user)
-    data["initial_password"] = initial
+    return {"id": user.id, "username": uname, "temporary_password": temp}
+
+
+# ---------- 防越权助手 ----------
+
+
+def _roles(db: Session, role_ids: Iterable[int]) -> list[AdminRole]:
+    ids = sorted({int(r) for r in role_ids})
+    if not ids:
+        return []
+    rows = db.execute(select(AdminRole).where(AdminRole.id.in_(ids))).scalars().all()
+    missing = sorted(set(ids) - {r.id for r in rows})
+    if missing:
+        raise field_error("role_ids", f"unknown role: {missing}")
+    return list(rows)
+
+
+def _codes_of(db: Session, roles: list[AdminRole]) -> frozenset[str]:
+    if any(r.builtin_code == SUPER_ADMIN for r in roles):
+        return frozenset(registered_codes() | {WILDCARD})
+    ids = [r.id for r in roles]
+    if not ids:
+        return frozenset()
+    return frozenset(db.execute(select(AdminRolePermission.code).where(AdminRolePermission.role_id.in_(ids))).scalars().all())
+
+
+def _escalation(message: str, extra: Any = None) -> AppError:
+    return AppError(ErrorCode.FORBIDDEN, message, data={"reason": "privilege_escalation", "extra": extra})
+
+
+def assert_can_grant_codes(actor: Staff, codes: Iterable[str]) -> None:
+    if actor.has(WILDCARD):
+        return
+    extra = sorted(set(codes) - set(actor.permissions))
+    if extra:
+        raise _escalation("you cannot grant permissions you do not hold", extra)
+
+
+def assert_can_grant_scope(actor: Staff, all_stores: bool, store_ids: Iterable[int]) -> None:
+    if actor.all_stores:
+        return
+    if all_stores:
+        raise _escalation("you cannot grant access to all stores")
+    extra = sorted(set(store_ids) - set(actor.store_ids))
+    if extra:
+        raise _escalation("you cannot grant stores outside your scope", extra)
+
+
+def _assert_can_assign_roles(db: Session, actor: Staff, roles: list[AdminRole]) -> None:
+    if any(r.builtin_code == SUPER_ADMIN for r in roles) and not actor.is_super_admin:
+        raise _escalation("only a super admin can grant the super admin role")
+    assert_can_grant_codes(actor, _codes_of(db, roles))
+
+
+def _visible(actor: Staff, user: AdminUser, stores: list[int]) -> bool:
+    if actor.all_stores:
+        return True
+    return not user.all_stores and set(stores) <= set(actor.store_ids)
+
+
+def _get_target(db: Session, actor: Staff, staff_id: int, manage: bool = True) -> AdminUser:
+    """取目标员工：不存在 / 已删除 / 不在范围 → 4040；manage=True 时权限超过自己 → 4030。"""
+    user = db.get(AdminUser, staff_id)
+    if user is None or user.deleted_at is not None:
+        raise AppError(ErrorCode.NOT_FOUND, "staff not found")
+    codes, roles, stores = load_grants(db, user.id)
+    if not _visible(actor, user, stores):
+        raise AppError(ErrorCode.NOT_FOUND, "staff not found")
+    if manage and user.id != actor.id:
+        if any(r.builtin_code == SUPER_ADMIN for r in roles) and not actor.is_super_admin:
+            raise _escalation("only a super admin can manage a super admin")
+        assert_can_grant_codes(actor, codes)
+    return user
+
+
+def _not_self(actor: Staff, staff_id: int, what: str) -> None:
+    if actor.id == staff_id:
+        raise AppError(ErrorCode.FORBIDDEN, f"you cannot {what} yourself", data={"reason": "self_action"})
+
+
+def _reason_required(reason: str | None) -> str:
+    if not reason or not reason.strip():
+        raise field_error("reason", "reason is required")
+    return reason.strip()[:200]
+
+
+# ---------- 员工：读取与序列化 ----------
+
+
+def _batch_access(db: Session, user_ids: list[int]) -> tuple[dict[int, list[dict]], dict[int, list[int]]]:
+    roles: dict[int, list[dict]] = {uid: [] for uid in user_ids}
+    stores: dict[int, list[int]] = {uid: [] for uid in user_ids}
+    if not user_ids:
+        return roles, stores
+    for uid, rid, name, code in db.execute(
+            select(AdminUserRole.user_id, AdminRole.id, AdminRole.name, AdminRole.builtin_code)
+            .join(AdminRole, AdminRole.id == AdminUserRole.role_id).where(AdminUserRole.user_id.in_(user_ids))
+            .order_by(AdminRole.id)).all():
+        roles[uid].append({"id": rid, "name": name, "builtin_code": code})
+    for uid, sid in db.execute(select(AdminStoreScope.user_id, AdminStoreScope.store_id)
+                               .where(AdminStoreScope.user_id.in_(user_ids)).order_by(AdminStoreScope.store_id)).all():
+        stores[uid].append(sid)
+    return roles, stores
+
+
+def _locks(db: Session, usernames: list[str]) -> dict[str, Any]:
+    if not usernames:
+        return {}
+    at = config.now()
+    out = {}
+    for name, locked_until in db.execute(select(AdminLoginThrottle.username, AdminLoginThrottle.locked_until)
+                                         .where(AdminLoginThrottle.username.in_(usernames))).all():
+        lu = aware(locked_until)
+        out[name] = lu if lu is not None and lu > at else None
+    return out
+
+
+def _staff_dicts(db: Session, users: list[AdminUser]) -> list[dict]:
+    ids = [u.id for u in users]
+    roles, stores = _batch_access(db, ids)
+    locks = _locks(db, [u.username for u in users])
+    c = cipher()
+    return [{
+        "id": u.id, "username": u.username, "name": u.name, "phone": mask_phone(c.decrypt(u.phone_enc)) if u.phone_enc else None,
+        "status": u.status, "all_stores": u.all_stores, "store_ids": stores[u.id], "roles": roles[u.id],
+        "mfa_enabled": u.mfa_enabled, "must_change_password": u.must_change_password, "locked_until": locks.get(u.username),
+        "last_login_at": aware(u.last_login_at), "last_login_ip": u.last_login_ip, "created_at": aware(u.created_at),
+        "updated_at": aware(u.updated_at),
+    } for u in users]
+
+
+def staff_dict(db: Session, user: AdminUser) -> dict:
+    return _staff_dicts(db, [user])[0]
+
+
+STAFF_SPEC = ListSpec(
+    fields={
+        "status": Field(AdminUser.status, ops=("eq", "in"), choices=STAFF_STATUSES),
+        "mfa_enabled": Field(AdminUser.mfa_enabled, kind="bool"),
+        "all_stores": Field(AdminUser.all_stores, kind="bool"),
+        "username": Field(AdminUser.username, sortable=True),
+        "created_at": Field(AdminUser.created_at, kind="datetime", ops=("range",), sortable=True),
+        "last_login_at": Field(AdminUser.last_login_at, kind="datetime", ops=("range", "null"), sortable=True),
+    },
+    id_column=AdminUser.id,
+    keyword_columns=(AdminUser.username, AdminUser.name),
+    default_sort="-created_at",
+    extra_params=frozenset({"role_id", "store_id", "phone"}),
+)
+
+
+def _int_param(params: Mapping[str, Any], key: str) -> int | None:
+    raw = params.get(key)
+    if raw in (None, ""):
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError) as exc:
+        raise AppError(ErrorCode.BAD_REQUEST, f"{key}: expected integer") from exc
+
+
+def _staff_base(actor: Staff, params: Mapping[str, Any]) -> Select:
+    stmt = select(AdminUser).where(AdminUser.deleted_at.is_(None))
+    if not actor.all_stores:  # 只看范围内员工：非全门店，且没有范围外门店
+        stmt = stmt.where(AdminUser.all_stores.is_(False), ~exists().where(
+            AdminStoreScope.user_id == AdminUser.id, AdminStoreScope.store_id.not_in(list(actor.store_ids) or [-1])))
+    role_id = _int_param(params, "role_id")
+    if role_id is not None:
+        stmt = stmt.where(AdminUser.id.in_(select(AdminUserRole.user_id).where(AdminUserRole.role_id == role_id)))
+    store_id = _int_param(params, "store_id")
+    if store_id is not None:
+        stmt = stmt.where(AdminUser.all_stores.is_(True) | AdminUser.id.in_(
+            select(AdminStoreScope.user_id).where(AdminStoreScope.store_id == store_id)))
+    phone = params.get("phone")
+    if phone:
+        stmt = stmt.where(AdminUser.phone_hash == cipher().lookup_hash(validate_phone(str(phone))))
+    return stmt
+
+
+def list_staff(db: Session, actor: Staff, params: Mapping[str, Any]) -> dict:
+    result = STAFF_SPEC.page(db, _staff_base(actor, params), params)
+    result["items"] = _staff_dicts(db, result["items"])
+    return result
+
+
+STAFF_EXPORT_HEADERS = ("ID", "账号", "姓名", "手机号", "状态", "全部门店", "门店", "角色", "MFA", "最后登录", "创建时间")
+
+
+def export_staff(db: Session, actor: Staff, params: Mapping[str, Any]) -> bytes:
+    roles_map: dict[int, list[str]] = {}
+    for uid, name in db.execute(select(AdminUserRole.user_id, AdminRole.name).join(AdminRole, AdminRole.id == AdminUserRole.role_id)):
+        roles_map.setdefault(uid, []).append(name)
+    stores_map: dict[int, list[str]] = {}
+    for uid, sid in db.execute(select(AdminStoreScope.user_id, AdminStoreScope.store_id)):
+        stores_map.setdefault(uid, []).append(str(sid))
+    c = cipher()
+
+    def row(u: AdminUser) -> list[Any]:
+        return [u.id, u.username, u.name, mask_phone(c.decrypt(u.phone_enc)) if u.phone_enc else "", u.status, u.all_stores,
+                " ".join(stores_map.get(u.id, [])), "、".join(roles_map.get(u.id, [])), u.mfa_enabled,
+                aware(u.last_login_at), aware(u.created_at)]
+
+    data = b"".join(export_csv(db, STAFF_SPEC, _staff_base(actor, params), params, STAFF_EXPORT_HEADERS, row,
+                               hard_limit=config.get_config().export_max_rows))
+    audit(db, actor, "staff.export", "staff", "-", after={"filters": _filters(params), "bytes": len(data)})
+    db.commit()
     return data
 
 
-def update_staff(db: Session, actor: Actor | int, staff_id: int, name: str | None = None, phone: str | None = None,
-                 role_ids: list[int] | None = None, store_ids: list[int] | None = None, reason: str | None = None) -> dict:
-    """改资料 / 角色 / 门店范围。改自己的角色或门店范围 → 4030（防自我升权）。"""
-    actor = _actor(actor)
-    user = _get_staff(db, staff_id)
-    before = _staff_dict(db, user)
-    if actor.id == user.id and (role_ids is not None or store_ids is not None):
-        raise AppError(ErrorCode.FORBIDDEN, "cannot change your own roles or store scope")
+def get_staff(db: Session, actor: Staff, staff_id: int) -> dict:
+    return staff_dict(db, _get_target(db, actor, staff_id, manage=False))
+
+
+def reveal_phone(db: Session, actor: Staff, staff_id: int, reason: str | None) -> dict:
+    """明文手机号（staff:sensitive）：写敏感查看审计。"""
+    user = _get_target(db, actor, staff_id, manage=False)
+    reason = _reason_required(reason)
+    phone = cipher().decrypt(user.phone_enc) if user.phone_enc else None
+    log_sensitive_read(db, actor, "staff", user.id, ["phone"], reason=reason)
+    db.commit()
+    return {"id": user.id, "phone": phone}
+
+
+# ---------- 员工：写 ----------
+
+
+def _replace_access(db: Session, user_id: int, role_ids: list[int], store_ids: list[int]) -> None:
+    db.execute(delete(AdminUserRole).where(AdminUserRole.user_id == user_id))
+    db.execute(delete(AdminStoreScope).where(AdminStoreScope.user_id == user_id))
+    for rid in sorted(set(role_ids)):
+        db.add(AdminUserRole(user_id=user_id, role_id=rid))
+    for sid in sorted(set(store_ids)):
+        db.add(AdminStoreScope(user_id=user_id, store_id=int(sid)))
+
+
+def create_staff(db: Session, actor: Staff, username: str, name: str = "", phone: str | None = None,
+                 role_ids: Iterable[int] = (), all_stores: bool = False, store_ids: Iterable[int] = ()) -> dict:
+    """新建员工：系统生成一次性临时口令（只在本次响应返回），首登必须改密；不 commit。"""
+    uname = validate_username(username)
+    phone = validate_phone(phone)
+    roles = _roles(db, role_ids)
+    store_ids = sorted({int(s) for s in store_ids})
+    if all_stores:
+        store_ids = []
+    _assert_can_assign_roles(db, actor, roles)
+    assert_can_grant_scope(actor, all_stores, store_ids)
+    at = config.now()
+    temp = _temp_password()
+    c = cipher()
+    user = AdminUser(username=uname, password_hash=hash_secret(temp), name=(name or "").strip()[:32],
+                     phone_enc=c.encrypt(phone) if phone else None, phone_hash=c.lookup_hash(phone) if phone else None,
+                     all_stores=bool(all_stores), must_change_password=True,
+                     temp_password_expires_at=at + timedelta(seconds=config.get_config().temp_password_ttl_seconds),
+                     created_by=str(actor.id), updated_by=str(actor.id))
+    db.add(user)
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        raise AppError(ErrorCode.CONFLICT, "username already exists",
+                       data={"errors": [{"field": "username", "message": "exists"}]}) from exc
+    _replace_access(db, user.id, [r.id for r in roles], store_ids)
+    db.flush()
+    after = staff_dict(db, user)
+    audit(db, actor, "staff.create", "staff", user.id, after=after)
+    enqueue_event(db, "staff.created", {"staff_id": user.id}, "admin_user", user.id)
+    return {**after, "temporary_password": temp}
+
+
+def update_staff(db: Session, actor: Staff, staff_id: int, name: str | None = None, phone: str | None = None,
+                 reason: str | None = None) -> dict:
+    """改资料（姓名 / 手机号）。手机号传空串表示清除。"""
+    user = _get_target(db, actor, staff_id)
+    before = staff_dict(db, user)
     if name is not None:
         user.name = name.strip()[:32]
     if phone is not None:
-        phone = _validate_phone(phone)
-        cipher = _cipher()
-        user.phone_enc = cipher.encrypt(phone) if phone else None
-        user.phone_hash = cipher.lookup_hash(phone) if phone else None
-    if role_ids is not None:
-        role_ids = _validate_roles(db, role_ids)
-        db.execute(delete(AdminUserRole).where(AdminUserRole.user_id == user.id))
-        for role_id in role_ids:
-            db.add(AdminUserRole(user_id=user.id, role_id=role_id))
-    if store_ids is not None:
-        db.execute(delete(AdminStoreScope).where(AdminStoreScope.user_id == user.id))
-        for store_id in sorted(set(store_ids)):
-            db.add(AdminStoreScope(user_id=user.id, store_id=int(store_id)))
+        phone = validate_phone(phone)
+        c = cipher()
+        user.phone_enc = c.encrypt(phone) if phone else None
+        user.phone_hash = c.lookup_hash(phone) if phone else None
     user.updated_by = str(actor.id)
     db.flush()
-    after = _staff_dict(db, user)
-    _audit(db, actor, "staff.update", "staff", user.id, before=before, after=after, reason=reason)
-    db.commit()
-    invalidate_permissions(user.id)
+    after = staff_dict(db, user)
+    audit(db, actor, "staff.update", "staff", user.id, before=before, after=after, reason=reason)
     return after
 
 
-def disable_staff(db: Session, actor: Actor | int, staff_id: int, reason: str | None = None) -> dict:
-    """停用：不能停用自己；条件 UPDATE active → disabled 并 rv + 1（会话立即失效）；已停用 4090。"""
-    actor = _actor(actor)
-    if actor.id == staff_id:
-        raise AppError(ErrorCode.FORBIDDEN, "cannot disable yourself")
-    user = _get_staff(db, staff_id)
+def set_staff_access(db: Session, actor: Staff, staff_id: int, role_ids: Iterable[int], all_stores: bool = False,
+                     store_ids: Iterable[int] = (), reason: str | None = None) -> dict:
+    """改角色与门店范围：不能改自己；只能授予自己持有的；撤销该员工全部会话；必须保留超级管理员。"""
+    _not_self(actor, staff_id, "change the roles or store scope of")
+    _super_role(db, lock=True)
+    user = _get_target(db, actor, staff_id)
+    roles = _roles(db, role_ids)
+    store_ids = [] if all_stores else sorted({int(s) for s in store_ids})
+    _assert_can_assign_roles(db, actor, roles)
+    assert_can_grant_scope(actor, all_stores, store_ids)
+    before = staff_dict(db, user)
+    _replace_access(db, user.id, [r.id for r in roles], store_ids)
+    user.all_stores = bool(all_stores)
+    user.updated_by = str(actor.id)
+    _assert_super_admin_remains(db)
+    revoked = revoke_sessions(db, user.id, "access_changed")
+    after = staff_dict(db, user)
+    audit(db, actor, "staff.access.update", "staff", user.id, before=before, after={**after, "sessions_revoked": revoked},
+          reason=reason)
+    enqueue_event(db, "staff.access_changed", {"staff_id": user.id}, "admin_user", user.id)
+    return after
+
+
+def disable_staff(db: Session, actor: Staff, staff_id: int, reason: str | None = None) -> dict:
+    _not_self(actor, staff_id, "disable")
+    _super_role(db, lock=True)
+    user = _get_target(db, actor, staff_id)
     rows = db.execute(update(AdminUser).where(AdminUser.id == staff_id, AdminUser.status == STATUS_ACTIVE)
-                      .values(status=STATUS_DISABLED, refresh_version=AdminUser.refresh_version + 1, updated_by=str(actor.id))).rowcount
+                      .values(status=STATUS_DISABLED, updated_by=str(actor.id))).rowcount
     if rows != 1:
-        db.rollback()
-        raise AppError(ErrorCode.CONFLICT, "staff already disabled")
-    _audit(db, actor, "staff.disable", "staff", staff_id, before={"status": STATUS_ACTIVE}, after={"status": STATUS_DISABLED}, reason=reason)
-    db.commit()
+        raise AppError(ErrorCode.CONFLICT, "staff is already disabled")
+    _assert_super_admin_remains(db)
+    revoke_sessions(db, staff_id, "staff_disabled")
+    audit(db, actor, "staff.disable", "staff", staff_id, before={"status": STATUS_ACTIVE}, after={"status": STATUS_DISABLED},
+          reason=reason)
+    enqueue_event(db, "staff.disabled", {"staff_id": staff_id}, "admin_user", staff_id)
     db.refresh(user)
-    invalidate_permissions(staff_id)
-    return _staff_dict(db, user, with_roles=False)
+    return staff_dict(db, user)
 
 
-def enable_staff(db: Session, actor: Actor | int, staff_id: int, reason: str | None = None) -> dict:
-    actor = _actor(actor)
-    user = _get_staff(db, staff_id)
+def enable_staff(db: Session, actor: Staff, staff_id: int, reason: str | None = None) -> dict:
+    user = _get_target(db, actor, staff_id)
     rows = db.execute(update(AdminUser).where(AdminUser.id == staff_id, AdminUser.status == STATUS_DISABLED)
-                      .values(status=STATUS_ACTIVE, failed_attempts=0, locked_until=None, updated_by=str(actor.id))).rowcount
+                      .values(status=STATUS_ACTIVE, updated_by=str(actor.id))).rowcount
     if rows != 1:
-        db.rollback()
         raise AppError(ErrorCode.CONFLICT, "staff is not disabled")
-    _audit(db, actor, "staff.enable", "staff", staff_id, before={"status": STATUS_DISABLED}, after={"status": STATUS_ACTIVE}, reason=reason)
-    db.commit()
+    clear_throttle(db, user.username, config.now())
+    audit(db, actor, "staff.enable", "staff", staff_id, before={"status": STATUS_DISABLED}, after={"status": STATUS_ACTIVE},
+          reason=reason)
+    enqueue_event(db, "staff.enabled", {"staff_id": staff_id}, "admin_user", staff_id)
     db.refresh(user)
-    return _staff_dict(db, user, with_roles=False)
+    return staff_dict(db, user)
 
 
-def unlock_staff(db: Session, actor: Actor | int, staff_id: int, reason: str | None = None) -> dict:
-    """人工解锁：清零失败计数与 locked_until。"""
-    actor = _actor(actor)
-    user = _get_staff(db, staff_id)
-    db.execute(update(AdminUser).where(AdminUser.id == staff_id).values(failed_attempts=0, locked_until=None, updated_by=str(actor.id)))
-    _audit(db, actor, "staff.unlock", "staff", staff_id, reason=reason)
-    db.commit()
-    db.refresh(user)
-    return _staff_dict(db, user, with_roles=False)
+def delete_staff(db: Session, actor: Staff, staff_id: int, reason: str | None = None) -> dict:
+    """软删除：deleted_at + 停用 + 撤销会话；账号名不复用，审计可追溯。"""
+    _not_self(actor, staff_id, "delete")
+    _super_role(db, lock=True)
+    user = _get_target(db, actor, staff_id)
+    at = config.now()
+    rows = db.execute(update(AdminUser).where(AdminUser.id == staff_id, AdminUser.deleted_at.is_(None))
+                      .values(deleted_at=at, status=STATUS_DISABLED, updated_by=str(actor.id))).rowcount
+    if rows != 1:
+        raise AppError(ErrorCode.NOT_FOUND, "staff not found")
+    _assert_super_admin_remains(db)
+    revoke_sessions(db, staff_id, "staff_deleted", at=at)
+    audit(db, actor, "staff.delete", "staff", staff_id, before={"username": user.username, "status": user.status},
+          reason=reason)
+    enqueue_event(db, "staff.deleted", {"staff_id": staff_id}, "admin_user", staff_id)
+    return {"id": staff_id, "deleted": True}
 
 
-def reset_password(db: Session, actor: Actor | int, staff_id: int, reason: str | None = None) -> dict:
-    """重置密码：生成一次性初始密码，must_change_password=True，rv + 1。"""
-    actor = _actor(actor)
-    user = _get_staff(db, staff_id)
-    initial = _initial_password()
+def unlock_staff(db: Session, actor: Staff, staff_id: int, reason: str | None = None) -> dict:
+    user = _get_target(db, actor, staff_id)
+    clear_throttle(db, user.username, config.now())
+    audit(db, actor, "staff.unlock", "staff", staff_id, reason=reason)
+    return staff_dict(db, user)
+
+
+def reset_password(db: Session, actor: Staff, staff_id: int, reason: str | None = None) -> dict:
+    """管理员重置口令：生成一次性临时口令（72 小时内首登必须改），撤销全部会话。不能重置自己。"""
+    _not_self(actor, staff_id, "reset the password of")
+    user = _get_target(db, actor, staff_id)
+    at = config.now()
+    temp = _temp_password()
     db.execute(update(AdminUser).where(AdminUser.id == staff_id).values(
-        password_hash=hash_password(initial), must_change_password=True, password_changed_at=None,
-        failed_attempts=0, locked_until=None, refresh_version=AdminUser.refresh_version + 1, updated_by=str(actor.id)))
-    _audit(db, actor, "staff.password.reset", "staff", staff_id, reason=reason)
-    db.commit()
-    db.refresh(user)
-    invalidate_permissions(staff_id)
-    return {"id": staff_id, "initial_password": initial}
+        password_hash=hash_secret(temp), must_change_password=True, updated_by=str(actor.id),
+        temp_password_expires_at=at + timedelta(seconds=config.get_config().temp_password_ttl_seconds)))
+    clear_throttle(db, user.username, at)
+    revoked = revoke_sessions(db, staff_id, "password_reset", at=at)
+    audit(db, actor, "staff.password.reset", "staff", staff_id, after={"sessions_revoked": revoked}, reason=reason)
+    enqueue_event(db, "staff.password_reset", {"staff_id": staff_id}, "admin_user", staff_id)
+    return {"id": staff_id, "temporary_password": temp, "must_change_password": True}
 
 
-def reset_mfa(db: Session, actor: Actor | int, staff_id: int, reason: str | None = None) -> dict:
-    actor = _actor(actor)
-    user = _get_staff(db, staff_id)
-    db.execute(update(AdminUser).where(AdminUser.id == staff_id).values(
-        mfa_enabled=False, mfa_secret_enc=None, refresh_version=AdminUser.refresh_version + 1, updated_by=str(actor.id)))
-    _audit(db, actor, "staff.mfa.reset", "staff", staff_id, before={"mfa_enabled": user.mfa_enabled}, after={"mfa_enabled": False}, reason=reason)
-    db.commit()
-    db.refresh(user)
-    invalidate_permissions(staff_id)
+def reset_mfa(db: Session, actor: Staff, staff_id: int, reason: str | None) -> dict:
+    """重置他人 MFA（丢失设备）：必须由另一名管理员执行并填写原因；清密钥与恢复码，撤销全部会话。"""
+    _not_self(actor, staff_id, "reset the MFA of")
+    reason = _reason_required(reason)
+    user = _get_target(db, actor, staff_id)
+    before = {"mfa_enabled": user.mfa_enabled}
+    clear_mfa(db, staff_id)
+    revoked = revoke_sessions(db, staff_id, "mfa_reset")
+    audit(db, actor, "staff.mfa.reset", "staff", staff_id, before=before, after={"mfa_enabled": False, "sessions_revoked": revoked},
+          reason=reason)
+    enqueue_event(db, "staff.mfa_reset", {"staff_id": staff_id, "by": actor.id}, "admin_user", staff_id)
     return {"id": staff_id, "mfa_enabled": False}
 
 
-def get_staff(db: Session, staff_id: int) -> dict:
-    return _staff_dict(db, _get_staff(db, staff_id))
+def staff_sessions(db: Session, actor: Staff, staff_id: int) -> list[dict]:
+    from .auth import list_sessions
+
+    _get_target(db, actor, staff_id, manage=False)
+    return list_sessions(db, staff_id)
 
 
-def list_staff(db: Session, page: int | None = None, page_size: int | None = None, keyword: str | None = None,
-               status: str | None = None) -> dict:
-    page, size = parse_page(page, page_size)
-    stmt = select(AdminUser).where(AdminUser.deleted_at.is_(None))
-    if keyword:
-        like = f"%{keyword.strip()}%"
-        stmt = stmt.where(or_(AdminUser.username.like(like), AdminUser.name.like(like)))
-    if status:
-        stmt = stmt.where(AdminUser.status == status)
-    total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
-    rows = db.execute(stmt.order_by(AdminUser.id.desc()).offset((page - 1) * size).limit(size)).scalars().all()
-    return {"items": [_staff_dict(db, u) for u in rows], "page": page, "page_size": size, "total": total}
+def revoke_staff_sessions(db: Session, actor: Staff, staff_id: int, reason: str | None = None) -> dict:
+    """管理员强制下线（ASVS 7.4.5）。"""
+    _get_target(db, actor, staff_id)
+    count = revoke_sessions(db, staff_id, "admin_revoked", except_session_id=actor.session_id if actor.id == staff_id else None)
+    audit(db, actor, "staff.session.revoke_all", "staff", staff_id, after={"revoked": count}, reason=reason)
+    return {"id": staff_id, "revoked": count}
 
 
 # ---------- 角色 ----------
 
-def _role_dict(db: Session, role: AdminRole) -> dict:
-    codes = db.execute(select(AdminRolePermission.code).where(AdminRolePermission.role_id == role.id).order_by(AdminRolePermission.code)).scalars().all()
-    users = db.execute(select(func.count()).select_from(AdminUserRole).where(AdminUserRole.role_id == role.id)).scalar_one()
-    return {"id": role.id, "name": role.name, "description": role.description, "builtin": role.builtin,
-            "permissions": list(codes), "user_count": users}
+ROLE_SPEC = ListSpec(
+    fields={
+        "builtin": Field(AdminRole.builtin, kind="bool"),
+        "mfa_required": Field(AdminRole.mfa_required, kind="bool"),
+        "name": Field(AdminRole.name, sortable=True),
+        "created_at": Field(AdminRole.created_at, kind="datetime", ops=("range",), sortable=True),
+    },
+    id_column=AdminRole.id,
+    keyword_columns=(AdminRole.name, AdminRole.description),
+    default_sort="id",
+)
 
 
-def _validate_codes(codes: list[str]) -> list[str]:
-    codes = sorted(set(c.strip() for c in codes))
-    unknown = [c for c in codes if c not in ALL_CODES]
+def _role_dicts(db: Session, roles: list[AdminRole]) -> list[dict]:
+    ids = [r.id for r in roles]
+    perms: dict[int, list[str]] = {i: [] for i in ids}
+    counts: dict[int, int] = {i: 0 for i in ids}
+    if ids:
+        for rid, code in db.execute(select(AdminRolePermission.role_id, AdminRolePermission.code)
+                                    .where(AdminRolePermission.role_id.in_(ids)).order_by(AdminRolePermission.code)).all():
+            perms[rid].append(code)
+        for rid, n in db.execute(select(AdminUserRole.role_id, func.count()).join(AdminUser, AdminUser.id == AdminUserRole.user_id)
+                                 .where(AdminUserRole.role_id.in_(ids), AdminUser.deleted_at.is_(None))
+                                 .group_by(AdminUserRole.role_id)).all():
+            counts[rid] = n
+    return [{"id": r.id, "name": r.name, "builtin_code": r.builtin_code, "description": r.description, "builtin": r.builtin,
+             "mfa_required": r.mfa_required, "editable": r.builtin_code != SUPER_ADMIN,
+             "permissions": [WILDCARD] if r.builtin_code == SUPER_ADMIN else perms[r.id], "user_count": counts[r.id],
+             "created_at": aware(r.created_at), "updated_at": aware(r.updated_at)} for r in roles]
+
+
+def list_roles(db: Session, params: Mapping[str, Any]) -> dict:
+    result = ROLE_SPEC.page(db, select(AdminRole), params)
+    result["items"] = _role_dicts(db, result["items"])
+    return result
+
+
+def _get_role(db: Session, role_id: int) -> AdminRole:
+    role = db.get(AdminRole, role_id)
+    if role is None:
+        raise AppError(ErrorCode.NOT_FOUND, "role not found")
+    return role
+
+
+def get_role(db: Session, role_id: int) -> dict:
+    return _role_dicts(db, [_get_role(db, role_id)])[0]
+
+
+def _validate_codes(codes: Iterable[str]) -> list[str]:
+    codes = sorted({c.strip() for c in codes})
+    known = registered_codes()
+    unknown = [c for c in codes if c not in known]
     if unknown:
-        raise AppError(ErrorCode.BAD_REQUEST, "unknown permission code", data={"errors": [{"field": "permissions", "message": f"unknown: {unknown}"}]})
+        raise field_error("permissions", f"unknown permission code: {unknown}")
     return codes
 
 
-def _assert_no_self_elevation(db: Session, actor: Actor, role_id: int, new_codes: list[str]) -> None:
-    """编辑自己持有的角色：新权限集必须 ⊆ 自己当前权限集，否则 4030。"""
-    holds = db.execute(select(AdminUserRole).where(AdminUserRole.user_id == actor.id, AdminUserRole.role_id == role_id)).first()
-    if holds is None:
-        return
-    own = _load_grants(db, actor.id)[0]
-    extra = sorted(set(new_codes) - own)
-    if extra:
-        raise AppError(ErrorCode.FORBIDDEN, "cannot grant yourself permissions you do not have", data={"extra": extra})
-
-
-def list_roles(db: Session) -> list[dict]:
-    return [_role_dict(db, r) for r in db.execute(select(AdminRole).order_by(AdminRole.id)).scalars().all()]
-
-
-def create_role(db: Session, actor: Actor | int, name: str, permissions: list[str], description: str = "") -> dict:
-    actor = _actor(actor)
+def _validate_role_name(name: str | None) -> str:
     name = (name or "").strip()
     if not 1 <= len(name) <= 32:
-        raise AppError(ErrorCode.BAD_REQUEST, "role name must be 1-32 chars", data={"errors": [{"field": "name", "message": "invalid"}]})
+        raise field_error("name", "role name must be 1-32 characters")
+    return name
+
+
+def create_role(db: Session, actor: Staff, name: str, permissions: Iterable[str], description: str = "",
+                mfa_required: bool = False) -> dict:
+    name = _validate_role_name(name)
     codes = _validate_codes(permissions)
-    role = AdminRole(name=name, description=(description or "")[:200])
+    assert_can_grant_codes(actor, codes)
+    role = AdminRole(name=name, description=(description or "")[:200], mfa_required=bool(mfa_required),
+                     created_by=str(actor.id), updated_by=str(actor.id))
     db.add(role)
     try:
         db.flush()
     except IntegrityError as exc:
-        db.rollback()
-        raise AppError(ErrorCode.CONFLICT, "role name already exists") from exc
+        raise AppError(ErrorCode.CONFLICT, "role name already exists",
+                       data={"errors": [{"field": "name", "message": "exists"}]}) from exc
     for code in codes:
         db.add(AdminRolePermission(role_id=role.id, code=code))
-    _audit(db, actor, "role.create", "role", role.id, after={"name": name, "permissions": codes})
-    db.commit()
-    return _role_dict(db, role)
-
-
-def update_role(db: Session, actor: Actor | int, role_id: int, name: str | None = None, permissions: list[str] | None = None,
-                description: str | None = None, reason: str | None = None) -> dict:
-    actor = _actor(actor)
-    role = db.get(AdminRole, role_id)
-    if role is None:
-        raise AppError(ErrorCode.NOT_FOUND, "role not found")
-    before = _role_dict(db, role)
-    if name is not None:
-        name = name.strip()
-        if not 1 <= len(name) <= 32:
-            raise AppError(ErrorCode.BAD_REQUEST, "role name must be 1-32 chars")
-        role.name = name
-    if description is not None:
-        role.description = description[:200]
-    if permissions is not None:
-        codes = _validate_codes(permissions)
-        _assert_no_self_elevation(db, actor, role_id, codes)
-        db.execute(delete(AdminRolePermission).where(AdminRolePermission.role_id == role_id))
-        for code in codes:
-            db.add(AdminRolePermission(role_id=role_id, code=code))
-    try:
-        db.flush()
-    except IntegrityError as exc:
-        db.rollback()
-        raise AppError(ErrorCode.CONFLICT, "role name already exists") from exc
-    after = _role_dict(db, role)
-    _audit(db, actor, "role.update", "role", role_id, before=before, after=after, reason=reason)
-    db.commit()
-    invalidate_permissions()
+    db.flush()
+    after = get_role(db, role.id)
+    audit(db, actor, "role.create", "role", role.id, after=after)
     return after
 
 
-def delete_role(db: Session, actor: Actor | int, role_id: int, reason: str | None = None) -> None:
-    """内置角色 4220；仍有用户绑定 4090。"""
-    actor = _actor(actor)
-    role = db.get(AdminRole, role_id)
-    if role is None:
-        raise AppError(ErrorCode.NOT_FOUND, "role not found")
+def update_role(db: Session, actor: Staff, role_id: int, name: str | None = None, permissions: Iterable[str] | None = None,
+                description: str | None = None, mfa_required: bool | None = None, reason: str | None = None) -> dict:
+    """超级管理员角色不可编辑（4220）；只能编辑权限不超过自己的角色，新权限集也不能超过自己。"""
+    role = _get_role(db, role_id)
+    if role.builtin_code == SUPER_ADMIN:
+        raise AppError(ErrorCode.BUSINESS_RULE, "the super admin role cannot be edited")
+    before = get_role(db, role_id)
+    assert_can_grant_codes(actor, before["permissions"])
+    if name is not None:
+        role.name = _validate_role_name(name)
+    if description is not None:
+        role.description = description[:200]
+    if mfa_required is not None:
+        role.mfa_required = bool(mfa_required)
+    if permissions is not None:
+        codes = _validate_codes(permissions)
+        assert_can_grant_codes(actor, codes)
+        db.execute(delete(AdminRolePermission).where(AdminRolePermission.role_id == role_id))
+        for code in codes:
+            db.add(AdminRolePermission(role_id=role_id, code=code))
+    role.updated_by = str(actor.id)
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        raise AppError(ErrorCode.CONFLICT, "role name already exists",
+                       data={"errors": [{"field": "name", "message": "exists"}]}) from exc
+    after = get_role(db, role_id)
+    audit(db, actor, "role.update", "role", role_id, before=before, after=after, reason=reason)
+    return after
+
+
+def delete_role(db: Session, actor: Staff, role_id: int, reason: str | None = None) -> dict:
+    """内置角色 4220；仍有员工使用 4090。"""
+    role = _get_role(db, role_id)
     if role.builtin:
-        raise AppError(ErrorCode.BUSINESS_RULE, "builtin role cannot be deleted")
+        raise AppError(ErrorCode.BUSINESS_RULE, "built-in roles cannot be deleted")
+    before = get_role(db, role_id)
+    assert_can_grant_codes(actor, before["permissions"])
     users = db.execute(select(func.count()).select_from(AdminUserRole).where(AdminUserRole.role_id == role_id)).scalar_one()
     if users:
-        raise AppError(ErrorCode.CONFLICT, "role still assigned to staff", data={"user_count": users})
-    before = _role_dict(db, role)
+        raise AppError(ErrorCode.CONFLICT, "role is still assigned to staff", data={"user_count": users})
     db.execute(delete(AdminRolePermission).where(AdminRolePermission.role_id == role_id))
     db.delete(role)
-    _audit(db, actor, "role.delete", "role", role_id, before=before, reason=reason)
-    db.commit()
+    audit(db, actor, "role.delete", "role", role_id, before=before, reason=reason)
+    return {"id": role_id, "deleted": True}
 
 
-def list_permissions(db: Session) -> list[dict]:
-    rows = db.execute(select(AdminPermission).order_by(AdminPermission.module, AdminPermission.code)).scalars().all()
-    return [{"code": p.code, "module": p.module, "description": p.description} for p in rows]
+def list_permissions() -> list[dict]:
+    return [{"code": p.code, "module": p.module, "description": p.description} for p in registered()]
 
 
-# ---------- 审计查询 ----------
+# ---------- 审计与登录日志 ----------
 
-def _audit_dict(row: AuditLog) -> dict:
-    return {"id": row.id, "actor_type": row.actor_type, "actor_id": row.actor_id, "action": row.action, "resource": row.resource,
-            "resource_id": row.resource_id, "before_json": row.before_json, "after_json": row.after_json, "reason": row.reason,
-            "ip": row.ip, "trace_id": row.trace_id, "created_at": row.created_at}
+AUDIT_SPEC = ListSpec(
+    fields={
+        "actor_type": Field(AuditLog.actor_type, ops=("eq", "in"), choices=frozenset({"user", "staff", "system", "agent"})),
+        "actor_id": Field(AuditLog.actor_id, ops=("eq", "in")),
+        "action": Field(AuditLog.action, ops=("eq", "in"), sortable=True),
+        "resource": Field(AuditLog.resource, ops=("eq", "in")),
+        "resource_id": Field(AuditLog.resource_id),
+        "trace_id": Field(AuditLog.trace_id),
+        "created_at": Field(AuditLog.created_at, kind="datetime", ops=("range",), sortable=True),
+    },
+    id_column=AuditLog.id,
+    keyword_columns=(AuditLog.action, AuditLog.resource_id, AuditLog.reason),
+    default_sort="-created_at",
+)
+
+LOGIN_SPEC = ListSpec(
+    fields={
+        "user_id": Field(AdminLoginLog.user_id, kind="int"),
+        "username": Field(AdminLoginLog.username),
+        "success": Field(AdminLoginLog.success, kind="bool"),
+        "factor": Field(AdminLoginLog.factor, ops=("eq", "in")),
+        "reason": Field(AdminLoginLog.reason, ops=("eq", "in")),
+        "ip": Field(AdminLoginLog.ip),
+        "created_at": Field(AdminLoginLog.created_at, kind="datetime", ops=("range",), sortable=True),
+    },
+    id_column=AdminLoginLog.id,
+    keyword_columns=(AdminLoginLog.username, AdminLoginLog.ip),
+    default_sort="-created_at",
+)
 
 
-def list_audit_logs(db: Session, page: int | None = None, page_size: int | None = None, actor_id: str | None = None,
-                    action: str | None = None, resource: str | None = None, resource_id: str | None = None,
-                    since: datetime | None = None, until: datetime | None = None) -> dict:
-    page, size = parse_page(page, page_size)
-    stmt = select(AuditLog)
-    if actor_id:
-        stmt = stmt.where(AuditLog.actor_id == str(actor_id))
-    if action:
-        stmt = stmt.where(AuditLog.action.like(f"{action}%"))
-    if resource:
-        stmt = stmt.where(AuditLog.resource == resource)
-    if resource_id:
-        stmt = stmt.where(AuditLog.resource_id == str(resource_id))
-    if since is not None:
-        stmt = stmt.where(AuditLog.created_at >= since)
-    if until is not None:
-        stmt = stmt.where(AuditLog.created_at < until)
-    total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
-    rows = db.execute(stmt.order_by(AuditLog.id.desc()).offset((page - 1) * size).limit(size)).scalars().all()
-    return {"items": [_audit_dict(r) for r in rows], "page": page, "page_size": size, "total": total}
+def _filters(params: Mapping[str, Any]) -> dict:
+    return {k: str(v)[:100] for k, v in params.items() if k not in ("page", "page_size")}
+
+
+def audit_dict(row: AuditLog) -> dict:
+    return {"id": row.id, "actor_type": row.actor_type, "actor_id": row.actor_id, "action": row.action,
+            "resource": row.resource, "resource_id": row.resource_id, "before_json": row.before_json,
+            "after_json": row.after_json, "reason": row.reason, "ip": row.ip, "user_agent": row.user_agent,
+            "trace_id": row.trace_id, "created_at": aware(row.created_at)}
+
+
+def login_log_dict(row: AdminLoginLog) -> dict:
+    return {"id": row.id, "user_id": row.user_id, "username": row.username, "factor": row.factor, "success": row.success,
+            "reason": row.reason, "ip": row.ip, "user_agent": row.user_agent, "created_at": aware(row.created_at)}
+
+
+def list_audit_logs(db: Session, params: Mapping[str, Any]) -> dict:
+    return AUDIT_SPEC.page(db, select(AuditLog), params, serialize=audit_dict)
 
 
 def get_audit_log(db: Session, log_id: int) -> dict:
     row = db.get(AuditLog, log_id)
     if row is None:
         raise AppError(ErrorCode.NOT_FOUND, "audit log not found")
-    return _audit_dict(row)
+    return audit_dict(row)
 
 
-def purge_login_logs(db: Session, now: datetime | None = None) -> int:
-    cutoff = (now or utcnow()) - timedelta(days=LOGIN_LOG_RETENTION_DAYS)
-    deleted = db.execute(delete(AdminLoginLog).where(AdminLoginLog.created_at < cutoff)).rowcount
+AUDIT_EXPORT_HEADERS = ("ID", "时间", "操作者类型", "操作者", "动作", "资源", "资源ID", "原因", "IP", "追踪ID", "变更前", "变更后")
+
+
+def export_audit_logs(db: Session, actor: Staff, params: Mapping[str, Any]) -> bytes:
+    """导出（与列表同一套筛选）；导出行为本身写审计（操作人、筛选条件、大小）。"""
+    def row(r: AuditLog) -> list[Any]:
+        return [r.id, aware(r.created_at), r.actor_type, r.actor_id, r.action, r.resource, r.resource_id, r.reason, r.ip,
+                r.trace_id, r.before_json, r.after_json]
+
+    data = b"".join(export_csv(db, AUDIT_SPEC, select(AuditLog), params, AUDIT_EXPORT_HEADERS, row,
+                               hard_limit=config.get_config().export_max_rows))
+    audit(db, actor, "audit.export", "audit_log", "-", after={"filters": _filters(params), "bytes": len(data)})
     db.commit()
-    return deleted
+    return data
+
+
+def list_login_logs(db: Session, params: Mapping[str, Any]) -> dict:
+    return LOGIN_SPEC.page(db, select(AdminLoginLog), params, serialize=login_log_dict)
+
+
+LOGIN_EXPORT_HEADERS = ("ID", "时间", "员工ID", "账号", "因素", "成功", "原因", "IP", "UA")
+
+
+def export_login_logs(db: Session, actor: Staff, params: Mapping[str, Any]) -> bytes:
+    def row(r: AdminLoginLog) -> list[Any]:
+        return [r.id, aware(r.created_at), r.user_id, r.username, r.factor, r.success, r.reason, r.ip, r.user_agent]
+
+    data = b"".join(export_csv(db, LOGIN_SPEC, select(AdminLoginLog), params, LOGIN_EXPORT_HEADERS, row,
+                               hard_limit=config.get_config().export_max_rows))
+    audit(db, actor, "login_log.export", "admin_login_log", "-", after={"filters": _filters(params), "bytes": len(data)})
+    db.commit()
+    return data

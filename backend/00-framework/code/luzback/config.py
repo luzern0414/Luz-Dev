@@ -41,6 +41,14 @@ class Settings:
     log_level: str = field(default_factory=lambda: _env("LOG_LEVEL", "info"))
     timezone: str = field(default_factory=lambda: _env("LUZ_TIMEZONE", "Asia/Shanghai"))
 
+    # ---- 网关与内网 ----
+    # 只有来自这些地址的 X-Forwarded-For 才可信（nginx 所在网段）；其他请求一律取 TCP 对端地址
+    trusted_proxies: tuple[str, ...] = field(default_factory=lambda: _list("LUZ_TRUSTED_PROXIES", "127.0.0.1/32,::1/128"))
+    # /metrics 只对内网开放；也可用 LUZ_METRICS_TOKEN 以 Bearer 访问
+    internal_networks: tuple[str, ...] = field(default_factory=lambda: _list(
+        "LUZ_INTERNAL_NETWORKS", "127.0.0.0/8,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"))
+    metrics_token: str = field(default_factory=lambda: _env("LUZ_METRICS_TOKEN", ""))
+
     # ---- 存储 ----
     database_url: str = field(default_factory=lambda: _env("LUZ_DATABASE_URL", "sqlite:///./luz-dev.db"))
     db_pool_size: int = field(default_factory=lambda: _int("LUZ_DB_POOL_SIZE", 20))

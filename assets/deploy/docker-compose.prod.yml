@@ -1,77 +1,377 @@
-# Luz 项目生产部署模板（references/operations.md §2）。复制到项目 infra/deploy/ 后按项目修改。
-# 秘密不写在这里：通过 env_file 指向服务器上的受限文件（权限 600），或使用云密钥服务注入。
+# Luz 项目生产部署模板（references/operations.md §2）。复制到服务器 /opt/luz/deploy/，监控配置复制到 /opt/luz/monitoring/。
+# 要求 Docker Engine >= 25、Compose >= 2.24（healthcheck start_interval、depends_on restart/required）。
+#
+# 启动：  LUZ_IMAGE=registry.example.com/luz-api@sha256:<digest> docker compose -f docker-compose.prod.yml up -d --wait
+# 监控：  再加 --profile monitoring
+# 迁移：  docker compose -f docker-compose.prod.yml --profile release run --rm migrate
+# 发布：  不要直接 up -d（先停后起有停机窗口），用 ./release.sh deploy <镜像@digest>（健康门控滚动替换）
+#
+# 镜像版本：下方第三方镜像 tag 为 2026-10 核对的版本；上线前一律改为 tag@sha256:<digest>（docker buildx imagetools inspect 获取），
+# 并用 Dependabot/Renovate（docker-compose 生态）跟进更新。
+# 秘密不写在这里：env_file 指向服务器上的受限文件（600），密码类用 compose secrets（文件挂载到 /run/secrets/）。
+# 服务器上需要准备的文件见 references/operations.md §2「服务器文件清单」。
+#
+# 网络与真实 IP（与 nginx.conf、luzback.app.client_ip 对应）：
+#   backend   172.30.0.0/24  nginx(固定 172.30.0.10) ↔ api / worker（可出公网：调用微信等）
+#   data      172.30.1.0/24  internal，不可出公网：postgres、redis、api、worker、exporter、prometheus
+#   monitoring 172.30.2.0/24 prometheus、alertmanager、blackbox、grafana、node-exporter
+#   api 只信任 nginx 的 X-Forwarded-For（FORWARDED_ALLOW_IPS / LUZ_TRUSTED_PROXIES = 172.30.0.10）；
+#   /metrics 只对 data 网段（Prometheus）开放（LUZ_INTERNAL_NETWORKS），且 Prometheus 带 Bearer 令牌。
 name: luz-app
 
+x-logging: &logging
+  # 本地 json-file 只是缓冲，不是留存：必须由采集器（Vector/Fluent Bit/云日志 Agent）集中存储 >= 180 天（网络安全法）
+  driver: json-file
+  options: { max-size: "50m", max-file: "5", tag: "{{.Name}}" }
+
+x-hardening: &hardening
+  init: true
+  read_only: true
+  security_opt: ["no-new-privileges:true"]
+  restart: unless-stopped
+  logging: *logging
+
+x-app: &app
+  <<: *hardening
+  # 按 digest 部署，不按可变 tag：release.sh 写入 LUZ_IMAGE
+  image: ${LUZ_IMAGE:?set LUZ_IMAGE=registry/luz-api@sha256:<digest>}
+  env_file: [/etc/luz/api.env]
+  cap_drop: ["ALL"]
+  tmpfs: ["/tmp:size=64m,mode=1777"]
+  ulimits: { nofile: { soft: 65536, hard: 65536 } }
+  volumes:
+    - /etc/luz/keys:/etc/luz/keys:ro          # 微信支付私钥、平台公钥（属主 10001，权限 400）
+  environment: &app-env
+    LUZ_ENV: prod
+    FORWARDED_ALLOW_IPS: "172.30.0.10"        # uvicorn --proxy-headers 只信任 nginx
+    LUZ_TRUSTED_PROXIES: "172.30.0.10/32"     # 应用层 client_ip 同样只信任 nginx
+    LUZ_INTERNAL_NETWORKS: "172.30.1.0/24"    # /metrics 只对 data 网段开放（nginx 不在其中）
+    APP_VERSION: ${APP_VERSION:-unknown}
+
 services:
+  # ------------------------------------------------------------------ 应用
   api:
-    image: ${REGISTRY}/luz-api:${APP_VERSION:?set APP_VERSION}
-    env_file: /etc/luz/api.env
-    command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
-    depends_on:
-      postgres: { condition: service_healthy }
-      redis: { condition: service_healthy }
+    <<: *app
+    # 不设 container_name、不映射 ports：release.sh 才能扩容到 2 倍做滚动替换
+    deploy:
+      replicas: ${API_REPLICAS:-2}            # 每容器 1 个 uvicorn 进程，按副本扩容；单机 2–4 个
+      resources:
+        limits: { cpus: "2", memory: 1g, pids: 512 }
+        reservations: { cpus: "0.25", memory: 256m }
+    stop_grace_period: 30s                    # > uvicorn --timeout-graceful-shutdown 20
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
-      interval: 15s
-      timeout: 5s
+      # 就绪检查（DB 可用）：用于 depends_on 与滚动发布切流；镜像自带的 HEALTHCHECK 是 /healthz 存活检查
+      test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=2).status == 200 else 1)"]
+      interval: 10s
+      timeout: 3s
       retries: 3
-    restart: unless-stopped
-    networks: [internal]
+      start_period: 30s
+      start_interval: 2s
+    depends_on:
+      postgres: { condition: service_healthy, restart: false }
+      redis: { condition: service_healthy, restart: false }
+    networks: [backend, data]
 
   worker:
-    # 发件箱投递与定时任务（关单、查单、退款查询、对账、过期）；只运行一个实例或使用租约锁
-    image: ${REGISTRY}/luz-api:${APP_VERSION}
-    env_file: /etc/luz/api.env
-    command: ["python", "-m", "worker"]
+    <<: *app
+    # 发件箱投递与消息消费（backend/MODULES.md 25-jobs：python -m jobs worker）。发件箱用 SKIP LOCKED，可多副本
+    command: ["python", "-m", "jobs", "worker"]
+    environment:
+      <<: *app-env
+      LUZ_WORKER_HEARTBEAT_FILE: /tmp/luz-worker.heartbeat
+    deploy:
+      replicas: 1
+      resources:
+        limits: { cpus: "1", memory: 512m, pids: 256 }
+    stop_grace_period: 60s                    # 收到 SIGTERM 后完成当前批次或放回队列
+    healthcheck:
+      # worker 每轮循环 touch 心跳文件；超过 60s 未更新视为卡死
+      test: ["CMD", "python", "-c", "import os,sys,time; p='/tmp/luz-worker.heartbeat'; sys.exit(0 if os.path.exists(p) and time.time() - os.path.getmtime(p) < 60 else 1)"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
     depends_on:
-      postgres: { condition: service_healthy }
-    restart: unless-stopped
-    networks: [internal]
+      postgres: { condition: service_healthy, restart: false }
+      redis: { condition: service_healthy, restart: false }
+    networks: [backend, data]
+
+  scheduler:
+    <<: *app
+    # 定时任务（关单、查单、退款查询、对账、过期）。任务有 Redis 锁，但仍只跑 1 个副本，避免无谓竞争
+    command: ["python", "-m", "jobs", "scheduler"]
+    environment:
+      <<: *app-env
+      LUZ_WORKER_HEARTBEAT_FILE: /tmp/luz-scheduler.heartbeat
+    deploy:
+      replicas: 1
+      resources:
+        limits: { cpus: "0.5", memory: 384m, pids: 128 }
+    stop_grace_period: 60s
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,sys,time; p='/tmp/luz-scheduler.heartbeat'; sys.exit(0 if os.path.exists(p) and time.time() - os.path.getmtime(p) < 60 else 1)"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      postgres: { condition: service_healthy, restart: false }
+      redis: { condition: service_healthy, restart: false }
+    networks: [backend, data]
 
   migrate:
-    # 发布时先执行：docker compose run --rm migrate
-    image: ${REGISTRY}/luz-api:${APP_VERSION}
-    env_file: /etc/luz/api.env
+    <<: *app
+    # 一次性管理进程（12-Factor）：release.sh 在替换 api 之前执行
     command: ["alembic", "upgrade", "head"]
+    restart: "no"
     profiles: ["release"]
-    networks: [internal]
+    healthcheck: { disable: true }
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [data]
 
+  # ------------------------------------------------------------------ 数据
   postgres:
-    image: postgres:16
-    env_file: /etc/luz/postgres.env
-    volumes: ["pgdata:/var/lib/postgresql/data"]
+    <<: *hardening
+    # 固定小版本并改为 digest；与开发环境 pgvector/pgvector:pg16 同一大版本（PG16 EOL 2028-11）
+    image: ${POSTGRES_IMAGE:-pgvector/pgvector:0.8.1-pg16}
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-luz}
+      POSTGRES_USER: ${POSTGRES_USER:-luz}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    secrets: [postgres_password]
+    shm_size: 256m
+    tmpfs: ["/tmp", "/var/run/postgresql"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - /var/backups/luz/wal:/wal-archive      # WAL 归档目录（属主 999:999，700）；backup.sh wal-sync 加密外传
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - archive_mode=on
+      # 仅成功时返回 0；先写 .part 再改名，防止半个文件被当成完整段
+      - -c
+      - archive_command=test ! -f /wal-archive/%f && cp %p /wal-archive/%f.part && mv /wal-archive/%f.part /wal-archive/%f
+      - -c
+      - archive_timeout=60                     # RPO ≈ 1 分钟；每次切换产生 16MB 段，注意归档盘容量
+      - -c
+      - max_wal_senders=3                       # pg_basebackup 需要
+      - -c
+      - max_connections=200                     # >= api 副本 × (池 10 + 溢出 10) + worker + scheduler + 运维余量
+      - -c
+      - log_min_duration_statement=500
+      - -c
+      - log_lock_waits=on
+      - -c
+      - idle_in_transaction_session_timeout=60000
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
-      interval: 10s
-      retries: 5
-    restart: unless-stopped
-    networks: [internal]   # 不映射端口，不暴露公网（OPS-002）
+      test: ["CMD-SHELL", "pg_isready -t 3 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    stop_grace_period: 60s                      # 留足 checkpoint 时间，避免下次启动做崩溃恢复
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 2g, pids: 512 }
+    networks: [data]                             # 不映射端口，不暴露公网（OPS-002）
 
   redis:
-    image: redis:7
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD}"]
-    volumes: ["redisdata:/data"]
+    <<: *hardening
+    image: ${REDIS_IMAGE:-redis:7.4-bookworm}
+    # 密码等全部写在受限配置文件里（requirepass、appendonly yes、appendfsync everysec、save、maxmemory），
+    # 不放命令行参数：argv 会出现在 ps 与 docker inspect 中。模板见 redis.conf.example
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    user: "999:999"                             # 直接以 redis 用户运行，入口脚本不再需要 chown/gosu 权限
+    cap_drop: ["ALL"]
+    tmpfs: ["/tmp"]
+    volumes:
+      - redisdata:/data
+      - /etc/luz/redis.conf:/usr/local/etc/redis/redis.conf:ro
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      # 口令从配置文件读出放进 REDISCLI_AUTH 环境变量，不出现在 redis-cli 参数里
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$(sed -n 's/^requirepass[[:space:]]*//p' /usr/local/etc/redis/redis.conf)\" redis-cli ping | grep -q PONG"]
       interval: 10s
+      timeout: 3s
       retries: 5
-    restart: unless-stopped
-    networks: [internal]
+      start_period: 10s
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 768m, pids: 128 }   # 比 maxmemory 512mb 多出 AOF 重写余量
+    networks: [data]
 
+  # ------------------------------------------------------------------ 入口
   nginx:
-    image: nginx:1.27
+    <<: *hardening
+    image: ${NGINX_IMAGE:-nginx:1.30.6-bookworm}
     ports: ["80:80", "443:443"]
+    environment:
+      NGINX_ENTRYPOINT_QUIET_LOGS: "1"
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN", "SETUID", "SETGID", "NET_BIND_SERVICE", "DAC_OVERRIDE"]
+    tmpfs: ["/var/cache/nginx", "/var/run", "/tmp"]
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - /etc/luz/certs:/etc/nginx/certs:ro
+      - /etc/luz/certs:/etc/nginx/certs:ro           # 各域名 fullchain/privkey + ffdhe2048.pem
+      - /var/www/acme:/var/www/acme:ro               # ACME http-01（证书由宿主机 certbot/acme.sh 续期后 nginx -s reload）
       - ./admin-dist:/usr/share/nginx/admin:ro
-    depends_on: [api]
-    restart: unless-stopped
-    networks: [internal]
+    depends_on:
+      api: { condition: service_healthy, restart: false }
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8081/nginx-health"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 256m, pids: 256 }
+    logging:
+      driver: json-file
+      options: { max-size: "100m", max-file: "10", tag: "{{.Name}}" }
+    networks:
+      backend: { ipv4_address: 172.30.0.10 }
+
+  # ------------------------------------------------------------------ 监控（--profile monitoring）
+  prometheus:
+    <<: *hardening
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.15.1}
+    profiles: ["monitoring"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --storage.tsdb.retention.size=20GB
+      - --web.enable-lifecycle                     # 允许 curl -X POST /-/reload 热加载规则
+    secrets: [metrics_token]
+    volumes:
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../monitoring/rules:/etc/prometheus/rules:ro
+      - promdata:/prometheus
+    ports: ["127.0.0.1:9090:9090"]                 # 只绑本机；release.sh 用它判断回滚条件，远程访问走 SSH 隧道
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 2g }
+    networks: [data, monitoring]
+
+  alertmanager:
+    <<: *hardening
+    image: ${ALERTMANAGER_IMAGE:-prom/alertmanager:v0.34.1}
+    profiles: ["monitoring"]
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml", "--storage.path=/alertmanager"]
+    volumes:
+      - ../monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - /etc/luz/secrets/alertmanager:/etc/alertmanager/secrets:ro   # webhook URL 文件（url_file），不进仓库
+      - amdata:/alertmanager
+    ports: ["127.0.0.1:9093:9093"]
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 256m }
+    networks: [monitoring]
+
+  blackbox:
+    <<: *hardening
+    image: ${BLACKBOX_IMAGE:-prom/blackbox-exporter:v0.29.1}
+    profiles: ["monitoring"]
+    command: ["--config.file=/etc/blackbox/blackbox.yml"]
+    volumes: ["../monitoring/blackbox.yml:/etc/blackbox/blackbox.yml:ro"]
+    cap_drop: ["ALL"]
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 128m }
+    networks: [monitoring]                          # 从公网侧探测域名、证书与 HTTPS 可用性
+
+  node-exporter:
+    <<: *hardening
+    image: ${NODE_EXPORTER_IMAGE:-prom/node-exporter:v1.12.1}
+    profiles: ["monitoring"]
+    pid: host
+    command:
+      - --path.rootfs=/host
+      - --collector.textfile.directory=/textfile   # backup.sh 写入 luz_backup_*.prom
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run|var/lib/docker/.+)($|/)
+    volumes:
+      - /:/host:ro,rslave
+      - /var/lib/node_exporter/textfile:/textfile:ro
+    cap_drop: ["ALL"]
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 128m }
+    networks: [monitoring]
+
+  postgres-exporter:
+    <<: *hardening
+    image: ${POSTGRES_EXPORTER_IMAGE:-quay.io/prometheuscommunity/postgres-exporter:v0.20.1}
+    profiles: ["monitoring"]
+    env_file: [/etc/luz/monitoring.env]            # DATA_SOURCE_NAME=postgresql://luz_monitor:<pwd>@postgres:5432/luz?sslmode=disable
+    command: ["--collector.stat_archiver"]          # pg_stat_archiver_last_archive_age / failed_count：WAL 归档告警
+    cap_drop: ["ALL"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 128m }
+    networks: [data]
+
+  sql-exporter:
+    <<: *hardening
+    # 业务指标（发件箱滞后、任务最近成功时间、支付待确认积压）直接从业务表查询，不依赖应用进程
+    image: ${SQL_EXPORTER_IMAGE:-burningalchemist/sql_exporter:0.24.12}
+    profiles: ["monitoring"]
+    env_file: [/etc/luz/monitoring.env]            # SQLEXPORTER_TARGET_DSN=postgres://luz_monitor:<pwd>@postgres:5432/luz?sslmode=disable
+    command: ["--config.file=/etc/sql_exporter/sql_exporter.yml"]
+    volumes: ["../monitoring/sql-exporter:/etc/sql_exporter:ro"]
+    cap_drop: ["ALL"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 128m }
+    networks: [data]
+
+  grafana:
+    <<: *hardening
+    image: ${GRAFANA_IMAGE:-grafana/grafana:13.3.0}
+    profiles: ["monitoring"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_SERVER_ROOT_URL: http://127.0.0.1:3000/
+    secrets: [grafana_admin_password]
+    tmpfs: ["/tmp"]
+    volumes:
+      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    ports: ["127.0.0.1:3000:3000"]
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 512m }
+    networks: [monitoring]
+
+secrets:
+  postgres_password: { file: /etc/luz/secrets/postgres_password }
+  metrics_token: { file: /etc/luz/secrets/metrics_token }              # 与 api.env 中 LUZ_METRICS_TOKEN 相同；Prometheus（uid 65534）需可读
+  grafana_admin_password: { file: /etc/luz/secrets/grafana_admin_password }
 
 volumes:
-  pgdata:
-  redisdata:
+  pgdata: {}
+  redisdata: {}
+  promdata: {}
+  amdata: {}
+  grafanadata: {}
 
 networks:
-  internal:
+  backend:
+    ipam: { config: [{ subnet: 172.30.0.0/24 }] }
+  data:
+    internal: true                                 # 数据层不能出公网
+    ipam: { config: [{ subnet: 172.30.1.0/24 }] }
+  monitoring:
+    ipam: { config: [{ subnet: 172.30.2.0/24 }] }

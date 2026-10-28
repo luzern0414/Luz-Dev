@@ -1,0 +1,72 @@
+# Alertmanager 路由示例：critical → 电话/短信（值班），warning → 群消息；Watchdog → 外部死人开关。
+# Webhook 地址属于秘密，用 url_file 从 /etc/luz/secrets/alertmanager/ 读取（compose 挂载到 /etc/alertmanager/secrets/）：
+#   critical_webhook   电话/短信网关（云厂商语音/短信通知、PagerDuty、OnCall 平台等）的 webhook 入口
+#   chat_webhook       企业微信/钉钉/飞书群机器人转换服务（Alertmanager 原生 JSON 需转换为机器人格式，
+#                      如 prometheus-webhook-dingtalk 或自建 20 行转换器）；企业微信应用消息也可用原生 wechat_configs
+#   deadman_webhook    死人开关（healthchecks 类服务）：每分钟收到 Watchdog，收不到就从外部报警
+# 校验：amtool check-config alertmanager.yml
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: chat-warning
+  group_by: [alertname, env]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers: ['alertname="Watchdog"']
+      receiver: deadman
+      group_wait: 0s
+      group_interval: 1m
+      repeat_interval: 1m
+    - matchers: ['severity="critical"']
+      receiver: oncall-critical
+      group_wait: 10s
+      repeat_interval: 1h
+      continue: true                # 同时发到群，便于协同
+    - matchers: ['severity="critical"']
+      receiver: chat-warning
+    - matchers: ['severity="warning"']
+      receiver: chat-warning
+      # 工作时间外的 warning 次日处理：可加 active_time_intervals: [workhours]
+    - matchers: ['severity="none"']
+      receiver: blackhole
+
+inhibit_rules:
+  # 同一告警 critical 已触发时，抑制 warning
+  - source_matchers: ['severity="critical"']
+    target_matchers: ['severity="warning"']
+    equal: [alertname, env]
+  # api 全部不可用时，抑制延迟、错误率等派生告警
+  - source_matchers: ['alertname="ApiAllInstancesDown"']
+    target_matchers: ['alertname=~"Api.*|PaymentNotifySlow|OutboxLagHigh"']
+    equal: [env]
+  # 数据库不可用时，抑制依赖它的 exporter/任务告警
+  - source_matchers: ['alertname="PostgresDown"']
+    target_matchers: ['alertname=~"ExporterDown|FrequentJobStale|OutboxLagHigh|PostgresConnectionsHigh"']
+    equal: [env]
+
+receivers:
+  - name: oncall-critical
+    webhook_configs:
+      - url_file: /etc/alertmanager/secrets/critical_webhook
+        send_resolved: true
+        max_alerts: 20
+  - name: chat-warning
+    webhook_configs:
+      - url_file: /etc/alertmanager/secrets/chat_webhook
+        send_resolved: true
+        max_alerts: 20
+  - name: deadman
+    webhook_configs:
+      - url_file: /etc/alertmanager/secrets/deadman_webhook
+        send_resolved: false
+  - name: blackhole
+
+# time_intervals:
+#   - name: workhours
+#     time_intervals:
+#       - weekdays: ["monday:friday"]
+#         times: [{ start_time: "09:00", end_time: "19:00" }]
+#         location: Asia/Shanghai

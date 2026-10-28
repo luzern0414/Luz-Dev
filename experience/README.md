@@ -6,10 +6,12 @@
 
 | 存放位置 | 内容 | 写入 | 上限 |
 |---|---|---|---|
-| `notes.json` | 用户偏好（preference）、教训（lesson）、有效信息（fact），每条一句通用原则 | `record_experience.py note --kind … --key … --text …` | 偏好 60、教训 120、有效信息 120 |
+| `notes.json` | 偏好（preference）、教训（lesson）、有效信息（fact），每条一句通用原则；与 Luz-System、Luz-Design、Luz-Writing 同一文件名、字段与命令 | `record_experience.py note --kind … --key … --text … [--why …]`，另有 `list`、`search`、`prune`、`check` | 偏好 60、教训 120、有效信息 120 |
 | `records/EXP-*.md` | 一次任务的完整经验：摘要、决策、失败尝试、证据、可复用候选 | `record_experience.py record --key … …` | 有效记录 120 |
 
-两类条目都按 `key` 去重：同一 key 再写会替换原内容，保留一次 `previous` 供追溯，不新增条目。超过上限时 `prune` 先删除 180 天未确认的，再删除使用次数最少、最久未确认的；经验记录超限时自动废弃价值最低的 candidate。`check` 发现重复 key、重复内容、个人信息或超限即失败。INDEX.md 在每次写入后自动重建。
+`notes.json` 的结构：`{"schema_version": "1.0", "caps": {...}, "notes": [...]}`，每条有 `key`、`kind`、`text`、可选 `why`、`uses`、`first_seen`、`last_confirmed`（年-月-日），被替换过的再带 `previous`（`text`、`replaced_at`）。
+
+两类条目都按 `key` 去重：同一 key 再写会替换原内容，保留一次 `previous` 供追溯，不新增条目；同一句话换了 key 只算再确认一次。笔记超过上限时先删确认次数最少、再删最久未确认的，`prune` 同时列出 180 天未确认的笔记；经验记录超限时自动废弃价值最低的 candidate。`check` 发现结构不符、缺字段、重复 key、重复内容、个人信息或超限即失败。INDEX.md 在每次写入后自动重建。
 
 ## 状态
 

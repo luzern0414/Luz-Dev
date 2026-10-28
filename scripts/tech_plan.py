@@ -658,6 +658,33 @@ def research_summary(plan: Mapping[str, Any]) -> dict[str, Any]:
     return {"total": len(sources), "read": len(read), "official": len(official), "opensource": len(opensource), "modules": covered}
 
 
+def frontend_problems(plan: Mapping[str, Any], gate: bool) -> tuple[list[str], list[str]]:
+    """The frontend address the user gives after approving the plan.
+
+    The order is: report → user approval → frontend address → development. Review and approval only
+    remind; the development gate refuses until a Luz System session or frontend directory is registered.
+    """
+    errors: list[str] = []
+    warnings: list[str] = []
+    if plan.get("mode") != "implementation" or not FRONTEND_TYPES.intersection(plan.get("projectTypes", [])):
+        return errors, warnings
+    design = plan.get("design") or {}
+    if not design:
+        message = ("包含前端但还没有前端地址：用户批准方案后，请用户给出 Luz System 设计会话目录或前端工程目录，"
+                   "再运行 tech_plan.py design NN --session <会话目录> [--frontend <前端目录>]（纯后端任务用 --skip 原因）")
+        (errors if gate else warnings).append(message)
+    elif design.get("skip"):
+        if not str(design["skip"]).strip():
+            errors.append("跳过 Luz System 接入必须写明原因")
+    else:
+        if design.get("errors"):
+            (errors if gate else warnings).append("Luz System 设计尚未全部批准：" + "；".join(design["errors"]))
+        missing = [f["path"] for f in design.get("frontend", []) if not f.get("exists")]
+        if missing:
+            (errors if gate else warnings).append("前端目录不存在：" + "、".join(missing))
+    return errors, warnings
+
+
 def check_plan(plan: Mapping[str, Any], stage: str = "review") -> tuple[list[str], list[str]]:
     """Return (errors, warnings) for a stage: review | approve | development | delivery."""
     errors: list[str] = []
@@ -673,6 +700,7 @@ def check_plan(plan: Mapping[str, Any], stage: str = "review") -> tuple[list[str
             elif plan["approval"].get("contentHash") != content_hash(plan):
                 errors.append("方案在批准后被修改；请用 revise 记录修订并重新提交审批")
         if stage == "development":
+            errors += frontend_problems(plan, gate=True)[0]
             return errors, warnings
 
     # Content completeness.
@@ -797,16 +825,9 @@ def check_plan(plan: Mapping[str, Any], stage: str = "review") -> tuple[list[str
             if not str(feature.get("name", "")).strip() or not str(feature.get("description", "")).strip():
                 errors.append(f"定制功能 {feature.get('id')} 缺少名称或说明")
 
-    # Luz System frontend.
-    if mode == "implementation" and FRONTEND_TYPES.intersection(plan.get("projectTypes", [])):
-        design = plan.get("design") or {}
-        if not design:
-            errors.append("包含前端但未登记 Luz System 设计会话：运行 tech_plan.py design NN --session <会话目录>（或 --skip 原因）")
-        elif design.get("skip"):
-            if not str(design["skip"]).strip():
-                errors.append("跳过 Luz System 接入必须写明原因")
-        elif stage in {"approve", "development", "delivery"} and design.get("errors"):
-            warnings.append("Luz System 设计尚未全部批准：" + "；".join(design["errors"]))
+    frontend_errors, frontend_warnings = frontend_problems(plan, gate=stage == "delivery")
+    errors += frontend_errors
+    warnings += frontend_warnings
 
     # Decisions.
     for decision in plan.get("decisions", []):
@@ -1938,23 +1959,33 @@ def command_spec(args: argparse.Namespace) -> int:
 
 
 def command_design(args: argparse.Namespace) -> int:
-    """Register the Luz System session this plan's frontend comes from (references/design-integration.md)."""
+    """Register the frontend address the user gave after approving the plan (references/design-integration.md).
+
+    --session: the Luz System session (system design + prototype, hash-approved); --frontend: the frontend
+    source directories (mini-program, admin) when they already exist. Either or both; --skip for backend-only work.
+    """
     plan, html_path, data_path = _load(args.plan, args.output_root)
     if args.skip:
         plan["design"] = {"skip": args.skip, "checkedAt": now_iso()}
     else:
-        import design_intake  # noqa: PLC0415 - sibling script
+        if not args.session and not args.frontend:
+            raise PlanError("请给出前端地址：--session <Luz System 会话目录> 和/或 --frontend <前端工程目录>")
+        design: dict[str, Any] = {"checkedAt": now_iso(), "errors": []}
+        if args.session:
+            import design_intake  # noqa: PLC0415 - sibling script
 
-        report = design_intake.inspect_session(Path(args.session))
-        errors = design_intake.readiness_errors(report, ["architecture", "system_design", "prototype"])
-        plan["design"] = {
-            "session": report["session"], "sessionId": report["sessionId"], "title": report["title"],
-            "stages": {k: {key: v.get(key) for key in ("status", "hash_ok", "approved_by", "problem")} for k, v in report["stages"].items()},
-            "counts": report["counts"], "errors": errors, "checkedAt": now_iso(),
-        }
-        design_intake.write_json(data_path.parent / "design-intake.json", report)
+            report = design_intake.inspect_session(Path(args.session))
+            design.update({
+                "session": report["session"], "sessionId": report["sessionId"], "title": report["title"],
+                "stages": {k: {key: v.get(key) for key in ("status", "hash_ok", "approved_by", "problem")} for k, v in report["stages"].items()},
+                "counts": report["counts"],
+                "errors": design_intake.readiness_errors(report, ["architecture", "system_design", "prototype"]),
+            })
+            design_intake.write_json(data_path.parent / "design-intake.json", report)
+        design["frontend"] = [{"path": str(Path(f)), "exists": Path(f).is_dir()} for f in (args.frontend or [])]
+        plan["design"] = design
     save_plan(plan, html_path, data_path, args.design_root)
-    print_result({"ok": True, "design": {k: v for k, v in plan["design"].items() if k != "stages"}})
+    print_result({"ok": not plan["design"].get("errors"), "design": {k: v for k, v in plan["design"].items() if k != "stages"}})
     return 0
 
 
@@ -2071,10 +2102,10 @@ def build_parser() -> argparse.ArgumentParser:
     spec_group.add_argument("--remove", help="删除指定 id 的模块设计")
     spec.set_defaults(func=command_spec)
 
-    design = with_plan("design", "登记 Luz System 设计会话并核验批准与哈希")
-    group = design.add_mutually_exclusive_group(required=True)
-    group.add_argument("--session", help="Luz System 会话目录，例如 D:\\Codes\\skill输出\\Luz-System\\001-项目")
-    group.add_argument("--skip", help="不接入 Luz System 的原因（例如纯后端任务）")
+    design = with_plan("design", "方案批准后登记前端地址：Luz System 设计会话（核验批准与哈希）和/或前端工程目录")
+    design.add_argument("--session", help=r"Luz System 会话目录，例如 D:\Codes\skill输出\Luz-System\001-项目")
+    design.add_argument("--frontend", action="append", help="前端工程目录（小程序、后台），可多次")
+    design.add_argument("--skip", help="不接入前端的原因（例如纯后端任务）")
     design.set_defaults(func=command_design)
 
     adopt = sub.add_parser("adopt", help="把旧版 HTML 方案迁移为数据化方案")

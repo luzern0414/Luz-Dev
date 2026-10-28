@@ -116,10 +116,10 @@ Record every reusable conclusion from this task's research as a fact in `knowled
 
 Mandatory on every call, whatever its outcome:
 
-1. At the start, `record_experience.py search <关键词>` and apply the matching preferences, lessons and facts.
+1. At the start, `record_experience.py search <关键词> [--kind preference|lesson|fact]` and apply the matching preferences, lessons and facts.
 2. Before finishing, `record_experience.py note --kind preference|lesson|fact --key K --text "…" [--why "…"]` for each preference the user stated or corrected, each route, source, parameter or fix that proved effective or failed, and each rule correction. Write the general principle, not task details.
-3. Same topic, same key: the new statement replaces the old one (one `previous` kept). Caps: preferences 60, lessons 120, facts 120, active records 120; `prune` removes the least valuable, `check` fails on duplicates, private data and overflow.
-4. No personal or client data, local paths or credentials; those stay in a git-ignored `*.local.json`.
+3. The store is `experience/notes.json` (same shape in all four Luz skills; see SKILL.md). Same topic, same key: the new statement replaces the old one (one `previous` kept); the same statement under another key only confirms that note. Caps: preferences 60, lessons 120, facts 120, active records 120; `prune` drops the fewest uses, then the oldest confirmation, and lists notes unconfirmed for 180 days; `check` fails on duplicates, missing fields, private data and overflow.
+4. No phone numbers, emails, WeChat IDs, user-home paths, credentials, personal or client names; those stay in a git-ignored `*.local.json`.
 
 **Gate:** candidate experience is not used as a default rule. Promotion requires tests, production evidence, or explicit user confirmation. Reusable code has a source, dependencies, tests, usage example, security boundary, and limitations. Deprecated records state why and what replaces them.
 

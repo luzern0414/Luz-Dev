@@ -1,0 +1,298 @@
+# Luz 后端 CI/CD 模板（references/operations.md §3）。复制到项目 .github/workflows/ci-cd.yml。
+# 假定项目布局：backend/（本仓库 backend 同构）、infra/deploy/（assets/deploy 副本）、infra/loadtest/k6-api.js。
+#
+# 流水线：lint → typecheck(可选) → unit → integration(PostgreSQL/Redis + 迁移检查 + Schemathesis 契约测试)
+#        → security(pip-audit、bandit、trivy fs) → build(镜像 + SBOM + provenance + trivy image)
+#        → deploy-staging(release.sh + k6 smoke) → deploy-production(environment 人工审批，仅 v* tag)
+#
+# 安全基线：
+#   - 顶层 permissions: {}，每个 job 只授予需要的权限（GITHUB_TOKEN 最小权限）。
+#   - 所有 action 固定到完整 commit SHA（注释写版本）。2026-03 aquasecurity/trivy-action 75 个 tag 被强推恶意代码、
+#     窃取 runner 内存中的密钥——tag 不可信，只认 SHA；升级由 Dependabot（package-ecosystem: github-actions）提 PR，
+#     合并前核对 SHA 与上游 release 一致。若曾在 2026-03 事件窗口内用 tag 引用过 trivy-action，轮换当时可见的全部密钥。
+#   - 不使用 pull_request_target；不可信输入（PR 标题等）不直接拼进 run:。
+#   - 部署密钥只在 environment 内可见；production environment 配置 required reviewers（1–2 人、禁止自审）、
+#     仅允许 v* tag 部署（Settings → Environments）。私有仓库需 GitHub Team 及以上。
+# 需要配置：
+#   vars.PYTHON_IMAGE        python:3.12-slim-bookworm@sha256:<digest>（Dockerfile 基础镜像，必须带 digest）
+#   vars.STAGING_HOST / vars.PROD_HOST、vars.DEPLOY_KNOWN_HOSTS（ssh-keyscan 结果，人工核对指纹后保存）
+#   vars.STAGING_API_URL / vars.PROD_API_URL（如 https://staging-api.example.com）
+#   secrets.DEPLOY_SSH_KEY（environment 级；部署账号只允许执行 /opt/luz/deploy/release.sh）
+name: ci-cd
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PYTHON_VERSION: "3.12"
+  IMAGE: ghcr.io/${{ github.repository_owner }}/luz-api   # owner 含大写字母时改为小写常量
+  # 工具版本集中固定（2026-10 核对）
+  RUFF_VERSION: "0.17.3"
+  MYPY_VERSION: "2.4.0"
+  PIP_AUDIT_VERSION: "2.10.1"
+  BANDIT_VERSION: "1.9.4"
+  SCHEMATHESIS_VERSION: "4.32.7"
+  TRIVY_VERSION: "v0.76.1"
+  K6_IMAGE: "grafana/k6:2.3.0"   # 建议改为 grafana/k6:2.3.0@sha256:<digest>
+
+jobs:
+  # ------------------------------------------------------------------ 静态检查
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with: { python-version: "${{ env.PYTHON_VERSION }}" }
+      - run: pip install "ruff==${RUFF_VERSION}"
+      - run: ruff check backend --output-format=github
+      - run: ruff format --check backend
+
+  typecheck:
+    # 可选：先覆盖 00-framework，逐模块扩大；全部通过后删除 continue-on-error 变为阻断
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with: { python-version: "${{ env.PYTHON_VERSION }}", cache: pip, cache-dependency-path: "backend/requirements*.txt" }
+      - run: pip install "mypy==${MYPY_VERSION}" -r backend/requirements.txt
+      - run: mypy --ignore-missing-imports backend/00-framework/code
+
+  # ------------------------------------------------------------------ 单元测试（SQLite，快）
+  unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with: { python-version: "${{ env.PYTHON_VERSION }}", cache: pip, cache-dependency-path: "backend/requirements*.txt" }
+      - run: pip install -r backend/requirements.txt pytest-cov
+      - working-directory: backend
+        run: python -m pytest -q -m "not integration" --cov --cov-report=xml --junitxml=reports/unit.xml
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with: { name: unit-reports, path: backend/reports/, retention-days: 14 }
+
+  # ------------------------------------------------------------------ 集成：真实 PostgreSQL / Redis + 迁移 + 契约
+  integration:
+    needs: [lint, unit]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions: { contents: read }
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16          # 与生产同大版本
+        env: { POSTGRES_USER: luz, POSTGRES_PASSWORD: luz, POSTGRES_DB: luz_test }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U luz -d luz_test" --health-interval 10s --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7.4-bookworm
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      LUZ_ENV: test
+      LUZ_DATABASE_URL: postgresql+psycopg://luz:luz@localhost:5432/luz_test
+      LUZ_REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false, fetch-depth: 0 }
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with: { python-version: "${{ env.PYTHON_VERSION }}", cache: pip, cache-dependency-path: "backend/requirements*.txt" }
+      - run: pip install -r backend/requirements.txt "schemathesis==${SCHEMATHESIS_VERSION}"
+
+      - name: migration safety (expand/contract)
+        # 新增迁移里出现破坏性操作（删表、删列、改名、改为 NOT NULL）时，必须在文件中写明 "# luz: contract"，
+        # 表示对应的 expand 版本已上线、旧代码不再读写该列；否则失败。
+        if: github.event_name == 'pull_request'
+        working-directory: backend
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          changed=$(git diff --name-only --diff-filter=A "origin/${BASE_REF}...HEAD" -- 'alembic/versions/*.py' || true)
+          bad=0
+          for f in $changed; do
+            if grep -Eq 'op\.(drop_table|drop_column|rename_table|drop_constraint)|alter_column\([^)]*(nullable=False|new_column_name)' "$f" \
+               && ! grep -q '# luz: contract' "$f"; then
+              echo "::error file=backend/$f::destructive migration without '# luz: contract' marker (expand/contract)"; bad=1
+            fi
+          done
+          exit $bad
+
+      - name: migrations upgrade → check → downgrade -1 → upgrade
+        working-directory: backend
+        run: |
+          alembic upgrade head
+          alembic check                                   # 模型与迁移一致，否则 "New upgrade operations detected"
+          test "$(alembic heads | grep -c .)" -le 1 || { echo "::error::multiple alembic heads"; exit 1; }
+          if [ -n "$(alembic current 2>/dev/null | grep -v '^$')" ]; then
+            alembic downgrade -1                          # downgrade 可用（回滚预案的前提）
+            alembic upgrade head
+          fi
+
+      - name: integration tests
+        working-directory: backend
+        run: |
+          python -m pytest -q -m integration --junitxml=reports/integration.xml || code=$?
+          # 5 = 没有收集到 integration 标记的用例（模板初期允许）
+          [ "${code:-0}" -eq 0 ] || [ "${code}" -eq 5 ]
+
+      - name: contract test (Schemathesis vs OpenAPI)
+        working-directory: backend
+        run: |
+          uvicorn app:app --host 127.0.0.1 --port 8000 > reports-uvicorn.log 2>&1 &
+          for i in $(seq 1 30); do curl -fs http://127.0.0.1:8000/readyz >/dev/null && break; sleep 1; done
+          # 检查：5xx（ST101）、响应不符合 schema、状态码未声明、无认证可访问等
+          schemathesis run http://127.0.0.1:8000/openapi.json \
+            --checks all \
+            --max-examples 30 \
+            --exclude-path-regex '^/(healthz|readyz|metrics)$' \
+            --report junit --report-dir reports
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with: { name: integration-reports, path: "backend/reports/\nbackend/reports-uvicorn.log", retention-days: 14 }
+
+  # ------------------------------------------------------------------ 依赖、代码与配置安全扫描
+  security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions: { contents: read, security-events: write }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with: { python-version: "${{ env.PYTHON_VERSION }}" }
+      - run: pip install "pip-audit==${PIP_AUDIT_VERSION}" "bandit[sarif]==${BANDIT_VERSION}"
+      - name: pip-audit（已知漏洞即失败）
+        run: pip-audit -r backend/requirements.txt --strict -s osv --desc
+      - name: bandit（SARIF 上报全部，HIGH 阻断）
+        run: |
+          bandit -r backend -x '*/tests/*,*/test_*.py' -f sarif -o bandit.sarif || true
+          bandit -r backend -x '*/tests/*,*/test_*.py' -lll -iii
+      - if: always()
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with: { sarif_file: bandit.sarif, category: bandit }
+      - name: trivy fs（依赖漏洞、硬编码密钥、Dockerfile/compose 配置问题）
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0（只认 SHA，见文件头）
+        with:
+          version: ${{ env.TRIVY_VERSION }}
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+  # ------------------------------------------------------------------ 构建镜像（仅 push）
+  build:
+    needs: [lint, unit, integration, security]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions: { contents: read, packages: write, id-token: write, attestations: write }
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
+      - name: build & push（gha 缓存、SBOM、provenance）
+        id: push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: backend
+          file: backend/deploy/Dockerfile
+          pull: true
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:${{ github.ref_name }}
+          build-args: |
+            PYTHON_IMAGE=${{ vars.PYTHON_IMAGE }}
+            APP_VERSION=${{ github.ref_name }}-${{ github.sha }}
+            VCS_REF=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true
+      - name: trivy image（按 digest 扫描已推送镜像）
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: ${{ env.TRIVY_VERSION }}
+          image-ref: ${{ env.IMAGE }}@${{ steps.push.outputs.digest }}
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+  # ------------------------------------------------------------------ 预发：自动部署 + 冒烟 + k6 smoke
+  deploy-staging:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: { name: staging, url: "${{ vars.STAGING_API_URL }}" }
+    permissions: { contents: read }
+    concurrency: { group: deploy-staging, cancel-in-progress: true }
+    env:
+      TARGET: ghcr.io/${{ github.repository_owner }}/luz-api@${{ needs.build.outputs.digest }}   # job 级 env 不能引用 env 上下文
+      HOST: ${{ vars.STAGING_HOST }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - name: ssh setup
+        env: { SSH_KEY: "${{ secrets.DEPLOY_SSH_KEY }}", KNOWN_HOSTS: "${{ vars.DEPLOY_KNOWN_HOSTS }}" }
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: deploy（迁移 + 健康门控滚动替换 + 5 分钟观察）
+        run: ssh -i ~/.ssh/id_deploy -o BatchMode=yes "deploy@${HOST}" "WATCH_MINUTES=5 /opt/luz/deploy/release.sh deploy '${TARGET}'"
+      - name: k6 smoke
+        env: { BASE: "${{ vars.STAGING_API_URL }}" }
+        run: |
+          docker run --rm -i -e BASE -e PROFILE=smoke "$K6_IMAGE" run --quiet - < infra/loadtest/k6-api.js
+
+  # ------------------------------------------------------------------ 生产：人工审批（environment 保护规则）
+  deploy-production:
+    needs: [build, deploy-staging]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: { name: production, url: "${{ vars.PROD_API_URL }}" }
+    permissions: { contents: read }
+    concurrency: { group: deploy-production, cancel-in-progress: false }   # 生产不取消，按序执行
+    env:
+      TARGET: ghcr.io/${{ github.repository_owner }}/luz-api@${{ needs.build.outputs.digest }}   # job 级 env 不能引用 env 上下文
+      HOST: ${{ vars.PROD_HOST }}
+    steps:
+      - name: ssh setup
+        env: { SSH_KEY: "${{ secrets.DEPLOY_SSH_KEY }}", KNOWN_HOSTS: "${{ vars.DEPLOY_KNOWN_HOSTS }}" }
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: deploy（发布前备份 → 迁移 → 滚动替换 → 观察 15 分钟，触发阈值自动回滚）
+        run: ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 "deploy@${HOST}" "WATCH_MINUTES=15 /opt/luz/deploy/release.sh deploy '${TARGET}'"
+      - name: external check
+        env: { BASE: "${{ vars.PROD_API_URL }}" }
+        run: curl -fsS --max-time 5 -o /dev/null "${BASE}/api/v1/app/config"
