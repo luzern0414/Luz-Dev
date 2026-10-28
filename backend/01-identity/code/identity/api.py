@@ -4,7 +4,7 @@
 - current_user(): 当前用户 id（令牌无效或会话已失效 → 4010）
 - current_claims(): 完整声明（含 sid、iat，用于 require_fresh）
 - service_call(): 服务间签名校验（智能体等内部服务调用写接口时附带）
-- require_permission(code): 后台权限依赖（默认接 22-admin-rbac，set_staff_authorizer 可替换）
+- 后台路由鉴权：22-admin-rbac 的 require_permission（member:read / member:write / member:reveal + 新鲜认证）
 - set_mini_program / set_code2session / set_phone_resolver / set_sms_sender / set_agreement_gateway: 注入外部实现
 - rate_limit_rules(settings): 登录 / 短信 / 刷新的限流声明，供 app.py 装配
 """
@@ -26,8 +26,12 @@ from luzback.db import get_session_factory
 from luzback.ratelimit import FixedWindowLimiter, RateLimitRule
 from luzback.security import NonceStore, verify_service_signature
 
+from admin_rbac import Staff, declare_permissions, require_permission
+
 from . import admin, service
 from .ports import AgreementAccept, AgreementGateway, FakeSmsSender, LegacyCode2Session, LegacySmsSender, SmsSender
+
+declare_permissions("member", admin.PERMISSIONS)  # 权限码目录（22-admin-rbac 角色配置用）
 
 router = APIRouter(prefix="/api/v1/app", tags=["identity"])
 admin_router = APIRouter(prefix="/api/v1/admin/members", tags=["identity-admin"])
@@ -38,7 +42,6 @@ _legacy_c2s: Callable[[str], dict] | None = None
 _legacy_phone: Callable[[str], str] | None = None
 _sms_sender: SmsSender | None = None
 _agreements: AgreementGateway | None = None
-_staff_authorizer: Callable[[Any, str, str], int] | None = None
 _nonces = NonceStore()
 
 
@@ -72,12 +75,6 @@ def set_sms_sender(sender: SmsSender | Callable[[str, str], None] | None) -> Non
 def set_agreement_gateway(gateway: AgreementGateway | None) -> None:
     global _agreements
     _agreements = gateway
-
-
-def set_staff_authorizer(fn: Callable[[Any, str, str], int] | None) -> None:
-    """fn(db, bearer_token, permission_code) → staff_id；失败抛 4010 / 4030。"""
-    global _staff_authorizer
-    _staff_authorizer = fn
 
 
 def _sms() -> SmsSender:
@@ -125,29 +122,6 @@ async def service_call(request: Request) -> str | None:
         skew_seconds=s.service_signature_skew_seconds,
     )
     return name
-
-
-def _admin_rbac_authorizer(db: Any, token: str, code: str) -> int:
-    try:
-        from admin_rbac import assert_permission, decode_access, load_active_staff  # type: ignore[attr-defined]
-    except ImportError:
-        try:
-            from admin_rbac.service import assert_permission, decode_access, load_active_staff
-        except ImportError as exc:  # 未启用后台模块：默认拒绝
-            raise AppError(ErrorCode.FORBIDDEN, "admin authorization not configured") from exc
-    claims = decode_access(token)
-    staff = load_active_staff(db, int(claims["sub"]), claims.get("rv"))
-    assert_permission(db, staff, code)
-    return int(staff.id)
-
-
-def require_permission(code: str):
-    def dependency(creds: HTTPAuthorizationCredentials | None = Depends(_bearer), db=Depends(get_db)) -> int:
-        if creds is None:
-            raise AppError(ErrorCode.UNAUTHORIZED, "missing bearer token")
-        return (_staff_authorizer or _admin_rbac_authorizer)(db, creds.credentials, code)
-
-    return dependency
 
 
 def rate_limit_rules(settings=None) -> list[RateLimitRule]:
@@ -326,12 +300,13 @@ def _trace(request: Request) -> str | None:
 
 
 @admin_router.get("")
-def admin_list(request: Request, staff_id: int = Depends(require_permission("member:read")), db=Depends(get_db)):
+def admin_list(request: Request, staff: Staff = Depends(require_permission("member:read")), db=Depends(get_db)):
     return ok(admin.list_members(db, request.query_params))
 
 
 @admin_router.get("/export")
-def admin_export(request: Request, staff_id: int = Depends(require_permission("member:read")), db=Depends(get_db)):
+def admin_export(request: Request, staff: Staff = Depends(require_permission("member:read")), db=Depends(get_db)):
+    staff_id = staff.id
     params = request.query_params
     content = b"".join(admin.export_members(db, staff_id, params, ip=client_ip(request), trace_id=_trace(request)))
     return Response(content, media_type="text/csv; charset=utf-8",
@@ -339,13 +314,14 @@ def admin_export(request: Request, staff_id: int = Depends(require_permission("m
 
 
 @admin_router.get("/{user_id}")
-def admin_detail(user_id: int, staff_id: int = Depends(require_permission("member:read")), db=Depends(get_db)):
+def admin_detail(user_id: int, staff: Staff = Depends(require_permission("member:read")), db=Depends(get_db)):
     return ok(admin.member_detail(db, user_id))
 
 
 @admin_router.post("/{user_id}/reveal-phone")
 def admin_reveal_phone(user_id: int, body: ReasonIn, request: Request,
-                       staff_id: int = Depends(require_permission("member:reveal")), db=Depends(get_db)):
+                       staff: Staff = Depends(require_permission("member:reveal", fresh=True)), db=Depends(get_db)):
+    staff_id = staff.id
     """查看完整手机号（不缓存进幂等记录，避免明文落库）；每次查看都审计。"""
     return ok(admin.reveal_phone(db, staff_id, user_id, body.reason, ip=client_ip(request), trace_id=_trace(request)))
 
@@ -356,27 +332,30 @@ def _admin_write(db, staff_id: int, scope: str, key: str, body: BaseModel, fn):
 
 @admin_router.post("/{user_id}/disable")
 def admin_disable(user_id: int, body: ReasonIn, request: Request, key: str = Depends(idempotency_key),
-                  staff_id: int = Depends(require_permission("member:write")), db=Depends(get_db)):
+                  staff: Staff = Depends(require_permission("member:write")), db=Depends(get_db)):
+    staff_id = staff.id
     return _admin_write(db, staff_id, f"identity.admin.disable:{user_id}", key, body, lambda: admin.disable_member(
         db, staff_id, user_id, body.reason, ip=client_ip(request), trace_id=_trace(request), commit=False))
 
 
 @admin_router.post("/{user_id}/enable")
 def admin_enable(user_id: int, body: ReasonIn, request: Request, key: str = Depends(idempotency_key),
-                 staff_id: int = Depends(require_permission("member:write")), db=Depends(get_db)):
+                 staff: Staff = Depends(require_permission("member:write")), db=Depends(get_db)):
+    staff_id = staff.id
     return _admin_write(db, staff_id, f"identity.admin.enable:{user_id}", key, body, lambda: admin.enable_member(
         db, staff_id, user_id, body.reason, ip=client_ip(request), trace_id=_trace(request), commit=False))
 
 
 @admin_router.post("/{user_id}/logout")
 def admin_force_logout(user_id: int, body: ReasonIn, request: Request, key: str = Depends(idempotency_key),
-                       staff_id: int = Depends(require_permission("member:write")), db=Depends(get_db)):
+                       staff: Staff = Depends(require_permission("member:write")), db=Depends(get_db)):
+    staff_id = staff.id
     return _admin_write(db, staff_id, f"identity.admin.logout:{user_id}", key, body, lambda: admin.force_logout(
         db, staff_id, user_id, body.reason, ip=client_ip(request), trace_id=_trace(request), commit=False))
 
 
 __all__ = [
-    "router", "admin_router", "routers", "current_user", "current_claims", "service_call", "require_permission",
+    "router", "admin_router", "routers", "current_user", "current_claims", "service_call",
     "rate_limit_rules", "set_mini_program", "set_code2session", "set_phone_resolver", "set_sms_sender",
-    "set_agreement_gateway", "set_staff_authorizer", "FakeSmsSender",
+    "set_agreement_gateway", "FakeSmsSender",
 ]

@@ -8,7 +8,7 @@
 
 | 主题 | 载荷（用到的字段） | 处理 |
 |---|---|---|
-| member.registered / user.registered | user_id 或 member_id | 发放 trigger_topic 为注册事件、含 event 渠道的进行中模板；ref = registered:{模板}:{会员} |
+| member.registered（01-identity） | user_id | 发放 trigger_topic 为注册事件、含 event 渠道的进行中模板；ref = registered:{模板}:{会员} |
 | lottery.prize_won | draw_id, member_id, prize_kind, ref_id(模板), quantity, delivery_key | prize_kind=coupon 时发 quantity 张，ref = lottery:{delivery_key}:{序号}；不受每人限领约束；回执抽奖模块 |
 | coupon.issue_requested | template_id, user_id, ref, channel?(event / compensation / lottery), source_ref? | 其他模块请求发券（补偿、生日礼） |
 """
@@ -26,13 +26,14 @@ from .models import CHANNEL_COMPENSATION, CHANNEL_EVENT, CHANNEL_LOTTERY, TEMPLA
 from .service import try_issue
 
 TOPIC_MEMBER_REGISTERED = "member.registered"
-TOPIC_USER_REGISTERED = "user.registered"
+TOPIC_USER_REGISTERED = "user.registered"  # 旧主题名：只为兼容已存的模板 trigger_topic，不再订阅
 TOPIC_LOTTERY_PRIZE_WON = "lottery.prize_won"
 TOPIC_ISSUE_REQUESTED = "coupon.issue_requested"
 
 
 def _member(payload: dict[str, Any]) -> int:
-    return int(payload.get("member_id") or payload["user_id"])
+    # 生产方各用自己的字段名：identity / coupon.issue_requested 用 user_id，lottery.prize_won 用 member_id（只读存在的那个）
+    return int(payload["user_id"] if "user_id" in payload else payload["member_id"])
 
 
 def _failed(db: Session, template_id: int, user_id: int, ref: str, topic: str, reason: str) -> None:
@@ -113,7 +114,6 @@ def on_issue_requested(db: Session, payload: dict[str, Any], event_id: str) -> d
 
 SUBSCRIPTIONS = {
     TOPIC_MEMBER_REGISTERED: on_registered,
-    TOPIC_USER_REGISTERED: on_registered,
     TOPIC_LOTTERY_PRIZE_WON: on_prize_won,
     TOPIC_ISSUE_REQUESTED: on_issue_requested,
 }

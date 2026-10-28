@@ -54,10 +54,17 @@ def paid(db, user_id=1, amount=100000, bonus=20000, at=T0, **plan_extra):
     plan_id = plan(db, amount, bonus, **plan_extra)
     order = svc.create_recharge_order(db, user_id, None, plan_id, at=at)
     db.commit()
-    payload = {"payment_id": order["payment_id"], "biz_type": "wallet_recharge", "biz_id": order["id"],
+    payload = {"payment_id": f"90{order['id']}", "business_type": "wallet_recharge", "business_id": order["id"],
                "amount_cents": amount, "paid_at": at.isoformat(), "user_id": user_id}
     assert svc.handle_event(db, "payment.succeeded", payload, event_id=f"evt-{order['id']}") == "credited"
     return order["id"]
+
+
+_PORT = {}
+
+
+def fresh_config_port():
+    return wallet.payment_port()
 
 
 def balance(db, user_id=1):
@@ -71,8 +78,10 @@ def balance(db, user_id=1):
 
 def test_recharge_order_creates_payment_with_offline_service(db, fresh_config):
     plan_id = plan(db)
-    order = svc.create_recharge_order(db, 1, 5, plan_id, at=T0)
+    order = svc.create_recharge_order(db, 1, 5, plan_id)
     db.commit()
+    assert "pay_params" not in order and not fresh_config.calls  # 业务单先提交，支付另起一步
+    order = svc.start_payment(db, 1, order["id"])
     call = fresh_config.calls[0]
     assert call["biz_type"] == "wallet_recharge" and call["goods_kind"] == "offline_service"
     assert call["amount_cents"] == 100000 and order["status"] == "pending" and order["pay_params"]
@@ -120,14 +129,20 @@ def test_late_payment_after_close_still_credits(db):
     assert balance(db)[:2] == (100000, 20000)
 
 
-def test_upstream_failure_rolls_back_order(db, fresh_config):
+def test_upstream_failure_keeps_order_payable(db, fresh_config):
     plan_id = plan(db)
+    order = svc.create_recharge_order(db, 1, None, plan_id)
+    db.commit()
     fresh_config.fail = True
     with pytest.raises(AppError) as exc:
-        svc.create_recharge_order(db, 1, None, plan_id, at=T0)
-    db.rollback()
+        svc.start_payment(db, 1, order["id"])
     assert exc.value.code == ErrorCode.UPSTREAM_FAILED
-    assert db.execute(select(func.count()).select_from(RechargeBatch)).scalar_one() == 0
+    fresh_config.fail = False
+    assert svc.start_payment(db, 1, order["id"])["pay_params"]
+    with pytest.raises(AppError) as exc:
+        svc.start_payment(db, 2, order["id"])
+    assert exc.value.code == ErrorCode.NOT_FOUND
+    assert svc.payable(db, 1, order["id"])["goods_kind"] == "offline_service"
 
 
 def test_plan_must_be_on_sale_and_in_window(db):
@@ -339,9 +354,15 @@ def test_refund_request_holds_then_success_event(db):
     db.commit()
     event = topics(db, "wallet.refund_requested")[0]
     assert event["amount_cents"] == 40000 and event["route"] == "original" and event["payment_id"]
-    assert svc.handle_event(db, "payment.refunded", {"business_ref": event["business_ref"], "biz_type": "wallet_recharge",
-                                                     "amount_cents": 40000}, event_id="r1") == "refunded"
-    assert svc.handle_event(db, "payment.refunded", {"business_ref": event["business_ref"]}, event_id="r2") == "duplicate"
+    submitted = svc.submit_refund(db, refund["id"])
+    svc.submit_refund(db, refund["id"])  # 只提交一次
+    port = fresh_config_port()
+    assert len(port.refunds) == 1 and port.refunds[0]["business_ref"] == event["business_ref"] == f"wallet_refund:{refund['refund_no']}"
+    assert submitted["channel_refund_id"] == "1"
+    payload = {"business_ref": event["business_ref"], "business_type": "wallet_recharge", "amount_cents": 40000}
+    assert svc.handle_event(db, "refund.abnormal", payload, event_id="r0") == "abnormal"
+    assert svc.handle_event(db, "refund.succeeded", payload, event_id="r1") == "refunded"
+    assert svc.handle_event(db, "refund.succeeded", payload, event_id="r2") == "duplicate"
     assert balance(db) == (0, 0, 0, 0)
     batch = db.get(RechargeBatch, batch_id)
     assert batch.status == "refunded" and batch.refunded_cents == 40000 and batch.bonus_forfeited_cents == 10000
@@ -356,7 +377,7 @@ def test_refund_failure_releases_hold(db):
     assert refund["status"] == "processing"  # 后台发起即审批
     assert db.execute(select(AuditLog).where(AuditLog.action == "wallet.refund.create")).scalar_one()
     ref = topics(db, "wallet.refund_requested")[0]["business_ref"]
-    assert svc.handle_event(db, "payment.refund_failed", {"business_ref": ref, "reason": "ABNORMAL"}) == "failed"
+    assert svc.handle_event(db, "refund.failed", {"business_ref": ref, "reason": "NOT_ENOUGH"}) == "failed"
     assert balance(db) == (1000, 0, 0, 0) and db.get(RechargeBatch, batch_id).status == "paid"
     assert svc.ledger_matches_balance(db, 1)
 
@@ -473,7 +494,8 @@ def test_reconcile_detects_mismatch_once_per_day(db):
 def test_jobs_registered_and_run(db):
     from wallet import jobs
     names = {j.name for j in jobs.JOBS}
-    assert names == {"wallet.close_expired_orders", "wallet.expire_bonus", "wallet.reconcile", "wallet.flag_overdue_refunds"}
+    assert names == {"wallet.close_expired_orders", "wallet.expire_bonus", "wallet.reconcile", "wallet.flag_overdue_refunds",
+                     "wallet.submit_refunds"}
     for job in jobs.JOBS:
         assert isinstance(job.fn(db), str)
 
@@ -490,7 +512,7 @@ def test_grant_bonus_not_refundable(db):
 
 def test_subscriptions_are_non_committing_and_idempotent(db):
     from wallet.events import SUBSCRIPTIONS
-    assert set(SUBSCRIPTIONS) == {"payment.succeeded", "payment.refunded", "payment.refund_failed"}
+    assert set(SUBSCRIPTIONS) == {"payment.succeeded", "refund.succeeded", "refund.failed", "refund.abnormal"}
     plan_id = plan(db)
     order = svc.create_recharge_order(db, 1, None, plan_id, at=T0)
     db.commit()
@@ -501,4 +523,102 @@ def test_subscriptions_are_non_committing_and_idempotent(db):
     assert SUBSCRIPTIONS["payment.succeeded"](db, payload, "w-1") == "credited"
     db.commit()
     assert SUBSCRIPTIONS["payment.succeeded"](db, payload, "w-1") == "duplicate"
-    assert SUBSCRIPTIONS["payment.refunded"](db, {"business_ref": "nope"}, "w-2") == "unknown"
+    assert SUBSCRIPTIONS["refund.succeeded"](db, {"business_ref": "wallet_refund:nope"}, "w-2") == "unknown"
+    manual = {"business_type": "wallet_recharge", "business_id": order["id"], "amount_cents": 100000, "needs_manual": True}
+    assert SUBSCRIPTIONS["payment.succeeded"](db, manual, "w-3") == "manual"
+
+
+def test_submit_refund_retry_and_rejection(db, fresh_config):
+    batch_id = paid(db, amount=1000, bonus=0)
+    refund = svc.request_refund(db, batch_id, "customer", "x", "staff:7", staff_id=7, at=T0 + timedelta(days=1))
+    db.commit()
+    fresh_config.refund_fail = True
+    assert svc.submit_refund(db, refund["id"])["submit_error"]  # 暂时失败：清除占位，等任务重试
+    fresh_config.refund_fail = False
+    assert svc.submit_pending_refunds(db) == 1 and len(fresh_config.refunds) == 1
+    batch2 = paid(db, user_id=2, amount=1000, bonus=0)
+    refund2 = svc.request_refund(db, batch2, "customer", "x", "staff:7", staff_id=7, at=T0 + timedelta(days=1))
+    db.commit()
+    fresh_config.refund_reject = True
+    assert svc.submit_refund(db, refund2["id"])["status"] == "failed"  # 规则拒绝：退款失败并释放预扣
+    assert balance(db, 2) == (1000, 0, 0, 0)
+
+
+# ---------------------------------------------------------------- 部分冲回（售后部分退款）
+
+
+def test_partial_reverse_multiple_parts_proportional_and_capped(db):
+    svc.recharge(db, 1, "a", 700, 300)  # 本金 700 + 赠送 300
+    entry = svc.consume(db, 1, "order:9:item:1", 1000)
+    assert (-entry.principal_delta, -entry.bonus_delta) == (700, 300)
+    first = svc.reverse(db, 1, "order:9:item:1", amount_cents=333, reversal_ref="after_sales:1:item:1")
+    assert (first.principal_delta, first.bonus_delta) == (234, 99)  # 赠送 ⌊300×333/1000⌋ = 99，余数归本金
+    assert first.origin_ledger_id == entry.id
+    replay = svc.reverse(db, 1, "order:9:item:1", amount_cents=333, reversal_ref="after_sales:1:item:1")
+    assert replay.id == first.id  # 同一 reversal_ref 重放
+    with pytest.raises(AppError) as exc:
+        svc.reverse(db, 1, "order:9:item:1", amount_cents=100, reversal_ref="after_sales:1:item:1")
+    assert exc.value.code == ErrorCode.CONFLICT  # 同 ref 不同金额
+    second = svc.reverse(db, 1, "order:9:item:1", amount_cents=333, reversal_ref="after_sales:2:item:1")
+    assert (second.principal_delta, second.bonus_delta) == (233, 100)  # 累计 666 → 赠送 199
+    with pytest.raises(AppError) as exc:
+        svc.reverse(db, 1, "order:9:item:1", amount_cents=335, reversal_ref="after_sales:3:item:1")
+    assert exc.value.code == ErrorCode.BUSINESS_RULE and exc.value.data["reason"] == "reverse_exceeds_consumed"
+    rest = svc.reverse(db, 1, "order:9:item:1")  # 整笔冲回 = 剩余 334，赠送补齐到 300
+    assert (rest.principal_delta, rest.bonus_delta) == (233, 101)
+    assert svc.reverse(db, 1, "order:9:item:1").id == rest.id  # 整笔幂等
+    with pytest.raises(AppError):
+        svc.reverse(db, 1, "order:9:item:1", amount_cents=1, reversal_ref="after_sales:4:item:1")
+    db.commit()
+    assert balance(db) == (700, 300, 0, 0)
+    assert svc.ledger_matches_balance(db, 1)
+    events = topics(db, "balance.reverted")
+    assert [e["amount_cents"] for e in events] == [333, 333, 334]
+    assert events[-1]["fully_reversed"] is True and events[0]["reversal_ref"] == "after_sales:1:item:1"
+
+
+def test_partial_reverse_across_batches_and_full_after_parts_noop(db):
+    svc.recharge(db, 1, "a", 1000, 0)
+    svc.recharge(db, 1, "b", 1000, 0)
+    svc.consume(db, 1, "order:1", 1500)  # 批次 a 1000 + b 500
+    svc.reverse(db, 1, "order:1", amount_cents=1200, reversal_ref="as:1")
+    svc.reverse(db, 1, "order:1", amount_cents=300, reversal_ref="as:2")
+    last = svc.reverse(db, 1, "order:1")  # 已累计冲完：返回最后一笔，不再加钱
+    assert last.ref == "as:2"
+    db.commit()
+    assert balance(db) == (2000, 0, 0, 0)
+    assert svc.ledger_matches_balance(db, 1)
+    with pytest.raises(AppError) as exc:
+        svc.reverse(db, 1, "order:1", amount_cents=0, reversal_ref="as:3")
+    assert exc.value.code == ErrorCode.BAD_REQUEST
+    with pytest.raises(AppError) as exc:
+        svc.reverse(db, 1, "order:1", amount_cents=10)
+    assert exc.value.code == ErrorCode.BAD_REQUEST
+
+
+def test_concurrent_partial_reverse_never_exceeds_consumed(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'r.db'}", future=True, connect_args={"check_same_thread": False, "timeout": 30})
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    with factory() as s:
+        svc.recharge(s, 1, "p1", 800, 200)
+        svc.consume(s, 1, "o:1", 1000)
+        s.commit()
+
+    def back(i):
+        with factory() as session:
+            try:
+                svc.reverse(session, 1, "o:1", amount_cents=150, reversal_ref=f"as:{i}")
+                session.commit()
+                return "ok"
+            except AppError as exc:
+                session.rollback()
+                return exc.code.name
+
+    with ThreadPoolExecutor(max_workers=20) as pool:
+        results = list(pool.map(back, range(20)))
+    assert results.count("ok") == 6  # 6 × 150 = 900 ≤ 1000 < 7 × 150
+    with factory() as s:
+        acct = s.execute(select(WalletAccount).where(WalletAccount.user_id == 1)).scalar_one()
+        assert acct.principal_cents + acct.bonus_cents == 900
+        assert svc.ledger_matches_balance(s, 1)

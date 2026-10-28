@@ -2,7 +2,7 @@
 
 | 项 | 内容 |
 |---|---|
-| 状态 | 已实现：协议版本草稿与发布（旧版本退役、写审计）、当前生效版本、用户待同意文档、主动同意（校验版本与文本哈希）、撤回；测试 5 项 |
+| 状态 | 已实现：协议版本草稿与发布（旧版本退役、写审计）、当前生效版本、用户待同意文档、主动同意（校验版本与文本哈希）、撤回；购买条款检查器（接 08-order）；测试 7 项 |
 | 代码 | `27-legal/code/legal/`、测试 `27-legal/code/tests/test_legal.py` |
 | 依赖 | framework（审计） |
 | 说明 | `references/legal-documents.md`；模板 `assets/legal/`；规则 LEGAL-001～LEGAL-003、PII-*、FACE-002 |
@@ -11,7 +11,7 @@
 
 | 表 | 关键字段 |
 |---|---|
-| `legal_documents` | 类型（terms / privacy / face_consent / prepaid / refund / activity）、版本、标题、正文、正文哈希、状态（draft / published / retired）、生效时间；唯一（类型, 版本） |
+| `legal_documents` | 类型（terms / privacy / face_consent / prepaid / refund / activity / purchase）、版本、标题、正文、正文哈希、状态（draft / published / retired）、生效时间；唯一（类型, 版本） |
 | `user_consents` | 用户、文档、类型、版本、正文哈希、渠道、同意时间、撤回时间（只追加） |
 
 ## 2 接口（设计）
@@ -29,3 +29,4 @@
 - 已发布文本不可修改，变更只能发布新版本；新版本发布后用户需重新同意。
 - 同意只接受当前生效版本与客户端展示文本的哈希，防止对旧文本或被篡改的文本“同意”。
 - 撤回后调用方停止相应处理并删除数据（如人脸），覆盖第三方。
+- 购买条款（08-order）：`purchase_terms_checker(db, user_id, accepted, client_version, now=None) -> version`，导入本模块时自动 `order.set_terms_checker(...)`（`install_purchase_terms_checker()` 可再次装配）。有已发布并生效的 purchase 文档：必须同意（4220 terms_required）、客户端版本不同 4220 terms_outdated（data 带当前 version / document_id / sha256），通过后记同意（channel=order，同版本不重复）并返回版本号写进订单；未发布时回落到订单配置检查 `order.ports.config_terms_checker`。

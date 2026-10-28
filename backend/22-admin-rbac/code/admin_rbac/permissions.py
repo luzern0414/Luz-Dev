@@ -19,7 +19,25 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,30}:[a-z][a-z0-9_]{0,30}$")
+GRANT_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,30}:\*$")  # 模块通配授予：`wallet:*`
 WILDCARD = "*"
+
+
+def is_module_wildcard(code: str) -> bool:
+    return isinstance(code, str) and bool(GRANT_PATTERN.match(code))
+
+
+def grants(granted: Iterable[str], code: str) -> bool:
+    """授予集合是否覆盖 code：`*` 全部；`module:*` 覆盖同前缀的全部码（含以后新增的）；否则精确匹配。
+
+    code 本身是 `module:*` 时（授予别人通配），只有 `*` 或同一个 `module:*` 才算覆盖。
+    """
+    g = granted if isinstance(granted, (set, frozenset)) else set(granted)
+    if WILDCARD in g or code in g:
+        return True
+    if is_module_wildcard(code):
+        return False
+    return f"{code.split(':', 1)[0]}:*" in g
 
 
 @dataclass(frozen=True)
@@ -70,6 +88,13 @@ def registered_codes() -> frozenset[str]:
 def registered() -> list[PermissionDef]:
     with _lock:
         return sorted(_registry.values(), key=lambda p: (p.module, p.code))
+
+
+def validate_grant(code: str) -> str:
+    """角色可授予的码：精确码或 `module:*`（不允许 `*`，那是超级管理员角色专属）。"""
+    if is_module_wildcard(code):
+        return code
+    return validate_code(code)
 
 
 def expand(patterns: Iterable[str]) -> list[str]:

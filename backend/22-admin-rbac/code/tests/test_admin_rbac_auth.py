@@ -173,7 +173,7 @@ def test_mfa_required_role_forces_enrollment(db, clock):
 
 
 def test_mfa_required_by_permission_config(db):
-    make_user(db, "manager", roles=("store_manager",))  # 持有 order:refund
+    make_user(db, "manager", roles=("store_manager",))  # 持有 after_sale:*（覆盖 after_sale:approve）
     assert staff_of(db, token_of(db, "manager")).mfa_required
     config.set_config(mfa_required_permissions=())
     assert not staff_of(db, token_of(db, "manager")).mfa_required
@@ -405,7 +405,8 @@ def test_me_payload(db, clock):
     staff = staff_of(db, token_of(db, "manager"))
     info = auth.me(db, staff)
     assert info["store_scope"] == [1, 3] and info["all_stores"] is False
-    assert "order:refund" in info["permissions"] and "staff:write" not in info["permissions"]
+    assert "order:*" in info["permissions"] and "staff:write" not in info["permissions"]
+    assert staff.has("order:close") and staff.has("after_sale:approve") and not staff.has("wallet:adjust")
     assert info["roles"][0]["builtin_code"] == "store_manager"
     assert info["session"]["idle_timeout_seconds"] == 900
 
@@ -423,7 +424,7 @@ def test_legacy_adapter_flow_enforces_server_side_session(db, clock):
     claims = decode_token(token, s.jwt_secret, kind="admin", issuer=s.jwt_issuer)  # 旧适配器的第一步
     assert decode_access(token)["sid"] == claims["rv"]
     staff = load_active_staff(db, int(claims["sub"]), claims.get("rv"))
-    assert_permission(db, staff, "order:refund")  # 旧签名
+    assert_permission(db, staff, "order:close")  # 旧签名
     assert err(lambda: assert_permission(db, staff, "staff:write")).code == ErrorCode.FORBIDDEN
     assert grants_of(db, staff)[1] == [2] and store_scope(staff) == [2]
     auth.logout(db, staff_of(db, token))

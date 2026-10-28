@@ -9,7 +9,8 @@
 
 - authenticated_staff：任何有效会话（含“首登改密 / 必须绑定 MFA”的受限会话），只给 me / 改密 / MFA 绑定 / 登出用。
 - current_staff：完整会话；受限会话返回 4011（data.reason = password_change_required | mfa_enrollment_required）。
-- require_permission(*codes)：全部持有才放行，否则 4030；未登记的码自动登记到注册表。
+- require_permission(*codes, fresh=False)：全部持有才放行，否则 4030；fresh=True 同时要求新鲜认证；未登记的码自动登记。
+- 门店范围：store_scope(staff) / assert_in_scope / apply_store_scope（admin_rbac 包导出）。
 - require_fresh（别名 require_fresh_auth）：最近 fresh_auth_seconds 内完成过完整认证，否则 4011 reason=reauth_required。
 """
 from __future__ import annotations
@@ -57,8 +58,8 @@ def current_staff(staff: Staff = Depends(authenticated_staff)) -> Staff:
     return staff
 
 
-def require_permission(*codes: str) -> Callable[..., Staff]:
-    """FastAPI 依赖工厂：要求持有全部权限码（默认拒绝）。"""
+def require_permission(*codes: str, fresh: bool = False) -> Callable[..., Staff]:
+    """FastAPI 依赖工厂：要求持有全部权限码（默认拒绝，4030）；fresh=True 另要求新鲜认证（4011 reauth_required）。"""
     if not codes:
         raise ValueError("require_permission needs at least one code")
     for code in codes:
@@ -67,6 +68,8 @@ def require_permission(*codes: str) -> Callable[..., Staff]:
 
     def dependency(staff: Staff = Depends(current_staff)) -> Staff:
         assert_permission(staff, *codes)
+        if fresh:
+            assert_fresh(staff)
         return staff
 
     dependency.__name__ = "require_" + "_".join(c.replace(":", "_") for c in codes)

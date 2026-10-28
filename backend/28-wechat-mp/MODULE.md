@@ -90,7 +90,17 @@
 | GET | `/api/v1/webhooks/wechat-mp/push` | URL 签名 | 是（只读） | no | 服务器地址验证，返回 echostr 纯文本 |
 | POST | `/api/v1/webhooks/wechat-mp/push` | URL 签名 + msg_signature | 去重表 | no | 事件推送（JSON / XML，安全模式）；回 `success` |
 
-客户端方法（`MiniProgramClient`）：`access_token`、`code2session`、`check_session_key`、`reset_session_key`、`get_phone_number(code, openid)`、`send_subscribe_message`、`msg_sec_check`、`media_check_async`、`get_unlimited_qrcode`。
+客户端方法（`MiniProgramClient`）：`access_token`、`code2session`、`check_session_key`、`reset_session_key`、`get_phone_number(code, openid)`、`send_subscribe_message`（返回平台应答 dict）、`msg_sec_check`、`media_check_async`、`get_unlimited_qrcode`。
+
+模块级函数（其他模块只调这些，不持有客户端）：
+
+| 函数 | 说明 | 使用方 |
+|---|---|---|
+| `send_subscribe_message(touser, template_id, data, page=None, miniprogram_state=None, lang=None) -> dict` | 代理到进程客户端；成功 `{"errcode": 0, "errmsg": "ok", "msgid"?}`，平台错误抛 `WechatError` 子类（`.errcode` / `.errmsg`）；空的 state / lang 用配置 | 20-notification `WechatMpSubscribeSender` |
+| `access_token() -> str` | 中控 token（缓存、提前刷新） | 09-wechat-pay 发货信息录入 |
+| `invalidate_access_token(bad_token) -> str` | 调用方收到 40001 / 40014 / 42001 时上报，返回新 token（同一缓存，单飞） | 同上 |
+| `is_configured() -> bool` | 已注入客户端或配置了真实 AppID / AppSecret | 20-notification 选择默认发送器 |
+| `production_problems() -> list[str]` | 生产检查：开发占位 AppID / Secret、进程客户端是假实现、非 https、推送启用但缺 EncodingAESKey、`WECHAT_MP_STATE` ≠ formal；导入时 `register_production_check("wechat_mp", ...)` | app.py 启动（`Settings.assert_production_safe`） |
 
 ## 7 事件
 
@@ -174,6 +184,6 @@
 |---|---|
 | 配置 | §9 全部环境变量 |
 | 注入 | `set_client(client)`：替换进程级客户端（如带 `DbTokenStore` + `RedisLock` 的实例）；`HttpMiniProgramClient(transport=...)` 替换传输层 |
-| 扩展钩子 | `register_push_handler(event, fn(db, message))`：任意推送事件的处理函数（不 commit）；`TokenStore` 协议：自定义 token 存储（Redis 等） |
+| 扩展钩子 | `register_push_handler(event, fn(db, message))`：任意推送事件的处理函数（不 commit；`dispatch` 去重后统一提交，异常整体回滚）。已登记：01-identity `wxa_media_check` → `handle_media_check_event`，20-notification 三类订阅消息事件 → `handle_push_message`；`TokenStore` 协议：自定义 token 存储（Redis 等） |
 | 测试替身 | `FakeWechatServer`（HTTP 层假服务，可注入超时 / 5xx / 任意 errcode）、`FakeMiniProgram`（接假服务的真实客户端 + 造数方法） |
 | 不包含 | 旧版 encryptedData 解密（官方推荐新版手机号组件）、getAccessToken（非 stable）、getUserRiskRank、订单发货管理（`/wxa/sec/order/*`）、虚拟支付（`/xpay/*`）、URL Scheme / URL Link、服务通信二次加密（AES256_GCM 签名）、第三方平台代调用 |

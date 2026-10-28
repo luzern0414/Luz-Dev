@@ -1,0 +1,301 @@
+{
+  "schemaVersion": "1.0",
+  "updatedAt": "2026-10-28",
+  "description": "后端标准模块目录：方案只写采用哪些标准模块、本项目参数与偏离；完整设计、规则与测试在 backend/<目录>/MODULE.md。plan 模块编号见 references/standards.json → modules。",
+  "modules": [
+    {
+      "id": "login",
+      "name": "会员登录与账号",
+      "backend": [
+        "01-identity",
+        "28-wechat-mp"
+      ],
+      "planModules": [
+        "login",
+        "auth"
+      ],
+      "covers": "微信登录与自动注册、手机号绑定、短信验证码、访问令牌 2 小时与刷新令牌轮换（重放即整链吊销）、资料与内容安全、注销冷静期与匿名化、后台会员管理",
+      "params": [
+        [
+          "IDENTITY_SMS_ENABLED",
+          "是",
+          "是否开放短信登录与绑定"
+        ],
+        [
+          "IDENTITY_REFRESH_ABSOLUTE_DAYS",
+          "30 天",
+          "会员会话最长天数"
+        ],
+        [
+          "IDENTITY_CONTENT_CHECK",
+          "是",
+          "昵称、头像内容安全检测"
+        ]
+      ]
+    },
+    {
+      "id": "admin",
+      "name": "后台账号、权限与审计",
+      "backend": [
+        "22-admin-rbac"
+      ],
+      "planModules": [
+        "admin-rbac"
+      ],
+      "covers": "员工账号、Argon2id 口令与失败锁定、TOTP 与恢复码、空闲 15 分钟 / 绝对 8 小时会话、敏感操作再验证、角色与权限码、门店数据范围、职责分离、审计查询与导出",
+      "params": [
+        [
+          "内置角色",
+          "超级管理员、店长、前台、财务、运营",
+          "按项目增删角色与权限码"
+        ],
+        [
+          "ADMIN_SESSION_IDLE_SECONDS",
+          "15 分钟",
+          "后台空闲超时"
+        ],
+        [
+          "需二次验证的权限",
+          "退款审批、导出、权限变更",
+          "必须开启 TOTP 的权限"
+        ]
+      ]
+    },
+    {
+      "id": "payment",
+      "name": "微信支付与对账",
+      "backend": [
+        "09-wechat-pay"
+      ],
+      "planModules": [
+        "payment",
+        "reconcile"
+      ],
+      "covers": "APIv3 签名与验签、小程序下单与调起、支付通知、主动查单补偿、先查后关、退款与退款通知、异常退款、账单下载对账、发货信息录入；线上虚拟内容拒绝普通支付",
+      "params": [
+        [
+          "商户模式",
+          "微信支付公钥",
+          "微信支付公钥或平台证书"
+        ],
+        [
+          "WECHAT_PAY_SHIPPING_ENABLED",
+          "是",
+          "是否录入小程序发货信息"
+        ],
+        [
+          "收款主体",
+          "单商户号",
+          "多门店是否各自独立商户号"
+        ]
+      ]
+    },
+    {
+      "id": "order",
+      "name": "订单",
+      "backend": [
+        "08-order",
+        "17-campaign"
+      ],
+      "planModules": [
+        "order",
+        "campaign"
+      ],
+      "covers": "服务端试算与报价令牌、下单幂等与价格快照、锁券与预占库存、限购、微信或余额支付、超时先查后关、履约钩子（商品、服务、会员卡）、自动完成、退款账本",
+      "params": [
+        [
+          "ORDER_PAY_TIMEOUT_MINUTES",
+          "15 分钟",
+          "待支付超时"
+        ],
+        [
+          "ORDER_BALANCE_PAYMENT",
+          "是",
+          "是否允许余额支付"
+        ],
+        [
+          "行类型",
+          "实物商品、到店服务、会员卡",
+          "本项目售卖的行类型"
+        ]
+      ]
+    },
+    {
+      "id": "refund",
+      "name": "售后与退款",
+      "backend": [
+        "10-after-sales"
+      ],
+      "planModules": [
+        "refund",
+        "after-sales"
+      ],
+      "covers": "按行申请（退款或退货退款）、可退金额取实付分摊、累计不超实付、审批需再验证与职责分离、退货寄回、原路退款与失败转人工、退券规则",
+      "params": [
+        [
+          "AFTER_SALE_NO_REASON_DAYS",
+          "7 天",
+          "七日无理由（不少于 7 天）"
+        ],
+        [
+          "AFTER_SALE_AUTO_APPROVE_DAYS",
+          "关闭",
+          "商家逾期自动同意，0 为关闭"
+        ],
+        [
+          "COUPON_RETURN_POLICY",
+          "全额退款时退券",
+          "退款后是否退券"
+        ]
+      ]
+    },
+    {
+      "id": "membership",
+      "name": "会员卡（次卡、期限卡、时段卡）",
+      "backend": [
+        "29-member-card"
+      ],
+      "planModules": [
+        "membership"
+      ],
+      "covers": "卡种与赠送、支付后发卡、扣次与时段校验（幂等可撤销）、请假冻结顺延、转让、挂失补办、按法释〔2025〕4号试算退卡、到期提醒与自动激活、预付限额",
+      "params": [
+        [
+          "LUZ_PREPAID_POLICY",
+          "保守预设（全国单用途卡规则）",
+          "预付限额预设（上海健身、北京等）"
+        ],
+        [
+          "MEMBER_CARD_APP_FREEZE / _APP_TRANSFER",
+          "均开放",
+          "会员自助请假、转让"
+        ],
+        [
+          "MEMBER_CARD_REFUND_REQUIRES_APPROVAL",
+          "是",
+          "退卡是否需要审批"
+        ]
+      ]
+    },
+    {
+      "id": "wallet",
+      "name": "储值钱包",
+      "backend": [
+        "15-recharge"
+      ],
+      "planModules": [
+        "recharge"
+      ],
+      "covers": "充值方案与赠送、按批次记账、本金与赠送按比例扣减、按批次原路退本金、7 日内全额退、退款冻结与审批、流水与余额对账",
+      "params": [
+        [
+          "LUZ_PREPAID_POLICY",
+          "保守预设（全国单用途卡规则）",
+          "与会员卡共用的预付限额"
+        ],
+        [
+          "WALLET_SPLIT_POLICY",
+          "按比例",
+          "本金与赠送扣减方式"
+        ],
+        [
+          "WALLET_REFUND_REQUIRES_APPROVAL",
+          "是",
+          "退款是否需要审批"
+        ]
+      ]
+    },
+    {
+      "id": "coupon",
+      "name": "优惠券",
+      "backend": [
+        "16-coupon",
+        "17-campaign"
+      ],
+      "planModules": [
+        "coupon"
+      ],
+      "covers": "满减、折扣（封顶）、兑换券；适用范围与互斥；固定或相对有效期；库存与每人限领（并发不超发）；领取、批量发放、事件发放、兑换码；下单锁定、支付核销、关单解锁、退款退券",
+      "params": [
+        [
+          "COUPON_MAX_PER_ORDER",
+          "3 张",
+          "一单最多用券数"
+        ],
+        [
+          "COUPON_RETURN_POLICY",
+          "全额退款时退券",
+          "退款后是否退券"
+        ],
+        [
+          "COUPON_REMIND_BEFORE_HOURS",
+          "48 小时",
+          "到期提醒提前量"
+        ]
+      ]
+    },
+    {
+      "id": "lottery",
+      "name": "抽奖",
+      "backend": [
+        "18-lottery"
+      ],
+      "planModules": [
+        "lottery"
+      ],
+      "covers": "活动发布后规则冻结（只允许有利于消费者的修改）、单奖不超过 5 万元、概率与库存、每日 / 每月 / 总次数、服务端随机且可复核、发奖重试、实物领奖、500 元以上公示、记录保存 2 年",
+      "params": [
+        [
+          "奖品类型",
+          "券、积分、会员卡天数、实物",
+          "本项目启用的奖品"
+        ],
+        [
+          "送次数规则",
+          "满额支付送次数",
+          "获得抽奖次数的方式"
+        ]
+      ]
+    },
+    {
+      "id": "notification",
+      "name": "消息通知",
+      "backend": [
+        "20-notification",
+        "28-wechat-mp"
+      ],
+      "planModules": [
+        "notification"
+      ],
+      "covers": "场景到订阅消息 / 短信 / 站内信的映射、关键词按类型截断、订阅额度（43101 不扣）、重试与永久失败、静默时段、关键场景短信兜底、站内信、送达统计",
+      "params": [
+        [
+          "场景",
+          "支付成功、退款、到期提醒、预约提醒、中奖、安全告警",
+          "本项目启用的场景与模板"
+        ],
+        [
+          "NOTIFY_QUIET_START / _END",
+          "22:00 / 08:00",
+          "非紧急消息静默时段"
+        ]
+      ]
+    },
+    {
+      "id": "foundation",
+      "name": "通用基础与任务",
+      "backend": [
+        "00-framework",
+        "25-jobs"
+      ],
+      "planModules": [
+        "consistency",
+        "jobs",
+        "cache",
+        "deploy"
+      ],
+      "covers": "统一信封与错误码、幂等键、列表筛选排序分页与导出标准、发件箱与订阅、审计、熔断与超时、限流与真实 IP、调度与事件进程、健康检查与监控指标",
+      "params": []
+    }
+  ]
+}

@@ -7,7 +7,8 @@ from fastapi.testclient import TestClient
 
 import coupon
 import coupon.api
-from coupon import CartLine, deps, jobs
+from admin_rbac.testing import staff_headers
+from coupon import CartLine, jobs, service
 from luzback import AppError, ErrorCode, create_token, get_settings
 from luzback.db import get_session_factory
 from luzback.testing import make_test_app
@@ -17,12 +18,17 @@ from coupon_fixtures import *  # noqa: F401,F403
 ALL = ["coupon:read", "coupon:write", "coupon:issue", "coupon:code", "coupon:export"]
 
 
+_STATE: dict = {}
+
+
 @pytest.fixture()
-def client(tmp_path, monkeypatch):
-    monkeypatch.setattr(deps, "_rbac", lambda: None)  # admin-rbac 未装配：按令牌 perms 判断
-    app = make_test_app([coupon.api.router], coupon, url=f"sqlite:///{tmp_path / 'http.db'}")
+def client(tmp_path):
+    app = make_test_app([coupon.api.router], coupon, "admin_rbac.models", url=f"sqlite:///{tmp_path / 'http.db'}")
+    _STATE["db"] = get_session_factory()()
+    _STATE["tokens"] = {}
     with TestClient(app) as test_client:
         yield test_client
+    _STATE.pop("db").close()
 
 
 def member(uid: int) -> dict:
@@ -30,11 +36,12 @@ def member(uid: int) -> dict:
     return {"Authorization": f"Bearer {create_token(str(uid), s.jwt_secret, 3600, kind='access', issuer=s.jwt_issuer)}"}
 
 
-def staff(sid: int = 1, perms=tuple(ALL)) -> dict:
-    s = get_settings()
-    token = create_token(str(sid), s.jwt_secret, 3600, kind="access", issuer=s.jwt_issuer,
-                         extra={"role": "staff", "perms": list(perms)})
-    return {"Authorization": f"Bearer {token}"}
+def staff(sid: int = 1, perms=tuple(ALL), stores=None) -> dict:
+    """真实 admin_rbac 会话（同一 sid / 权限 / 门店复用同一员工）。"""
+    k = (sid, tuple(perms), tuple(stores) if stores is not None else None)
+    if k not in _STATE["tokens"]:
+        _STATE["tokens"][k] = staff_headers(_STATE["db"], *perms, store_ids=stores)
+    return _STATE["tokens"][k]
 
 
 def key(k: str) -> dict:
@@ -67,7 +74,7 @@ def test_auth_permission_validation_and_envelope(client):
     assert client.post("/api/v1/admin/coupon-templates", json=TEMPLATE, headers=staff()).json()["code"] == 4001
     bad = client.post("/api/v1/admin/coupon-templates", json={**TEMPLATE, "rate_bp": 50}, headers={**staff(), **key("b")})
     assert bad.status_code == 400 and bad.json()["data"]["errors"][0]["field"] == "rate_bp"
-    semantic = client.post("/api/v1/admin/coupon-templates", json={**TEMPLATE, "type": "percent_off", "rate_bp": 8550},
+    semantic = client.post("/api/v1/admin/coupon-templates", json={**TEMPLATE, "type": "percent_off", "rate_bp": 99},
                            headers={**staff(), **key("c")})
     assert semantic.json()["code"] == 4001
     extra = client.post("/api/v1/admin/coupon-templates", json={**TEMPLATE, "issued_count": 5},
@@ -75,24 +82,54 @@ def test_auth_permission_validation_and_envelope(client):
     assert extra.json()["code"] == 4001  # 防批量赋值
 
 
-def test_rbac_adapter_path(client, monkeypatch):
-    calls = []
+def test_forged_claims_rejected_and_store_scope(client):
+    s = get_settings()
+    forged = create_token("1", s.jwt_secret, 3600, kind="access", issuer=s.jwt_issuer,
+                          extra={"role": "staff", "perms": ["*"]})
+    assert client.get("/api/v1/admin/coupon-templates", headers={"Authorization": f"Bearer {forged}"}).json()["code"] == 4010
+    forged_admin = create_token("1", s.jwt_secret, 3600, kind="admin", issuer=s.jwt_issuer, extra={"perms": ["*"], "sid": 99})
+    assert client.get("/api/v1/admin/coupon-templates",
+                      headers={"Authorization": f"Bearer {forged_admin}"}).json()["code"] == 4010
+    # 门店员工：只能建 / 改自己门店的模板；全局模板可看不可改；列表只含自己门店与全局
+    store3 = staff(3, stores=[3])
+    r = client.post("/api/v1/admin/coupon-templates", json={**TEMPLATE, "store_id": 4}, headers={**store3, **key("s4")})
+    assert r.status_code == 403 and r.json()["code"] == 4031
+    assert client.post("/api/v1/admin/coupon-templates", json=TEMPLATE, headers={**store3, **key("g")}).json()["code"] == 4031
+    mine = client.post("/api/v1/admin/coupon-templates", json={**TEMPLATE, "store_id": 3},
+                       headers={**store3, **key("s3")}).json()["data"]["id"]
+    glob = create_published(client, k="glob")
+    other = client.post("/api/v1/admin/coupon-templates", json={**TEMPLATE, "store_id": 5},
+                        headers={**staff(), **key("s5")}).json()["data"]["id"]
+    ids = {i["id"] for i in client.get("/api/v1/admin/coupon-templates", headers=store3).json()["data"]["items"]}
+    assert ids == {mine, glob}
+    assert client.get(f"/api/v1/admin/coupon-templates/{glob}", headers=store3).json()["code"] == 0
+    assert client.get(f"/api/v1/admin/coupon-templates/{other}", headers=store3).json()["code"] == 4031
+    assert client.post(f"/api/v1/admin/coupon-templates/{glob}/pause", headers={**store3, **key("p")}).json()["code"] == 4031
+    assert client.post(f"/api/v1/admin/coupon-templates/{mine}/publish",
+                       headers={**store3, **key("pm")}).json()["data"]["status"] == "active"
+    wildcard = staff(9, perms=["coupon:*"])
+    assert client.get("/api/v1/admin/user-coupons/export", headers=wildcard).status_code == 200
 
-    class FakeRbac:
-        @staticmethod
-        def load_active_staff(db, sid, rv):
-            calls.append(sid)
-            return SimpleNamespace(id=sid)
 
-        @staticmethod
-        def assert_permission(db, staff_obj, code):
-            if code != "coupon:read":
-                raise AppError(ErrorCode.FORBIDDEN, "no")
+def test_member_keyword_phone_uses_identity_hash_lookup(client, monkeypatch):
+    tid = create_published(client)
+    client.post("/api/v1/admin/coupon-issue-batches", json={"template_id": tid, "user_ids": [21, 22], "reason": "回馈"},
+                headers={**staff(perms=["coupon:issue"]), **key("batch")})
+    with get_session_factory()() as db:
+        jobs.process_issue_batches(db)
+    lookups = []
 
-    monkeypatch.setattr(deps, "_rbac", lambda: FakeRbac)
-    assert client.get("/api/v1/admin/coupon-templates", headers=staff(5, perms=[])).json()["code"] == 0
-    assert client.get("/api/v1/admin/user-coupons/export", headers=staff(5)).json()["code"] == 4030
-    assert calls == [5, 5]
+    def fake_lookup(db, phone):
+        lookups.append(phone)
+        return SimpleNamespace(id=22) if phone == "13800138022" else None
+
+    monkeypatch.setattr(service, "user_id_by_phone",
+                        lambda db, phone: (lambda u: u.id if u else None)(fake_lookup(db, phone)))
+    rows = client.get("/api/v1/admin/user-coupons?keyword=13800138022", headers=staff()).json()["data"]
+    assert [r["user_id"] for r in rows["items"]] == [22]
+    assert client.get("/api/v1/admin/user-coupons?keyword=13900000000", headers=staff()).json()["data"]["total"] == 0
+    assert lookups == ["13800138022", "13900000000"]
+    assert client.get("/api/v1/admin/user-coupons?keyword=21", headers=staff()).json()["data"]["total"] == 1  # 会员 id
 
 
 def test_admin_template_crud_list_export_and_idempotency(client):
@@ -220,3 +257,24 @@ def test_admin_issue_batch_member_list_export_and_revoke(client):
     bad_range = client.get("/api/v1/admin/user-coupons?claimed_at_from=2026-10-30&claimed_at_to=2026-10-01",
                            headers=staff()).json()
     assert bad_range["code"] == 4001
+
+
+def test_member_keyword_phone_with_real_identity_lookup(client):
+    """真实 01-identity：手机号只存加密 + 哈希，后台按完整手机号走 find_user_by_phone 哈希查找。"""
+    import identity.models  # noqa: F401
+    from identity import attach_phone
+    from identity.testing import create_member
+    from luzback.db import Base
+
+    db = _STATE["db"]
+    Base.metadata.create_all(db.get_bind())
+    alice, bob = create_member(db), create_member(db)
+    attach_phone(db, alice.id, "13800138031", "sms")
+    tid = create_published(client, k="real")
+    client.post("/api/v1/admin/coupon-issue-batches", json={"template_id": tid, "user_ids": [alice.id, bob.id], "reason": "回馈"},
+                headers={**staff(perms=["coupon:issue"]), **key("batch-real")})
+    with get_session_factory()() as s:
+        jobs.process_issue_batches(s)
+    rows = client.get("/api/v1/admin/user-coupons?keyword=13800138031", headers=staff()).json()["data"]
+    assert [r["user_id"] for r in rows["items"]] == [alice.id]
+    assert client.get("/api/v1/admin/user-coupons?keyword=13800138032", headers=staff()).json()["data"]["total"] == 0

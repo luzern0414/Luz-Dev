@@ -7,7 +7,8 @@ from fastapi.testclient import TestClient
 
 import member_card
 import wallet
-from luzback import AppError, ErrorCode, create_token, get_settings, utcnow
+from luzback import AppError, ErrorCode, utcnow
+from admin_rbac.testing import staff_headers
 from luzback.db import get_session_factory
 from luzback.testing import make_test_app
 from member_card import api
@@ -22,20 +23,21 @@ def user_decoder(token):
 @pytest.fixture()
 def client(tmp_path):
     wallet.set_user_token_decoder(user_decoder)
-    wallet.set_grants_resolver(lambda db, sid, claims: (frozenset(claims.get("perms", [])),
-                                                         tuple(claims["stores"]) if claims.get("stores") else None))
-    app = make_test_app(api.routers, wallet, member_card, url=f"sqlite:///{tmp_path / 'mc-api.db'}")
+    app = make_test_app(api.routers, wallet, member_card, "admin_rbac.models", url=f"sqlite:///{tmp_path / 'mc-api.db'}")
+    global _staff_db
+    _staff_db = get_session_factory()()
     with TestClient(app) as c:
         yield c
+    _staff_db.close()
     wallet.set_user_token_decoder(None)
-    wallet.set_grants_resolver(None)
 
 
-def staff(perms=("member_card:*",), stores=None):
-    s = get_settings()
-    token = create_token("7", s.jwt_secret, 600, kind="admin", extra={"perms": list(perms), "stores": stores},
-                         issuer=s.jwt_issuer)
-    return {"Authorization": f"Bearer {token}"}
+_staff_db = None
+
+
+def staff(perms=tuple(c for c, _ in member_card.PERMISSIONS), stores=None):
+    """真实 admin_rbac 会话令牌（admin_rbac.testing）：stores=None 全部门店，列表 = 仅这些门店。"""
+    return staff_headers(_staff_db, *perms, store_ids=stores)
 
 
 def user(uid=1):

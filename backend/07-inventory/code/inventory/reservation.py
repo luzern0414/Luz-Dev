@@ -12,16 +12,13 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import DateTime, Integer, String, UniqueConstraint, func, select, update
-from sqlalchemy.orm import Mapped, Session, mapped_column
+from sqlalchemy import func, select, update
+from sqlalchemy.orm import Session
 
-from luzback import AppError, Base, ErrorCode, StateMachine
+from luzback import AppError, ErrorCode, StateMachine
 
-from . import Sku, deduct
-
-RESERVED = "reserved"
-CONFIRMED = "confirmed"
-RELEASED = "released"
+from .models import CONFIRMED, RELEASED, RESERVED, Sku, StockLedger, StockReservation
+from .stock import deduct
 
 RESERVATION_FLOW = StateMachine(
     "stock_reservation",
@@ -37,33 +34,6 @@ def _utcnow() -> datetime:
 def _aware(value: datetime) -> datetime:
     # SQLite 返回无时区时间；统一按 UTC 解释
     return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
-
-
-class StockReservation(Base):
-    __tablename__ = "stock_reservations"
-    __table_args__ = (UniqueConstraint("ref", "sku_id", name="uq_stock_reservation_ref_sku"),)
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    ref: Mapped[str] = mapped_column(String(64), index=True)
-    sku_id: Mapped[int] = mapped_column(Integer, index=True)
-    qty: Mapped[int] = mapped_column(Integer)
-    status: Mapped[str] = mapped_column(String(16), default=RESERVED, index=True)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
-
-
-class StockLedger(Base):
-    """只追加。delta 为可售库存变化量（预占为负、释放为正、调整可正可负）。"""
-
-    __tablename__ = "stock_ledger"
-    __table_args__ = (UniqueConstraint("ref", "sku_id", "reason", name="uq_stock_ledger_ref_sku_reason"),)
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    sku_id: Mapped[int] = mapped_column(Integer, index=True)
-    delta: Mapped[int] = mapped_column(Integer)
-    reason: Mapped[str] = mapped_column(String(24))  # reserve | release | adjust
-    ref: Mapped[str] = mapped_column(String(64))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
 def _rows(db: Session, ref: str) -> list[StockReservation]:

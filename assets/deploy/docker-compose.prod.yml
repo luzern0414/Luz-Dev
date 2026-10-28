@@ -122,7 +122,8 @@ services:
   migrate:
     <<: *app
     # 一次性管理进程（12-Factor）：release.sh 在替换 api 之前执行
-    command: ["alembic", "upgrade", "head"]
+    # 迁移后写入权限码与内置角色（幂等）；首个超级管理员另行执行 python -m admin_rbac.bootstrap <账号>
+    command: ["sh", "-c", "alembic upgrade head && python -m admin_rbac.bootstrap --seed"]
     restart: "no"
     profiles: ["release"]
     healthcheck: { disable: true }

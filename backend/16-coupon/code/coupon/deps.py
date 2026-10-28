@@ -1,20 +1,20 @@
-"""接口依赖：会员身份、可选会员身份、后台员工权限（适配 22-admin-rbac）。
+"""接口依赖：会员身份、可选会员身份、后台员工权限。
 
-后台鉴权顺序：
-1. 项目或测试用 `set_staff_authenticator(fn)` 注入：fn(request, db, permission_code) -> staff_id，失败抛 AppError。
-2. 否则若 22-admin-rbac 的 `admin_rbac.service` 可用：校验员工访问令牌（role=staff）→ load_active_staff → assert_permission。
-3. 否则（admin-rbac 未装配）：校验员工访问令牌，并按令牌声明 `perms` 判断（仅开发环境的退路）。
-权限码通配：`coupon:*`、`*`。
+后台：直接用 22-admin-rbac 的正式依赖 `admin_rbac.require_permission`（服务端会话、空闲 / 绝对超时、停用即失效、
+权限码含 `coupon:*` 通配、门店范围）。没有本地替换钩子，令牌里自带的权限声明一律不认（失败即关闭）。
+会员：默认 01-identity（decode_access + 会话仍有效）；`set_member_resolver(fn)` 可替换（测试 / 项目）。
 """
 from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any
 
-from fastapi import Depends, Request
+from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from admin_rbac import Staff, assert_in_scope, declare_permissions, store_scope
+from admin_rbac import require_permission as _rbac_require
 from luzback import AppError, ErrorCode, decode_token, get_db, get_settings
 
 PERMISSIONS = (
@@ -24,66 +24,26 @@ PERMISSIONS = (
     ("coupon:code", "兑换码生成、作废与导出"),
     ("coupon:export", "优惠券数据导出"),
 )
+declare_permissions("coupon", PERMISSIONS)
 
-try:  # 22-admin-rbac 的权限注册表（可选）
-    from admin_rbac.permissions import declare_permissions as _declare  # type: ignore
-
-    _declare("coupon", PERMISSIONS)
-except Exception:  # noqa: BLE001 - admin-rbac 未装配时跳过
-    pass
-
-StaffAuthenticator = Callable[[Request, Session, str], int]
-_staff_authenticator: StaffAuthenticator | None = None
 _bearer = HTTPBearer(auto_error=False)
 
 
-def set_staff_authenticator(fn: StaffAuthenticator | None) -> None:
-    global _staff_authenticator
-    _staff_authenticator = fn
+def require_permission(code: str, fresh: bool = False) -> Callable[..., Staff]:
+    """= admin_rbac.require_permission(code, fresh=fresh)，返回 admin_rbac.Staff（.id / .store_scope）。"""
+    return _rbac_require(code, fresh=fresh)
 
 
-def _token(request: Request) -> str:
-    header = request.headers.get("Authorization", "")
-    if not header.startswith("Bearer ") or len(header) < 8:
-        raise AppError(ErrorCode.UNAUTHORIZED, "missing bearer token")
-    return header[7:]
+def assert_template_scope(staff: Staff, store_id: int | None, write: bool = True) -> None:
+    """门店范围：写操作按 admin_rbac.assert_in_scope（全局模板只允许全门店员工，越界 4031）；
+    读操作额外允许门店员工查看全局模板（store_id 为空）。"""
+    if not write and store_id is None:
+        return
+    assert_in_scope(staff, store_id)
 
 
-def _granted(perms: Any, code: str) -> bool:
-    perms = set(perms or [])
-    return code in perms or "*" in perms or f"{code.split(':', 1)[0]}:*" in perms
-
-
-def _rbac() -> Any:
-    """22-admin-rbac 的服务模块（需要 load_active_staff 与 assert_permission）；未装配返回 None。"""
-    try:
-        from admin_rbac import service as rbac  # type: ignore
-    except Exception:  # noqa: BLE001
-        return None
-    return rbac if hasattr(rbac, "load_active_staff") and hasattr(rbac, "assert_permission") else None
-
-
-def _default_staff_auth(request: Request, db: Session, code: str) -> int:
-    s = get_settings()
-    claims = decode_token(_token(request), s.jwt_secret, kind="access", issuer=s.jwt_issuer)
-    if claims.get("role") != "staff":
-        raise AppError(ErrorCode.UNAUTHORIZED, "staff token required")
-    rbac = _rbac()
-    if rbac is not None:
-        staff = rbac.load_active_staff(db, int(claims["sub"]), claims.get("rv"))
-        rbac.assert_permission(db, staff, code)
-        return int(staff.id)
-    if not _granted(claims.get("perms"), code):
-        raise AppError(ErrorCode.FORBIDDEN, f"permission required: {code}", data={"required": code})
-    return int(claims["sub"])
-
-
-def require_permission(code: str) -> Callable[..., int]:
-    def dependency(request: Request, db: Session = Depends(get_db)) -> int:
-        return (_staff_authenticator or _default_staff_auth)(request, db, code)  # noqa: B023
-
-    dependency.__name__ = f"require_{code.replace(':', '_')}"
-    return dependency
+__all__ = ["PERMISSIONS", "Staff", "assert_template_scope", "current_member", "identity_member_resolver",
+           "jwt_member_resolver", "optional_member", "require_permission", "set_member_resolver", "store_scope"]
 
 
 MemberResolver = Callable[[str, Session], int]

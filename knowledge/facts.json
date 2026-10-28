@@ -439,6 +439,1160 @@
       "checkedAt": "2026-10-26T17:00:00+08:00",
       "status": "active",
       "usedBy": []
+    },
+    {
+      "id": "KF-0025",
+      "kind": "platform",
+      "topic": "微信支付验签防重放",
+      "statement": "应答与回调验签时，Wechatpay-Timestamp 与当前时间相差超过 5 分钟即拒绝处理；验签串为 时间戳\\n随机串\\n原始应答体\\n，必须使用原始 body 字节，不得解析后重新序列化。",
+      "modules": [
+        "payment",
+        "refund"
+      ],
+      "sources": [
+        "KS-0115",
+        "KS-0008"
+      ],
+      "checkedAt": "2026-10-28T16:34:36+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0026",
+      "kind": "platform",
+      "topic": "微信支付请求签名串",
+      "statement": "请求签名串固定 5 行：大写 HTTP 方法、不含域名的 URL（有 query 时为 path?query）、Unix 秒时间戳、随机串、请求体（GET 为空串），每行以 \\n 结尾；用商户 API 私钥按 RSASSA-PKCS1-v1_5（256 位 SHA-2 摘要）签名后 Base64，Authorization 的 serial_no 填商户 API 证书序列号，签名与发送必须使用同一份 body 字符串。",
+      "modules": [
+        "payment",
+        "refund"
+      ],
+      "sources": [
+        "KS-0116"
+      ],
+      "checkedAt": "2026-10-28T16:34:36+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0027",
+      "kind": "platform",
+      "topic": "微信支付公钥模式与灰度",
+      "statement": "微信支付公钥无过期时间、每个商户号仅 1 份，官方推荐新系统使用；平台证书有效期 5 年需平滑换证。从平台证书切换到公钥时回调灰度 7 天（0.1%→1%→5%→10%→20%→50%→100%），期间回调签名方式随机，必须同时兼容两种验签。",
+      "modules": [
+        "payment",
+        "refund"
+      ],
+      "sources": [
+        "KS-0117",
+        "KS-0009"
+      ],
+      "checkedAt": "2026-10-28T16:34:36+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0028",
+      "kind": "platform",
+      "topic": "微信支付状态码与重试",
+      "statement": "APIv3 返回 202 表示已受理未处理，需用原参数重复请求；429 降频后重试（退款场景先查单再原单重试）；500 SYSTEM_ERROR 用相同参数重试；502/503 稍后重试并可切换备域名 api2.mch.weixin.qq.com；400 PARAM_ERROR、401 SIGN_ERROR、403 NO_AUTH 不可重试，需修正参数、签名或权限。",
+      "modules": [
+        "payment",
+        "refund"
+      ],
+      "sources": [
+        "KS-0118"
+      ],
+      "checkedAt": "2026-10-28T16:34:36+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0029",
+      "kind": "pitfall",
+      "topic": "微信支付无沙箱",
+      "statement": "微信支付 APIv3 没有沙箱环境，生产环境不支持压测；支付回调没有线上测试工具，只能在生产环境用真实小额支付验证。",
+      "modules": [
+        "payment",
+        "deploy"
+      ],
+      "sources": [
+        "KS-0119",
+        "KS-0120"
+      ],
+      "checkedAt": "2026-10-28T16:34:36+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0030",
+      "kind": "platform",
+      "topic": "微信支付 notify_url 规则",
+      "statement": "notify_url 必须以 https:// 开头、外网可访问，不能是 IP、localhost 或内网地址，不能带查询参数，域名需 ICP 备案；回调处理不能做登录态校验；未设置 APIv3 密钥时微信支付不会发送回调。",
+      "modules": [
+        "payment",
+        "refund",
+        "deploy"
+      ],
+      "sources": [
+        "KS-0121"
+      ],
+      "checkedAt": "2026-10-28T16:34:36+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0031",
+      "kind": "platform",
+      "topic": "微信支付重复下单",
+      "statement": "同一 out_trade_no 在未支付时可再次调用下单接口获取新 prepay_id，但全部参数必须与首次下单完全一致，否则返回 403 OUT_TRADE_NO_USED（商户订单号重复）；用户再次支付未付订单时应沿用原单号，避免重复支付。",
+      "modules": [
+        "payment",
+        "order"
+      ],
+      "sources": [
+        "KS-0120",
+        "KS-0122"
+      ],
+      "checkedAt": "2026-10-28T16:34:36+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0032",
+      "kind": "platform",
+      "topic": "微信支付 NOTPAY 判定",
+      "statement": "查单返回 NOTPAY 不能直接视为支付失败，应先调用关单接口成功后再标记失败（关单接口支持重入）；只有验签成功且 trade_state=SUCCESS 才能认定已支付；未支付订单只能用商户订单号查询。",
+      "modules": [
+        "payment",
+        "order"
+      ],
+      "sources": [
+        "KS-0120",
+        "KS-0122",
+        "KS-0005"
+      ],
+      "checkedAt": "2026-10-28T16:34:36+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0033",
+      "kind": "platform",
+      "topic": "微信支付主动查单节奏",
+      "statement": "官方查单方案一：从下单起依次间隔 5s/30s/1m/3m/5m/10m/30m 查询；方案二：每 30 秒扫描最近 10 分钟内创建且仍未支付的订单，查询 10 次仍未支付即调用关单。",
+      "modules": [
+        "payment",
+        "order",
+        "jobs"
+      ],
+      "sources": [
+        "KS-0122"
+      ],
+      "checkedAt": "2026-10-28T16:34:36+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0034",
+      "kind": "platform",
+      "topic": "微信支付退款请求字段",
+      "statement": "out_refund_no 不超过 64 字节，只能含数字、字母和 _-|*@ 且商户内唯一；amount.total 填原订单总金额而非本次退款金额；reason 不超过 80 字节；请求中传 notify_url 会覆盖商户平台配置，只在商户平台配置时退款回调为 V2 XML 格式。",
+      "modules": [
+        "refund"
+      ],
+      "sources": [
+        "KS-0011",
+        "KS-0123"
+      ],
+      "checkedAt": "2026-10-28T16:34:36+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0035",
+      "kind": "platform",
+      "topic": "微信支付退款错误处理",
+      "statement": "退款返回 500 SYSTEM_ERROR 或 429 FREQUENCY_LIMITED 时不得更换 out_refund_no，应先按 out_refund_no 查询再用原参数重试；查询返回 RESOURCE_NOT_EXISTS 表示未受理，可原单原参数重试；403 NOT_ENOUGH 充值后原单重试；USER_ACCOUNT_ABNORMAL 需线下处理；超过 365 天返回 TRADE_OVERDUE。",
+      "modules": [
+        "refund"
+      ],
+      "sources": [
+        "KS-0124",
+        "KS-0011",
+        "KS-0123"
+      ],
+      "checkedAt": "2026-10-28T16:34:37+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0036",
+      "kind": "platform",
+      "topic": "微信支付退款关闭与异常",
+      "statement": "退款 CLOSED 为失败终态（处理中超过 7 天且出资账户余额一直不足等），如需继续退款必须生成新的 out_refund_no；ABNORMAL 需在商户平台处理或调用发起异常退款接口，其 path 参数为微信 refund_id，退到用户银行卡时 bank_account、real_name 需 RSA-OAEP 加密。",
+      "modules": [
+        "refund"
+      ],
+      "sources": [
+        "KS-0058",
+        "KS-0068"
+      ],
+      "checkedAt": "2026-10-28T16:34:37+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0037",
+      "kind": "platform",
+      "topic": "微信支付账单申请错误",
+      "statement": "申请交易/资金账单的 bill_date 只能是三个月内且不能是当天；返回 NO_STATEMENT_EXIST 表示当天无交易应停止重试；STATEMENT_CREATING 表示生成中，T+1 日 10 点后重试，仍失败则每半小时重试直到成功或返回 NO_STATEMENT_EXIST。",
+      "modules": [
+        "reconcile",
+        "jobs"
+      ],
+      "sources": [
+        "KS-0069",
+        "KS-0125"
+      ],
+      "checkedAt": "2026-10-28T16:34:37+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0038",
+      "kind": "platform",
+      "topic": "微信支付账单文件与对账",
+      "statement": "下载 download_url 也要按 V3 规则签名（URL 行为 path+query），响应无签名头需跳过验签、改为核对 SHA1；账单为 CSV，每个字段前带反引号需去除，退款状态出账后不再更新；T+1 日 10 点后下载 T 日账单逐笔核对，微信成功而本地未成功的补发货或退款。",
+      "modules": [
+        "reconcile"
+      ],
+      "sources": [
+        "KS-0071",
+        "KS-0126",
+        "KS-0122"
+      ],
+      "checkedAt": "2026-10-28T16:34:37+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0039",
+      "kind": "platform",
+      "topic": "小程序发货信息录入",
+      "statement": "upload_shipping_info 的 logistics_type：1 实体快递、2 同城配送、3 虚拟商品、4 用户自提；统一发货时 shipping_list 只能 1 项，分拆发货仅限快递且最多 15 个包裹；item_desc 必填且不超过 120 字；用户确认收货前每笔支付单只有一次重新发货机会。",
+      "modules": [
+        "payment",
+        "delivery",
+        "order"
+      ],
+      "sources": [
+        "KS-0127"
+      ],
+      "checkedAt": "2026-10-28T16:34:37+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0040",
+      "kind": "platform",
+      "topic": "交易类小程序发货时限与结算",
+      "statement": "无特殊约定时普通商品须在支付后 48 小时内发货，预售最长 150 天，上传物流单号后 24 小时内须有揽件记录；快递订单发货后 T+10、自提/同城/虚拟发货 T+2 自动确认收货并结算；违规连续 3 天未整改会触发支付风险提示直至暂停交易。",
+      "modules": [
+        "delivery",
+        "payment",
+        "compliance"
+      ],
+      "sources": [
+        "KS-0128"
+      ],
+      "checkedAt": "2026-10-28T16:34:37+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0041",
+      "kind": "platform",
+      "topic": "小程序发货管理资金冻结",
+      "statement": "被纳入订单发货管理的小程序，用户支付后资金默认冻结，完成发货信息录入并确认收货后才结算；可调用 /wxa/sec/order/is_trade_managed 查询是否已开通；曾发过货的小程序订单超过 48 小时未发货会推送 trade_manage_remind_shipping 事件。",
+      "modules": [
+        "payment",
+        "delivery"
+      ],
+      "sources": [
+        "KS-0129"
+      ],
+      "checkedAt": "2026-10-28T16:34:37+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0042",
+      "kind": "platform",
+      "topic": "小程序 code2Session 错误码",
+      "statement": "wx.login 的 code 有效期 5 分钟且只能使用一次；code2Session 新文档位于 /miniprogram/dev/server/API/user-login/api_code2session（旧 OpenApiDoc 路径已 404），错误码 40029 code 无效、40226 高风险用户登录被拦截、45011 调用太频繁、-1 系统繁忙。",
+      "modules": [
+        "login"
+      ],
+      "sources": [
+        "KS-0130",
+        "KS-0131"
+      ],
+      "checkedAt": "2026-10-28T16:34:37+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0043",
+      "kind": "platform",
+      "topic": "小程序 stable_token",
+      "statement": "getStableAccessToken（POST /cgi-bin/stable_token）与 getAccessToken 的凭证相互隔离；普通模式在有效期内重复调用返回原 token 与剩余秒数，平台提前 5 分钟更新；force_refresh=true 每天限 20 次且两次间隔 30 秒；频率上限 1 万次/分钟、50 万次/天；存储空间至少预留 512 字符。",
+      "modules": [
+        "login",
+        "notification"
+      ],
+      "sources": [
+        "KS-0132"
+      ],
+      "checkedAt": "2026-10-28T16:34:37+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0044",
+      "kind": "platform",
+      "topic": "小程序 access_token 中控",
+      "statement": "access_token 有效期 2 小时，应由中控服务统一获取和刷新，刷新期间新旧 token 在 5 分钟内都可用；业务方遇到 40001、42001、40014 时应触发被动刷新后重试一次；40164 表示调用 IP 不在白名单。",
+      "modules": [
+        "login",
+        "notification"
+      ],
+      "sources": [
+        "KS-0134",
+        "KS-0133"
+      ],
+      "checkedAt": "2026-10-28T16:34:38+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0045",
+      "kind": "platform",
+      "topic": "小程序手机号换取",
+      "statement": "手机号 code 通过 POST /wxa/business/getuserphonenumber 换取，有效期 5 分钟且只能用一次，与 wx.login 的 code 不能混用；可传 openid 校验 code 的绑定关系；能力仅对非个人主体且已认证的小程序开放。",
+      "modules": [
+        "login",
+        "privacy"
+      ],
+      "sources": [
+        "KS-0135",
+        "KS-0136"
+      ],
+      "checkedAt": "2026-10-28T16:34:38+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0046",
+      "kind": "platform",
+      "topic": "小程序手机号收费",
+      "statement": "自 2023-08-28 起手机号快速验证每次成功调用 0.03 元、实时验证 0.04 元；每个小程序有 1000 次体验额度（正式、体验、开发版共用）；扣费发生在前端收到 bindgetphonenumber 成功回调时，额度不足时前端收到 errno 1400001；政府、非营利组织等主体免费。",
+      "modules": [
+        "login"
+      ],
+      "sources": [
+        "KS-0136"
+      ],
+      "checkedAt": "2026-10-28T16:34:38+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0047",
+      "kind": "platform",
+      "topic": "订阅消息弹窗限制",
+      "statement": "wx.requestSubscribeMessage 一次最多订阅 5 个模板（iOS 7.0.6 / Android 7.0.7 以下仅 1 个），只能在用户点击或支付回调后调起；一次性模板与长期模板不能在同一次调用中混用（20002）；同标题模板会被过滤（filter）。",
+      "modules": [
+        "notification"
+      ],
+      "sources": [
+        "KS-0137"
+      ],
+      "checkedAt": "2026-10-28T16:34:38+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0048",
+      "kind": "platform",
+      "topic": "订阅消息关键词长度",
+      "statement": "订阅消息 data 关键词限制：thing 20 个字符以内、number 32 位以内数字、letter 32 位以内、symbol 5 位以内、character_string 32 位以内、amount 为 1 个币种符号加 10 位以内数字、phone_number 17 位以内、car_number 8 位以内、name 10 个汉字或 20 个字母以内、phrase 5 个汉字以内，enum 只能传枚举值，均不得含换行等控制字符。",
+      "modules": [
+        "notification"
+      ],
+      "sources": [
+        "KS-0138"
+      ],
+      "checkedAt": "2026-10-28T16:34:38+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0049",
+      "kind": "platform",
+      "topic": "订阅消息发送错误码与总量",
+      "statement": "subscribeMessage.send 错误码：43101 用户未订阅或一次性订阅次数已用完、43107 订阅消息能力被封禁、43108 并发下发给同一用户、45168 命中敏感词、47003 data 结构或关键词不符合规则、40037 模板 ID 无效；日下发总量开通支付能力的小程序 3000 万次、未开通的 1000 万次。",
+      "modules": [
+        "notification"
+      ],
+      "sources": [
+        "KS-0138",
+        "KS-0114"
+      ],
+      "checkedAt": "2026-10-28T16:34:38+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0050",
+      "kind": "platform",
+      "topic": "小程序文本内容安全",
+      "statement": "msg_sec_check v2：content 不超过 2500 字，scene 取 1 资料、2 评论、3 论坛、4 社交日志，openid 须为近两小时访问过小程序的用户（否则 61010）；suggest 返回 risky/pass/review；频率 4000 次/分钟、200 万次/天，未上架小程序 100 次/天；官方建议 review 结果人工确认、pass 结果按比例抽查。",
+      "modules": [
+        "review",
+        "compliance"
+      ],
+      "sources": [
+        "KS-0139",
+        "KS-0140"
+      ],
+      "checkedAt": "2026-10-28T16:34:38+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0051",
+      "kind": "platform",
+      "topic": "小程序码 scene 规则",
+      "statement": "getwxacodeunlimit 的 scene 最多 32 个可见字符，只支持数字、大小写字母和 !#$&'()*+,/:;=?@-._~，不支持 % 和中文（需服务端做短码映射）；page 不加前导 / 且不带参数；成功返回图片二进制、失败返回 JSON；码永久有效、数量不限，频率 5000 次/分钟；小程序端需 decodeURIComponent(query.scene)。",
+      "modules": [
+        "campaign",
+        "store"
+      ],
+      "sources": [
+        "KS-0141"
+      ],
+      "checkedAt": "2026-10-28T16:34:38+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0052",
+      "kind": "platform",
+      "topic": "小程序虚拟支付规则",
+      "statement": "运营规范 2.5.13：除小游戏安卓内购外，iOS 上提供的虚拟商品不得展示任何购买、支付功能、页面或按钮，也不得引导到外部支付，违规会阶梯封禁 iOS 支付、搜索和打开；2.14.7：小程序内提供的虚拟商品，购买和支付均需接入小程序虚拟支付。",
+      "modules": [
+        "payment",
+        "membership",
+        "compliance"
+      ],
+      "sources": [
+        "KS-0142",
+        "KS-0144"
+      ],
+      "checkedAt": "2026-10-28T16:34:39+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0053",
+      "kind": "platform",
+      "topic": "小程序退款原路退回",
+      "statement": "运营规范 2.14 第 6 条：不得引导用户到小程序外申请退款，资金应原路退回，不得强制退到账户余额、储值卡、积分或代金券；原路无法退回时，替代方式不得附加门槛、有效期或使用条件。",
+      "modules": [
+        "refund",
+        "after-sales",
+        "recharge"
+      ],
+      "sources": [
+        "KS-0142"
+      ],
+      "checkedAt": "2026-10-28T16:34:39+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0054",
+      "kind": "platform",
+      "topic": "小程序用户数据删除",
+      "statement": "运营规范 2.15：小程序应提供修改、删除用户数据的方式并确保不可恢复地删除，终止服务后 24 小时内删除所获取的用户数据（事先获得书面明确同意的除外），某小程序收集的数据只能在该小程序中使用；审核规范 3.4.1 要求用户注销账号后相应删除相关数据。",
+      "modules": [
+        "privacy",
+        "compliance"
+      ],
+      "sources": [
+        "KS-0142",
+        "KS-0143"
+      ],
+      "checkedAt": "2026-10-28T16:34:39+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0055",
+      "kind": "platform",
+      "topic": "小程序隐私接口声明",
+      "statement": "未在《小程序用户隐私保护指引》中声明的隐私接口会被禁用并返回 errno 112，补充声明 5 分钟后生效；用户拒绝后 10 秒内再次调用直接报错（103 拒绝、104 未同意）不再弹窗；用户可在「小程序已获取的信息」中对手机号、发票信息「通知开发者删除」，开发者需提供删除流程。",
+      "modules": [
+        "privacy"
+      ],
+      "sources": [
+        "KS-0145",
+        "KS-0146"
+      ],
+      "checkedAt": "2026-10-28T16:34:39+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0056",
+      "kind": "platform",
+      "topic": "小程序虚拟服务售后",
+      "statement": "虚拟服务类目（在线课程、会员服务、充值等）：会员因违规被封禁须按未到期部分折算退款；七天无理由以未使用、未核销为前提，仅在详情页事先告知时可收退款手续费；平台介入后双方须在 48 小时内举证。",
+      "modules": [
+        "after-sales",
+        "membership",
+        "refund"
+      ],
+      "sources": [
+        "KS-0147"
+      ],
+      "checkedAt": "2026-10-28T16:34:39+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0057",
+      "kind": "law",
+      "topic": "NIST 密码策略",
+      "statement": "NIST SP 800-63B-4：仅以密码单因素认证时密码最短 15 位，作为多因素之一时最短 8 位，至少允许 64 位；不得设置组成规则（大小写、数字、特殊字符），不得强制定期改密，仅在发现泄露时要求更换；密码须加盐后经单向函数存储，盐至少 32 bit。",
+      "modules": [
+        "auth",
+        "login"
+      ],
+      "sources": [
+        "KS-0148"
+      ],
+      "checkedAt": "2026-10-28T16:34:39+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0058",
+      "kind": "practice",
+      "topic": "密码存储算法参数",
+      "statement": "OWASP 密码存储：首选 Argon2id，最低 m=19 MiB（19456 KiB）、t=2、p=1（等价配置如 m=46 MiB/t=1、m=12 MiB/t=3）；scrypt 最低 N=2^17、r=8、p=1；bcrypt work factor 至少 10 且输入限 72 字节；PBKDF2（HMAC 采用 256 位 SHA-2）迭代 600,000 次。",
+      "modules": [
+        "auth",
+        "login"
+      ],
+      "sources": [
+        "KS-0017"
+      ],
+      "checkedAt": "2026-10-28T16:34:39+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0059",
+      "kind": "law",
+      "topic": "认证失败限速与锁定",
+      "statement": "NIST SP 800-63B-4：同一认证器连续失败不超过 100 次即禁用，并配合人机挑战、递增等待（如 30 秒直到 1 小时）等限速手段，认证成功后清零失败计数；OWASP 要求失败计数绑定账号而非 IP，账号被锁定时仍允许走找回密码流程。",
+      "modules": [
+        "auth",
+        "login"
+      ],
+      "sources": [
+        "KS-0148",
+        "KS-0016"
+      ],
+      "checkedAt": "2026-10-28T16:34:39+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0060",
+      "kind": "law",
+      "topic": "短信验证码规则",
+      "statement": "NIST 将短信/语音验证码列为受限认证器，须同时提供至少一种不受限替代方式，带外验证码至少 6 位十进制数字且 10 分钟内有效；OWASP ASVS 5.0 要求验证码只能成功使用一次、至少 20 bit 熵、使用 CSPRNG 产生、绑定生成它的认证请求并限速。",
+      "modules": [
+        "login",
+        "auth"
+      ],
+      "sources": [
+        "KS-0148",
+        "KS-0149"
+      ],
+      "checkedAt": "2026-10-28T16:34:39+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0061",
+      "kind": "platform",
+      "topic": "阿里云短信默认频控",
+      "statement": "阿里云验证码短信默认频控为同一签名同一手机号 1 条/分钟、5 条/小时、10 条/天，按 UTC+8 自然时间窗计算；同一手机号验证码跨所有发送方合计上限 40 条/天；通知短信同签名同模板同号码 50 条/天。",
+      "modules": [
+        "login",
+        "notification"
+      ],
+      "sources": [
+        "KS-0150"
+      ],
+      "checkedAt": "2026-10-28T16:34:39+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0062",
+      "kind": "law",
+      "topic": "TOTP 参数",
+      "statement": "RFC 6238：TOTP 默认时间步长 30 秒、T0=0、算法 HMAC-SHA-1（也可用 256 位或 512 位 SHA-2），建议最多容忍 1 个时间步的时钟漂移，同一 OTP 验证成功后再次提交必须拒绝；RFC 4226 要求共享密钥至少 128 bit、推荐 160 bit，HOTP 至少 6 位。",
+      "modules": [
+        "auth"
+      ],
+      "sources": [
+        "KS-0151",
+        "KS-0152"
+      ],
+      "checkedAt": "2026-10-28T16:34:40+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0063",
+      "kind": "law",
+      "topic": "刷新令牌轮换",
+      "statement": "RFC 9700：公共客户端的 refresh token 必须做发送方约束（DPoP/mTLS）或轮换；轮换时旧 token 作废并保留新旧关联，检测到已作废 token 被再次提交时应吊销当前有效 token（整族吊销）；不活动一段时间后 refresh token 应过期；禁止密码模式，公共客户端必须使用 PKCE。",
+      "modules": [
+        "auth",
+        "login"
+      ],
+      "sources": [
+        "KS-0153"
+      ],
+      "checkedAt": "2026-10-28T16:34:40+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0064",
+      "kind": "practice",
+      "topic": "会话超时与 Cookie",
+      "statement": "OWASP 会话管理：空闲超时高价值应用常见 2–5 分钟、低风险应用 15–30 分钟，全天办公的绝对超时 4–8 小时，所有超时必须在服务端执行；登录、改密或权限变化后必须换发新会话 ID；Cookie 设 Secure、HttpOnly、SameSite=Strict 或 Lax。",
+      "modules": [
+        "auth",
+        "admin-rbac"
+      ],
+      "sources": [
+        "KS-0090"
+      ],
+      "checkedAt": "2026-10-28T16:34:40+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0065",
+      "kind": "law",
+      "topic": "JWT 校验规则",
+      "statement": "RFC 8725：先验签再信任内容，只允许预先指定的算法（禁止 none），jku/x5u/jwk 必须走白名单，JWT 必须带 aud 且不匹配即拒绝，不得用人类可记忆口令作 HS256 密钥；OWASP 要求 HMAC 密钥不短于摘要输出（HS256 为 256 bit），吊销按 jti 拉黑。",
+      "modules": [
+        "auth"
+      ],
+      "sources": [
+        "KS-0154",
+        "KS-0155"
+      ],
+      "checkedAt": "2026-10-28T16:34:40+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0066",
+      "kind": "law",
+      "topic": "账号注销 15 个工作日",
+      "statement": "《App违法违规收集使用个人信息行为认定方法》（国信办秘字〔2019〕191号）：未提供有效的更正、删除个人信息及注销账号功能，或为注销设置不必要、不合理条件属违规；需人工处理的注销请求承诺时限不得超过 15 个工作日（无承诺的以 15 个工作日为限）；前台显示注销完成而后台未完成也属违规。",
+      "modules": [
+        "privacy",
+        "legal",
+        "login"
+      ],
+      "sources": [
+        "KS-0156"
+      ],
+      "checkedAt": "2026-10-28T16:34:40+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0067",
+      "kind": "law",
+      "topic": "网络日志留存 6 个月",
+      "statement": "《网络安全法》第二十一条（2016 年文本）要求网络运营者采取监测、记录网络运行状态和网络安全事件的技术措施，并按规定留存相关网络日志不少于六个月；2025-10-28 通过的修改决定自 2026-01-01 施行并调整条文顺序，修正后的条号未核实。",
+      "modules": [
+        "compliance",
+        "deploy"
+      ],
+      "sources": [
+        "KS-0157",
+        "KS-0158"
+      ],
+      "checkedAt": "2026-10-28T16:34:40+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0068",
+      "kind": "law",
+      "topic": "电子商务法：注销与合同成立",
+      "statement": "《电子商务法》第二十四条：应明示信息查询、更正、删除及用户注销的方式和程序，不得设置不合理条件，用户注销的应立即删除其信息（法律法规规定或双方约定保存的除外）；第四十九条：用户提交订单成功即合同成立，约定「消费者付款后合同不成立」的格式条款无效；第五十条：须保证用户提交订单前可更正输入错误。",
+      "modules": [
+        "legal",
+        "order",
+        "privacy"
+      ],
+      "sources": [
+        "KS-0159",
+        "KS-0160"
+      ],
+      "checkedAt": "2026-10-28T16:34:40+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0069",
+      "kind": "law",
+      "topic": "消保条例：预付款",
+      "statement": "《消费者权益保护法实施条例》（2024-07-01 施行）第二十二条：以预付款方式提供商品或服务的应订立书面合同，约定具体内容、价款、预付款退还方式和违约责任；出现重大经营风险应停止收取预付款；停业或迁址的消费者可要求退还未消费余额。第二十一条：停业或迁移服务场所须提前 30 日公告。",
+      "modules": [
+        "recharge",
+        "membership",
+        "legal"
+      ],
+      "sources": [
+        "KS-0161"
+      ],
+      "checkedAt": "2026-10-28T16:34:40+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0070",
+      "kind": "law",
+      "topic": "消保条例：自动续费与无理由退货",
+      "statement": "消保条例第十条第二款：自动展期、自动续费的，应在消费者接受服务前和续费日期前以显著方式提醒消费者；第十九条：不适用无理由退货的商品须显著标注且不得作为默认同意选项；第二十三条：未经同意不得发送商业性信息，消费者选择取消的应立即停止。",
+      "modules": [
+        "membership",
+        "after-sales",
+        "notification"
+      ],
+      "sources": [
+        "KS-0161"
+      ],
+      "checkedAt": "2026-10-28T16:34:40+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0071",
+      "kind": "law",
+      "topic": "预付式消费司法解释：七日退款",
+      "statement": "法释〔2025〕4号（2025-05-01 施行）第十四条：消费者自付款之日起七日内请求返还预付款本金的应予支持（订立合同时已获得过相同商品或服务的除外）；第十五条：返还本金为预付款扣减已兑付价款后的余额；第十六条：因经营者原因返还的按合同成立时一年期 LPR 计息。",
+      "modules": [
+        "recharge",
+        "refund",
+        "membership"
+      ],
+      "sources": [
+        "KS-0162"
+      ],
+      "checkedAt": "2026-10-28T16:34:41+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0072",
+      "kind": "law",
+      "topic": "预付式消费司法解释：已兑付计价",
+      "statement": "法释〔2025〕4号第十八条：经营者原因解除的，已兑付部分按折扣价计算，有赠送金额时优惠比例按 实付/(实付+赠送)；第十九、二十条：消费者原因解除的按打折前价格计算，但超出预付款的部分经营者不得追要；第九条：约定记名卡遗失不补办等排除消费者权利的格式条款无效；第二十四条：有余额的记名卡可挂失、补办。",
+      "modules": [
+        "recharge",
+        "refund",
+        "membership"
+      ],
+      "sources": [
+        "KS-0162"
+      ],
+      "checkedAt": "2026-10-28T16:34:41+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0073",
+      "kind": "law",
+      "topic": "单用途商业预付卡限额（转载来源）",
+      "statement": "《单用途商业预付卡管理办法（试行）》（商务部令2012年第9号）第十八、十九条：单张记名卡限额不超过 5000 元、不记名卡不超过 1000 元，记名卡不得设有效期，不记名卡有效期不少于 3 年；第十五条：一次性购买 1 万元以上不记名卡须实名登记。本条条文取自第三方全文转载，尚未与政府网站原文逐字核对。",
+      "modules": [
+        "recharge",
+        "membership"
+      ],
+      "sources": [
+        "KS-0163"
+      ],
+      "checkedAt": "2026-10-28T16:34:41+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0074",
+      "kind": "law",
+      "topic": "北京预付卡退款时限（转载来源）",
+      "statement": "《北京市单用途预付卡管理条例》（2022-06-01 施行）第十六条：自购卡之日起 7 日内未兑付的消费者有权退卡，经营者应在 5 日内全额退还；第十七条：应当退款的按约定期限退还，没有约定的自消费者提出之日起 15 日内退还。本条条文取自第三方全文转载，尚未与政府网站原文逐字核对。",
+      "modules": [
+        "recharge",
+        "refund"
+      ],
+      "sources": [
+        "KS-0164"
+      ],
+      "checkedAt": "2026-10-28T16:34:41+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0075",
+      "kind": "law",
+      "topic": "上海健身预付「三限」",
+      "statement": "上海《体育健身行业预付式消费经营活动监管实施办法（试行）》（沪体规文〔2025〕1号，2025-03-01 施行）第八条：会籍类一次收取不超过 5000 元且不超过 24 个月，课时类不超过 20000 元且不超过 60 次，储值类不超过 5000 元，同一消费者合计不超过 20000 元，续约后也不得超限；数字据上海市体育局修订说明，2026-06 修订征求意见稿拟将会籍类改为不超过 12 个月并取消 5000 元限额（尚未生效）。",
+      "modules": [
+        "membership",
+        "recharge"
+      ],
+      "sources": [
+        "KS-0165"
+      ],
+      "checkedAt": "2026-10-28T16:34:41+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0076",
+      "kind": "law",
+      "topic": "规范促销：抽奖公示与档案",
+      "statement": "《规范促销行为暂行规定》第十三条第二款：现场即时开奖的，超过 500 元奖项的兑奖情况应随时公示；第十四条：以积分、礼券作奖品的应公布兑换规则、使用范围和有效期；第十八条：非现金奖品按同期市场同类商品价格计算金额；第十九条：设奖规则、公示信息、兑奖结果、获奖人员等资料保存 2 年。",
+      "modules": [
+        "lottery",
+        "campaign"
+      ],
+      "sources": [
+        "KS-0038"
+      ],
+      "checkedAt": "2026-10-28T16:34:41+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0077",
+      "kind": "law",
+      "topic": "反不正当竞争法 2025：抽奖上限",
+      "statement": "《反不正当竞争法》（2025 修订，2025-10-15 施行）第十一条第（四）项：抽奖式有奖销售最高奖金额不得超过五万元（2019 年版为第十条）；第二十七条：违反第十一条的处 5 万元以上 50 万元以下罚款。",
+      "modules": [
+        "lottery",
+        "legal"
+      ],
+      "sources": [
+        "KS-0166"
+      ],
+      "checkedAt": "2026-10-28T16:34:41+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0078",
+      "kind": "law",
+      "topic": "划线价 7 日规则",
+      "statement": "《明码标价和禁止价格欺诈规定》第十六条：未标明被比较价格详细信息的，划线价或原价不得高于本经营场所比较前 7 日内的最低成交价，前 7 日无交易的不得高于最后一次成交价；第二十条：首页或显著位置标示的价格不得低于详情页价格；《规范促销行为暂行规定》第二十一条对折价基准作相同的 7 日规定。",
+      "modules": [
+        "coupon",
+        "campaign",
+        "catalog"
+      ],
+      "sources": [
+        "KS-0167",
+        "KS-0038"
+      ],
+      "checkedAt": "2026-10-28T16:34:41+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0079",
+      "kind": "law",
+      "topic": "网购七日无理由退货时限",
+      "statement": "《网络购买商品七日无理由退货暂行办法》：消费者自签收次日起 7 日内发出退货通知，经营者自收到退回商品之日起 7 日内返还价款；退款方式与付款方式一致，未经消费者明确同意不得改用其他方式；满减或套装部分退货按各商品价格重新计算，赠品（含优惠券）应一并退回（所读为 2017 年文本）。",
+      "modules": [
+        "refund",
+        "after-sales",
+        "coupon"
+      ],
+      "sources": [
+        "KS-0168"
+      ],
+      "checkedAt": "2026-10-28T16:34:41+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0080",
+      "kind": "law",
+      "topic": "预付卡发票 601",
+      "statement": "国家税务总局公告2016年第53号第三条：销售单用途卡或接受充值取得的预收资金不缴纳增值税，可开具税率栏为「不征税」、编码 601（预付卡销售和充值）的增值税普通发票，不得开具增值税专用发票；持卡人用卡消费时不得再向持卡人开具增值税发票。",
+      "modules": [
+        "recharge",
+        "membership",
+        "legal"
+      ],
+      "sources": [
+        "KS-0169"
+      ],
+      "checkedAt": "2026-10-28T16:34:42+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0081",
+      "kind": "law",
+      "topic": "发票开具与红冲",
+      "statement": "《发票管理办法实施细则》（2024-03-01 施行）第二十四条：确认营业收入时开具发票，未发生经营业务不得开票；第二十七条：开具电子发票后发生销售退回、开票有误、应税服务中止、销售折让的，应按规定开具红字发票。《发票管理办法》第二十八条：已开具发票存根联保存 5 年。",
+      "modules": [
+        "refund",
+        "after-sales",
+        "order",
+        "legal"
+      ],
+      "sources": [
+        "KS-0170",
+        "KS-0171"
+      ],
+      "checkedAt": "2026-10-28T16:34:42+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0082",
+      "kind": "practice",
+      "topic": "列表分页 AIP-158",
+      "statement": "Google AIP-158：page_size 非必填，缺省或为 0 时使用文档化默认值，超过上限时自动降到上限而不报错，负数返回 INVALID_ARGUMENT；next_page_token 为空是唯一结束标志（短页不代表结束）；page_token 必须不透明（仅 Base64 不够）、不携带授权、与过滤排序条件绑定，可在约 3 天后过期。",
+      "modules": [
+        "report",
+        "admin-rbac"
+      ],
+      "sources": [
+        "KS-0172"
+      ],
+      "checkedAt": "2026-10-28T16:34:42+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0083",
+      "kind": "practice",
+      "topic": "Idempotency-Key 草案状态码",
+      "statement": "IETF draft-ietf-httpapi-idempotency-key-header（-08，仍为草案）：Idempotency-Key 是值为 String 的结构化头，推荐 UUID；需要却未提供返回 400，同一 key 配不同请求体返回 422，同一 key 前一请求仍在处理返回 409，错误体使用 application/problem+json；保留时长由服务方自定并应公布。",
+      "modules": [
+        "consistency",
+        "payment",
+        "order"
+      ],
+      "sources": [
+        "KS-0173"
+      ],
+      "checkedAt": "2026-10-28T16:34:42+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0084",
+      "kind": "practice",
+      "topic": "Keyset 分页",
+      "statement": "OFFSET 分页需读出并丢弃被跳过的行，且翻页间插入新行会重复或漏行；keyset 分页用行值比较 WHERE (sale_date, sale_id) < (?, ?) 并建同序复合索引，排序必须带唯一列以保证确定性；PostgreSQL 行比较遇到 NULL 结果为 unknown，keyset 排序列应为 NOT NULL。",
+      "modules": [
+        "report"
+      ],
+      "sources": [
+        "KS-0174",
+        "KS-0175",
+        "KS-0176"
+      ],
+      "checkedAt": "2026-10-28T16:34:42+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0085",
+      "kind": "practice",
+      "topic": "CSV 注入防护",
+      "statement": "OWASP CSV Injection：导出单元格不得以 =、+、-、@、Tab(0x09)、CR(0x0D)、LF(0x0A) 开头，全角 ＝＋－＠ 同样处理；组合做法是每个字段用双引号包裹并在前面加单引号，字段内的双引号写成两个双引号。",
+      "modules": [
+        "report"
+      ],
+      "sources": [
+        "KS-0177"
+      ],
+      "checkedAt": "2026-10-28T16:34:42+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0086",
+      "kind": "practice",
+      "topic": "零停机迁移 expand/contract",
+      "statement": "GitLab 零停机迁移规范：删列先在模型中忽略、下个版本再删除，二者不得在同一版本完成；改名改类型走新增列、同步、回填、切换读写、清理旧列的 expand/contract 流程；索引并发创建，NOT NULL 约束在发布后迁移中添加，高流量表的 ACCESS EXCLUSIVE 操作用短 lock_timeout 加重试，大表回填分批后台执行。",
+      "modules": [
+        "deploy"
+      ],
+      "sources": [
+        "KS-0178"
+      ],
+      "checkedAt": "2026-10-28T16:34:42+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0087",
+      "kind": "practice",
+      "topic": "PostgreSQL 并发与条件更新",
+      "statement": "PostgreSQL 默认 Read Committed，UPDATE 遇到并发修改的行会等待对方提交后对新版本重新计算 WHERE，可用 UPDATE ... WHERE qty >= n 条件更新原子扣减；Repeatable Read/Serializable 下序列化失败（SQLSTATE 40001）须回滚并从头重试整个事务；FOR UPDATE SKIP LOCKED 会得到不一致视图，只适合多消费者队列表。",
+      "modules": [
+        "consistency",
+        "inventory",
+        "jobs"
+      ],
+      "sources": [
+        "KS-0179",
+        "KS-0180"
+      ],
+      "checkedAt": "2026-10-28T16:34:42+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0088",
+      "kind": "practice",
+      "topic": "Mozilla TLS intermediate",
+      "statement": "Mozilla Server Side TLS 指南 5.7 intermediate 配置：协议 TLSv1.2 与 TLSv1.3，曲线 X25519、prime256v1、secp384r1，DH 参数 2048 位，开启 OCSP stapling，HSTS max-age 至少 63072000（2 年）。",
+      "modules": [
+        "deploy"
+      ],
+      "sources": [
+        "KS-0181"
+      ],
+      "checkedAt": "2026-10-28T16:34:42+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0089",
+      "kind": "practice",
+      "topic": "nginx 限流参数",
+      "statement": "nginx limit_req：用 $binary_remote_addr 作键，64 位平台每个状态 128 字节、1MB 约存 8000 个状态；burst 默认 0，nodelay 让 burst 内请求立即处理；limit_req_status 默认 503（可改为 429）；limit_req_dry_run（1.17.1+）只计数不限流，适合上线前观察阈值。",
+      "modules": [
+        "deploy"
+      ],
+      "sources": [
+        "KS-0095"
+      ],
+      "checkedAt": "2026-10-28T16:34:43+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0090",
+      "kind": "pitfall",
+      "topic": "nginx 非幂等请求不重试",
+      "statement": "nginx proxy_next_upstream 默认 error timeout，POST、PATCH 等非幂等请求一旦已发往上游就不会重试到下一台（除非显式加 non_idempotent）；proxy_read_timeout/proxy_send_timeout 默认 60s，且计的是两次读写之间的间隔而非整个响应时长。",
+      "modules": [
+        "deploy",
+        "payment"
+      ],
+      "sources": [
+        "KS-0182"
+      ],
+      "checkedAt": "2026-10-28T16:34:43+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0091",
+      "kind": "practice",
+      "topic": "FastAPI 容器进程模型",
+      "statement": "FastAPI 官方：Kubernetes 等集群中每个容器运行一个 Uvicorn 进程、靠增加容器扩容，单机或 Docker Compose 可在容器内用 --workers；tiangolo/uvicorn-gunicorn-fastapi 镜像已弃用；CMD 必须用 exec 形式，否则无法优雅关闭、lifespan 事件不触发；在 TLS 终止代理后运行要加 --proxy-headers。",
+      "modules": [
+        "deploy"
+      ],
+      "sources": [
+        "KS-0183"
+      ],
+      "checkedAt": "2026-10-28T16:34:43+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0092",
+      "kind": "pitfall",
+      "topic": "Uvicorn 转发头信任",
+      "statement": "Uvicorn --proxy-headers 默认开启，但只信任 --forwarded-allow-ips 中的来源（默认 127.0.0.1,::1）；官方提醒只有代理会清除客户端自带转发头后再设置时才可配置为 *，否则客户端 IP 可被伪造；--timeout-keep-alive 默认 5 秒。",
+      "modules": [
+        "deploy",
+        "auth"
+      ],
+      "sources": [
+        "KS-0184",
+        "KS-0185"
+      ],
+      "checkedAt": "2026-10-28T16:34:43+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0093",
+      "kind": "practice",
+      "topic": "k6 阈值",
+      "statement": "k6 中 checks 本身不影响退出码，需对 checks 设阈值（如 rate>0.99）才会使测试失败；官方阈值示例为 http_req_failed rate<0.01、http_req_duration p(95)<200；同一指标键在 thresholds 中重复出现时前面的会被静默丢弃；吞吐目标应使用 constant-arrival-rate 等开放模型执行器，preAllocatedVUs 过低会达不到目标速率。",
+      "modules": [
+        "deploy"
+      ],
+      "sources": [
+        "KS-0186",
+        "KS-0187"
+      ],
+      "checkedAt": "2026-10-28T16:34:43+08:00",
+      "status": "active",
+      "usedBy": []
+    },
+    {
+      "id": "KF-0094",
+      "kind": "practice",
+      "topic": "SLO 燃烧率告警",
+      "statement": "Google SRE Workbook：99.9% SLO 推荐多窗口多燃烧率告警——1 小时/5 分钟窗口燃烧率 14.4（消耗 2% 预算）呼叫、6 小时/30 分钟窗口燃烧率 6（消耗 5%）呼叫、3 天/6 小时窗口燃烧率 1（消耗 10%）开工单。",
+      "modules": [
+        "deploy"
+      ],
+      "sources": [
+        "KS-0188"
+      ],
+      "checkedAt": "2026-10-28T16:34:43+08:00",
+      "status": "active",
+      "usedBy": []
     }
   ]
 }

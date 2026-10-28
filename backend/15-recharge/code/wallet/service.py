@@ -24,13 +24,17 @@ from .models import (
     REFUND_SUCCEEDED, SOURCE_ADJUST, SOURCE_DIRECT, SOURCE_GIFT, SOURCE_OFFLINE, SOURCE_PAYMENT, BatchAllocation,
     RechargeBatch, RechargePlan, WalletAccount, WalletLedger, WalletMismatch, WalletRefund,
 )
-from .ports import GOODS_OFFLINE_SERVICE, PaidEvent, RefundResultEvent, parse_paid, parse_refund_result, payment_port
+from .ports import (
+    GOODS_OFFLINE_SERVICE, PaidEvent, RefundResultEvent, parse_paid, parse_refund_result, payment_port,
+    register_payment_hooks,
+)
 from .prepaid import policy_for, register_outstanding_provider
 from .rules import CAUSE_CUSTOMER, CAUSES, RULE_COOLING_OFF, allocate_fifo, quote_batch_refund, split
 
 BIZ_TYPE = "wallet_recharge"
 CONSUMER = "wallet"
 REFUND_TOPIC = "wallet.refund_requested"
+REFUND_PREFIX = "wallet_refund"
 
 
 def update(model):
@@ -211,33 +215,100 @@ def consume(db: Session, user_id: int, ref: str, amount_cents: int, policy: str 
     return entry
 
 
-def reverse(db: Session, user_id: int, ref: str) -> WalletLedger:
-    """冲回（订单退款 / 核销失败）：按原消费的拆分与批次原路加回。幂等。"""
-    found = _existing(db, ref, L_REVERSE)
-    if found is not None:
-        return found
+def reverse(db: Session, user_id: int, ref: str, amount_cents: int | None = None, reversal_ref: str | None = None,
+            note: str | None = None) -> WalletLedger:
+    """冲回消费（订单退款 / 售后部分退款 / 核销失败）：原路加回原消费的批次。
+
+    - 整笔：reverse(db, user_id, ref) 冲回该消费尚未冲回的全部金额；幂等键 (ref, reverse)。
+    - 部分：reverse(db, user_id, ref, amount_cents=N, reversal_ref="after_sales:9:item:3") 冲回 N 分；
+      幂等键 (reversal_ref, reverse)，同一 reversal_ref 重放返回原流水（金额不同 → 4090）。
+    - 累计冲回不超过原消费（consume 流水 reversed_cents 条件 UPDATE 封顶，超出 4220 reason=reverse_exceeds_consumed）。
+    - 本金 / 赠送金按原消费比例拆分：累计应退赠送金 = ⌊原赠送金 × 累计冲回 ÷ 原消费⌋（赠送金向下取整，余数归本金，
+      最后一笔补齐，合计严格等于原消费）；批次按原分配顺序逐个退回。
+    """
     original = _existing(db, ref, L_CONSUME)
     if original is None or original.user_id != user_id:
         raise AppError(ErrorCode.NOT_FOUND, "consume record not found")
+    consumed = -(original.principal_delta + original.bonus_delta)
+    if amount_cents is None and reversal_ref is None:
+        found = _existing(db, ref, L_REVERSE)
+        if found is not None:
+            return found
+        amount, entry_ref = consumed - int(original.reversed_cents or 0), ref
+        if amount <= 0:  # 已被部分冲回累计冲完：返回最后一笔
+            last = db.execute(select(WalletLedger).where(WalletLedger.origin_ledger_id == original.id,
+                                                         WalletLedger.kind == L_REVERSE)
+                              .order_by(WalletLedger.id.desc()).limit(1)).scalar_one_or_none()
+            if last is not None:
+                return last
+            raise AppError(ErrorCode.BUSINESS_RULE, "nothing to reverse", {"reason": "reverse_exceeds_consumed"})
+    else:
+        if amount_cents is None or reversal_ref is None:
+            raise AppError(ErrorCode.BAD_REQUEST, "partial reverse needs amount_cents and reversal_ref")
+        if amount_cents <= 0:
+            raise AppError(ErrorCode.BAD_REQUEST, "amount_cents must be positive")
+        found = _existing(db, reversal_ref, L_REVERSE)
+        if found is not None:
+            if found.origin_ledger_id != original.id or found.principal_delta + found.bonus_delta != amount_cents:
+                raise AppError(ErrorCode.CONFLICT, "reversal_ref already used with different parameters")
+            return found
+        amount, entry_ref = int(amount_cents), reversal_ref
+    capped = db.execute(update(WalletLedger).where(
+        WalletLedger.id == original.id, WalletLedger.reversed_cents + amount <= consumed,
+    ).values(reversed_cents=WalletLedger.reversed_cents + amount))
+    if capped.rowcount != 1:
+        raise AppError(ErrorCode.BUSINESS_RULE, "reverse exceeds consumed amount",
+                       {"reason": "reverse_exceeds_consumed", "consumed_cents": consumed})
+    db.refresh(original)
+    before = int(original.reversed_cents) - amount
+    orig_bonus = -original.bonus_delta
+
+    def bonus_until(total: int) -> int:
+        return orig_bonus if total >= consumed else (orig_bonus * total) // consumed if consumed else 0
+
+    bonus = bonus_until(before + amount) - bonus_until(before)
+    principal = amount - bonus
     account = get_account(db, user_id)
-    entry = _move(db, account, L_REVERSE, ref, -original.principal_delta, -original.bonus_delta, store_id=original.store_id)
+    entry = _move(db, account, L_REVERSE, entry_ref, principal, bonus, store_id=original.store_id, note=note)
+    entry.origin_ledger_id = original.id
+    # 各批次已退回的部分（之前的冲回流水在该批次上的负分配）
+    returned: dict[int, list[int]] = {}
+    rows = db.execute(select(BatchAllocation.batch_id, BatchAllocation.principal_cents, BatchAllocation.bonus_cents)
+                      .join(WalletLedger, WalletLedger.id == BatchAllocation.ledger_id)
+                      .where(WalletLedger.origin_ledger_id == original.id, WalletLedger.id != entry.id)).all()
+    for batch_id, p, b in rows:
+        acc = returned.setdefault(batch_id, [0, 0])
+        acc[0] -= p
+        acc[1] -= b
+    left_p, left_b = principal, bonus
     allocations = db.execute(select(BatchAllocation).where(BatchAllocation.ledger_id == original.id)
                              .order_by(BatchAllocation.id)).scalars().all()
     for alloc in allocations:
+        done = returned.get(alloc.batch_id, [0, 0])
+        p = min(left_p, max(0, alloc.principal_cents - done[0]))
+        b = min(left_b, max(0, alloc.bonus_cents - done[1]))
+        if not p and not b:
+            continue
+        left_p, left_b = left_p - p, left_b - b
+        returned[alloc.batch_id] = [done[0] + p, done[1] + b]
         result = db.execute(update(RechargeBatch).where(
             RechargeBatch.id == alloc.batch_id, RechargeBatch.status.in_((BATCH_PAID, BATCH_EXHAUSTED)),
-        ).values(principal_remaining_cents=RechargeBatch.principal_remaining_cents + alloc.principal_cents,
-                 bonus_remaining_cents=RechargeBatch.bonus_remaining_cents + alloc.bonus_cents,
+        ).values(principal_remaining_cents=RechargeBatch.principal_remaining_cents + p,
+                 bonus_remaining_cents=RechargeBatch.bonus_remaining_cents + b,
                  status=BATCH_PAID, updated_at=utcnow()))
         if result.rowcount != 1:
             # 原批次已在退款中或已退款：冲回金额进入一个新的直接入账批次（线下退款路径）
-            _new_batch(db, user_id, SOURCE_DIRECT, alloc.principal_cents, alloc.bonus_cents,
-                       source_ref=f"reverse:{ref}:{alloc.id}", note=f"reverse of batch {alloc.batch_id}")
-        db.add(BatchAllocation(ledger_id=entry.id, batch_id=alloc.batch_id, principal_cents=-alloc.principal_cents,
-                               bonus_cents=-alloc.bonus_cents))
+            _new_batch(db, user_id, SOURCE_DIRECT, p, b, source_ref=f"reverse:{entry_ref}:{alloc.id}"[:64],
+                       note=f"reverse of batch {alloc.batch_id}")
+        db.add(BatchAllocation(ledger_id=entry.id, batch_id=alloc.batch_id, principal_cents=-p, bonus_cents=-b))
+    if left_p or left_b:  # 原消费没有批次归属（历史数据）：进直接入账批次，保持批次合计 = 余额
+        _new_batch(db, user_id, SOURCE_DIRECT, left_p, left_b, source_ref=f"reverse:{entry_ref}"[:64],
+                   note="reverse without allocation")
     db.flush()
-    enqueue_event(db, "balance.reverted", {"user_id": user_id, "ref": ref, "principal_cents": -original.principal_delta,
-                                           "bonus_cents": -original.bonus_delta}, "wallet", account.id)
+    enqueue_event(db, "balance.reverted", {
+        "user_id": user_id, "ref": ref, "reversal_ref": entry_ref, "amount_cents": amount, "principal_cents": principal,
+        "bonus_cents": bonus, "reversed_total_cents": before + amount, "consumed_cents": consumed,
+        "fully_reversed": before + amount == consumed}, "wallet", account.id)
     return entry
 
 
@@ -436,19 +507,43 @@ def create_recharge_order(db: Session, user_id: int, store_id: int | None, plan_
     batch = _new_batch(db, user_id, SOURCE_PAYMENT, amount, bonus, store_id=store_id, plan_id=plan.id if plan else None,
                        status=BATCH_PENDING, terms=(plan.terms_text if plan else ""))
     batch.expires_at = at + timedelta(minutes=cfg().pay_timeout_minutes)
-    pay = payment_port().create_payment(db, biz_type=BIZ_TYPE, biz_id=batch.id, user_id=user_id, store_id=store_id,
-                                        amount_cents=amount, description=f"储值充值 {amount / 100:.2f} 元",
-                                        goods_kind=GOODS_OFFLINE_SERVICE, expires_at=batch.expires_at)
-    batch.payment_id = pay.get("payment_id") or None
-    batch.out_trade_no = pay.get("out_trade_no")
     db.flush()
-    return batch_dict(batch, pay.get("pay_params") or {})
+    return batch_dict(batch)
+
+
+def payable(db: Session, user_id: int, batch_id: int) -> dict:
+    """支付模块的 Payable 解析：金额只来自充值单。他人 4040，不可支付 4090。"""
+    batch = db.get(RechargeBatch, batch_id)
+    if batch is None or batch.user_id != user_id or batch.source != SOURCE_PAYMENT:
+        raise AppError(ErrorCode.NOT_FOUND, "recharge order not found")
+    if batch.status != BATCH_PENDING or (aware(batch.expires_at) and aware(batch.expires_at) <= utcnow()):
+        raise AppError(ErrorCode.CONFLICT, "recharge order is not payable", {"status": batch.status})
+    return {"amount_cents": batch.amount_cents, "description": f"储值充值 {batch.amount_cents / 100:.2f} 元",
+            "expires_at": aware(batch.expires_at), "store_id": batch.store_id, "goods_kind": GOODS_OFFLINE_SERVICE,
+            "business_no": batch.order_no}
+
+
+def start_payment(db: Session, user_id: int, batch_id: int) -> dict:
+    """为已提交的充值单调起支付。支付模块会自行 commit（含渠道调用），所以本函数必须在业务事务提交之后调用，
+    且自己提交支付单号的回写。可重复调用：支付模块按同一业务单复用 / 换单。"""
+    data = payable(db, user_id, batch_id)
+    db.commit()
+    pay = payment_port().create_payment(db, biz_type=BIZ_TYPE, biz_id=batch_id, user_id=user_id, store_id=data["store_id"],
+                                        amount_cents=data["amount_cents"], description=data["description"],
+                                        goods_kind=GOODS_OFFLINE_SERVICE, expires_at=data["expires_at"],
+                                        business_no=data["business_no"])
+    db.execute(update(RechargeBatch).where(RechargeBatch.id == batch_id)
+               .values(payment_id=pay.get("payment_id") or None, out_trade_no=pay.get("out_trade_no")))
+    db.commit()
+    return batch_dict(db.get(RechargeBatch, batch_id), pay.get("pay_params") or {})
 
 
 def on_payment_succeeded(db: Session, event: PaidEvent) -> str:
     """支付成功 → 批次入账。幂等：已入账返回 duplicate；金额不符 → needs_manual，不入账。"""
     if event.biz_type != BIZ_TYPE:
         return "ignored"
+    if event.needs_manual:  # 支付模块已转人工 / 自动退款（关单后支付、重复支付、钩子拒绝）：不入账
+        return "manual"
     batch = db.get(RechargeBatch, event.biz_id)
     if batch is None:
         return "unknown"
@@ -512,16 +607,17 @@ def _on_refund_event(topic: str):
         result = parse_refund_result(topic, payload)
         if result is None or (result.biz_type and result.biz_type != BIZ_TYPE):
             return "ignored"
-        if not first_time(db, f"{CONSUMER}.refund", event_id):
+        if not first_time(db, f"{CONSUMER}.{topic}", event_id):
             return "duplicate"
         return on_refund_result(db, result)
     return handler
 
 
-on_refunded_event = _on_refund_event("payment.refunded")
-on_refund_failed_event = _on_refund_event("payment.refund_failed")
-EVENT_HANDLERS = {"payment.succeeded": on_payment_event, "payment.refunded": on_refunded_event,
-                  "payment.refund_failed": on_refund_failed_event}
+on_refund_succeeded_event = _on_refund_event("refund.succeeded")
+on_refund_failed_event = _on_refund_event("refund.failed")
+on_refund_abnormal_event = _on_refund_event("refund.abnormal")
+EVENT_HANDLERS = {"payment.succeeded": on_payment_event, "refund.succeeded": on_refund_succeeded_event,
+                  "refund.failed": on_refund_failed_event, "refund.abnormal": on_refund_abnormal_event}
 
 
 def handle_event(db: Session, topic: str, payload: dict, event_id: str | None = None) -> str:
@@ -596,7 +692,8 @@ def refund_dict(refund: WalletRefund) -> dict:
             "bonus_forfeit_cents": refund.bonus_forfeit_cents, "retained_cents": refund.retained_cents,
             "route": refund.route, "status": refund.status, "reason": refund.reason, "requested_by": refund.requested_by,
             "approved_by": refund.approved_by, "due_at": aware(refund.due_at), "finished_at": aware(refund.finished_at),
-            "fail_reason": refund.fail_reason, "breakdown": json.loads(refund.breakdown_json or "{}"),
+            "fail_reason": refund.fail_reason, "submitted_at": aware(refund.submitted_at),
+            "channel_refund_id": refund.channel_refund_id, "submit_error": refund.submit_error, "breakdown": json.loads(refund.breakdown_json or "{}"),
             "created_at": aware(refund.created_at)}
 
 
@@ -619,6 +716,8 @@ def request_refund(db: Session, batch_id: int, cause: str, reason: str, actor: s
     ).values(status=BATCH_REFUNDING, principal_remaining_cents=0, bonus_remaining_cents=0, updated_at=utcnow()))
     if result.rowcount != 1:
         raise AppError(ErrorCode.CONFLICT, "recharge order changed, quote again")
+    if quote["refund_cents"] <= 0:
+        quote["route"] = "offline"
     refund = WalletRefund(refund_no=_no("WR"), user_id=batch.user_id, batch_id=batch.id, cause=cause, rule=quote["rule"],
                           hold_principal_cents=hold_p, hold_bonus_cents=hold_b, refund_cents=quote["refund_cents"],
                           interest_cents=quote["interest_cents"], fee_cents=quote["fee_cents"],
@@ -652,7 +751,7 @@ def _start_refund(db: Session, refund: WalletRefund, staff_id: int | None) -> di
     db.refresh(refund)
     batch = db.get(RechargeBatch, refund.batch_id)
     enqueue_event(db, REFUND_TOPIC, {
-        "business_ref": refund.refund_no, "biz_type": BIZ_TYPE, "biz_id": batch.id, "refund_id": refund.id,
+        "business_ref": f"{REFUND_PREFIX}:{refund.refund_no}", "biz_type": BIZ_TYPE, "biz_id": batch.id, "refund_id": refund.id,
         "payment_id": batch.payment_id, "out_trade_no": batch.out_trade_no, "amount_cents": refund.refund_cents,
         "interest_cents": refund.interest_cents, "route": refund.route, "reason": refund.reason,
         "user_id": refund.user_id}, "wallet_refund", refund.id)
@@ -721,10 +820,61 @@ def _finish(db: Session, refund: WalletRefund, success: bool, reason: str | None
 
 
 def on_refund_result(db: Session, event: RefundResultEvent) -> str:
-    refund = db.execute(select(WalletRefund).where(WalletRefund.refund_no == event.business_ref)).scalar_one_or_none()
+    refund = db.execute(select(WalletRefund).where(WalletRefund.refund_no == event.local_ref)).scalar_one_or_none()
     if refund is None:
         return "unknown"
+    if event.abnormal:  # 原路退回失败（银行卡作废等）：支付模块后台人工处理异常退款，本单保持处理中
+        db.execute(update(WalletRefund).where(WalletRefund.id == refund.id).values(submit_error="abnormal"))
+        enqueue_event(db, "wallet.refund_abnormal", {"refund_id": refund.id, "user_id": refund.user_id},
+                      "wallet_refund", refund.id)
+        return "abnormal"
     return _finish(db, refund, event.success, event.reason)
+
+
+def submit_refund(db: Session, refund_id: int) -> dict:
+    """把已审批的原路退款提交给支付模块（create_refund 自行提交并调用渠道，所以必须在业务事务提交后调用）。
+
+    每笔只提交一次：先条件占位 submitted_at 并提交；上游暂时失败清除占位等任务重试；规则拒绝（如超 365 天）→ 退款失败并释放预扣。
+    """
+    refund = db.get(WalletRefund, refund_id)
+    if refund is None or refund.status != REFUND_PROCESSING or refund.route != "original" or refund.submitted_at:
+        return refund_dict(refund) if refund else {}
+    claimed = db.execute(update(WalletRefund).where(WalletRefund.id == refund_id, WalletRefund.status == REFUND_PROCESSING,
+                                                    WalletRefund.submitted_at.is_(None)).values(submitted_at=utcnow()))
+    db.commit()
+    if claimed.rowcount != 1:
+        db.refresh(refund)
+        return refund_dict(refund)
+    batch = db.get(RechargeBatch, refund.batch_id)
+    try:
+        result = payment_port().create_refund(db, payment_id=batch.payment_id, amount_cents=refund.refund_cents,
+                                              reason=(refund.reason or "储值退款")[:80],
+                                              business_ref=f"{REFUND_PREFIX}:{refund.refund_no}")
+    except AppError as exc:
+        db.rollback()
+        if exc.code in (ErrorCode.UPSTREAM_FAILED, ErrorCode.SERVICE_UNAVAILABLE):
+            db.execute(update(WalletRefund).where(WalletRefund.id == refund_id)
+                       .values(submitted_at=None, submit_error=exc.message[:200]))
+        else:
+            db.refresh(refund)
+            _finish(db, refund, False, f"rejected: {exc.message}"[:200])
+        db.commit()
+        db.refresh(refund)
+        return refund_dict(refund)
+    db.execute(update(WalletRefund).where(WalletRefund.id == refund_id)
+               .values(channel_refund_id=str(result.get("refund_id") or ""), submit_error=None))
+    db.commit()
+    db.refresh(refund)
+    return refund_dict(refund)
+
+
+def submit_pending_refunds(db: Session, limit: int = 100) -> int:
+    ids = db.execute(select(WalletRefund.id).where(WalletRefund.status == REFUND_PROCESSING, WalletRefund.route == "original",
+                                                   WalletRefund.submitted_at.is_(None)).order_by(WalletRefund.id)
+                     .limit(limit)).scalars().all()
+    for refund_id in ids:
+        submit_refund(db, refund_id)
+    return len(ids)
 
 
 def complete_offline_refund(db: Session, refund_id: int, staff_id: int, success: bool = True, note: str = "") -> dict:
@@ -917,3 +1067,7 @@ def account_row_dict(account: WalletAccount) -> dict:
             "frozen_bonus_cents": account.frozen_bonus_cents, "status": account.status,
             "updated_at": aware(account.updated_at)}
 
+
+
+# 向 09-wechat-pay 注册同事务钩子（支付成功即入账；退款终态即回写）与 Payable 解析；事件订阅作为补偿通道。
+register_payment_hooks(BIZ_TYPE, on_payment_succeeded, REFUND_PREFIX, on_refund_result, payable=payable)

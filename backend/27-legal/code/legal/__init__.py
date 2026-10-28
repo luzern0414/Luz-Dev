@@ -4,6 +4,7 @@
 - 同意记录只追加：用户、文档、版本、文本哈希、时间、渠道；提交时校验为当前生效版本与哈希，防止对旧文本“同意”。
 - 用户是否还需同意 = 必需文档的当前版本中，没有该用户有效（未撤回）同意记录的那些。
 - 撤回只标记 withdrawn_at，调用方随后停止相应处理并删除数据（如人脸）。
+- 购买条款：purchase_terms_checker 接到 08-order 的 set_terms_checker（导入时自动装配），下单即记一次同意。
 本模块不 commit。
 """
 from __future__ import annotations
@@ -17,7 +18,7 @@ from sqlalchemy.orm import Mapped, Session, mapped_column
 from luzback import AppError, Base, ErrorCode, write_audit
 
 REQUIRED_KINDS = ("terms", "privacy")  # 所有用户都需同意；face_consent、prepaid 等在对应功能入口单独要求
-KINDS = {"terms", "privacy", "face_consent", "prepaid", "refund", "activity"}
+KINDS = {"terms", "privacy", "face_consent", "prepaid", "refund", "activity", "purchase"}  # purchase = 购买条款（下单时同意）
 
 
 def _aware(value: datetime) -> datetime:
@@ -127,3 +128,46 @@ def withdraw(db: Session, user_id: int, kind: str, now: datetime) -> int:
     result = db.execute(update(UserConsent).where(UserConsent.user_id == user_id, UserConsent.kind == kind,
                                                   UserConsent.withdrawn_at.is_(None)).values(withdrawn_at=now))
     return result.rowcount
+
+
+# ---------------------------------------------------------------- 08-order 购买条款
+
+
+def purchase_terms_checker(db: Session, user_id: int, accepted: bool, client_version: str | None,
+                           now: datetime | None = None) -> str | None:
+    """08-order `set_terms_checker` 的实现：fn(db, user_id, accepted, client_version) -> 生效版本号。
+
+    - 有已发布且已生效的 purchase 文档：必须 accepted（否则 4220 terms_required）；客户端带的版本与当前版本不同 → 4220
+      terms_outdated（返回当前版本、文档 id 与哈希，前端重新展示）；通过后记一条同意记录（channel=order，同版本不重复），
+      返回当前版本号写进订单快照。
+    - 没有发布 purchase 文档：回落到 08-order 的配置检查（ORDER_TERMS_REQUIRED / ORDER_TERMS_VERSION）。
+    """
+    now = now or datetime.now(timezone.utc)
+    document = current(db, "purchase", now)
+    if document is None:
+        try:
+            from order.ports import config_terms_checker
+        except ImportError:  # pragma: no cover - 未装配订单模块
+            return None
+        return config_terms_checker(db, user_id, accepted, client_version)
+    info = {"version": document.version, "document_id": document.id, "sha256": document.content_sha256}
+    if not accepted:
+        raise AppError(ErrorCode.BUSINESS_RULE, "purchase terms must be accepted", data={"reason": "terms_required", **info})
+    if client_version and client_version != document.version:
+        raise AppError(ErrorCode.BUSINESS_RULE, "purchase terms updated, please review again",
+                       data={"reason": "terms_outdated", **info})
+    accept(db, user_id, document.id, document.version, document.content_sha256, "order", now)
+    return document.version
+
+
+def install_purchase_terms_checker() -> bool:
+    """把 purchase_terms_checker 装到 08-order；订单模块未装配时返回 False。"""
+    try:
+        import order
+    except ImportError:
+        return False
+    order.set_terms_checker(purchase_terms_checker)
+    return True
+
+
+install_purchase_terms_checker()

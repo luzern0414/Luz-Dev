@@ -31,20 +31,23 @@ def make_template(db, publish: bool = True, staff: int = 1, now: datetime = NOW,
     return t
 
 
+ORIGINAL_MEMBERSHIP_PROVIDER = coupon.config._membership_provider
+
+
 @pytest.fixture(autouse=True)
-def reset_coupon_hooks():
+def reset_coupon_hooks(monkeypatch):
+    # 默认人群画像来自 14-membership；本模块用例用自己的注入，避免依赖 membership 的表
+    monkeypatch.setattr(coupon.config, "_membership_provider", lambda: None)
     coupon.reset_config()
     coupon.set_member_profile_provider(None)
     coupon.set_audience_checker(None)
     coupon.set_cart_lines_provider(None)
-    coupon.set_staff_authenticator(None)
     coupon.set_member_resolver(coupon.jwt_member_resolver)
     yield
     coupon.reset_config()
     coupon.set_member_profile_provider(None)
     coupon.set_audience_checker(None)
     coupon.set_cart_lines_provider(None)
-    coupon.set_staff_authenticator(None)
     coupon.set_member_resolver(None)
 
 

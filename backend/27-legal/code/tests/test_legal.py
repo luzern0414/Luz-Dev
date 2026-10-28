@@ -67,3 +67,37 @@ def test_published_document_cannot_be_republished(db):
     doc = release(db, "privacy", "1.0", "隐私一")
     with pytest.raises(AppError):
         publish(db, doc.id, actor_id=1, effective_at=NOW)
+
+
+# ---------------------------------------------------------------- 购买条款 → 08-order
+
+def test_purchase_terms_checker_uses_published_document(db):
+    from legal import purchase_terms_checker
+
+    # 未发布 purchase 文档：回落到订单配置（默认要求同意，版本 purchase-v1）
+    with pytest.raises(AppError) as error:
+        purchase_terms_checker(db, 7, False, None, now=NOW)
+    assert error.value.data["reason"] == "terms_required"
+    assert purchase_terms_checker(db, 7, True, None, now=NOW) == "purchase-v1"
+    doc = release(db, "purchase", "2026.10", "购买条款正文")
+    with pytest.raises(AppError) as error:
+        purchase_terms_checker(db, 7, False, "2026.10", now=NOW)
+    assert error.value.code == ErrorCode.BUSINESS_RULE and error.value.data["document_id"] == doc.id
+    with pytest.raises(AppError) as error:
+        purchase_terms_checker(db, 7, True, "2026.01", now=NOW)
+    assert error.value.data["reason"] == "terms_outdated" and error.value.data["version"] == "2026.10"
+    assert purchase_terms_checker(db, 7, True, "2026.10", now=NOW) == "2026.10"
+    assert purchase_terms_checker(db, 7, True, None, now=NOW) == "2026.10"  # 同版本不重复记同意
+    consents = db.execute(select(legal.UserConsent).where(legal.UserConsent.kind == "purchase")).scalars().all()
+    assert len(consents) == 1 and consents[0].channel == "order" and consents[0].content_sha256 == content_hash("购买条款正文")
+
+
+def test_purchase_terms_checker_wired_into_order():
+    import order
+    from order import ports
+
+    try:
+        assert legal.install_purchase_terms_checker() is True
+        assert ports._terms is legal.purchase_terms_checker
+    finally:
+        order.set_terms_checker(None)

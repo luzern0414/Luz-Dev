@@ -1,7 +1,7 @@
 """当前员工上下文与授权助手（其他模块通过 admin_rbac 导入使用）。
 
 - Staff：请求内的员工快照（权限码、门店范围、会话信息），每请求从数据库加载，不缓存，角色变更立即生效。
-- 默认拒绝：没有明确授予的权限码一律 4030；超级管理员持有通配 "*"。
+- 默认拒绝：没有明确授予的权限码一律 4030；超级管理员持有通配 "*"；角色可授予模块通配 `module:*`（前缀匹配）。
 - 门店范围：all_stores=True → None（全部）；否则为列表（可能为空 = 无门店）。越界 4031。
 - 职责分离：assert_not_self（例如不能审批自己发起的退款）。
 - 新鲜认证：assert_fresh（敏感操作要求最近 N 秒内完成过完整认证，否则 4011 reason=reauth_required）。
@@ -21,7 +21,7 @@ from luzback import AppError, ErrorCode, write_audit
 
 from . import config
 from .models import STATUS_ACTIVE, AdminRole, AdminRolePermission, AdminStoreScope, AdminUser, AdminUserRole
-from .permissions import WILDCARD, registered_codes
+from .permissions import WILDCARD, grants, registered_codes
 from .rules import aware, is_fresh
 from .seed import SUPER_ADMIN
 
@@ -54,7 +54,7 @@ class Staff:
     extra: dict[str, Any] = field(default_factory=dict, compare=False)
 
     def has(self, code: str) -> bool:
-        return WILDCARD in self.permissions or code in self.permissions
+        return grants(self.permissions, code)
 
     @property
     def store_scope(self) -> list[int] | None:
@@ -76,7 +76,8 @@ def mfa_required_for(roles: Iterable[AdminRole], codes: Iterable[str]) -> bool:
         return True
     if any(r.mfa_required for r in roles):
         return True
-    return bool(set(codes) & set(cfg.mfa_required_permissions))
+    granted = frozenset(codes)
+    return any(grants(granted, c) for c in cfg.mfa_required_permissions)
 
 
 def load_grants(db: Session, staff_id: int) -> tuple[frozenset[str], list[AdminRole], list[int]]:

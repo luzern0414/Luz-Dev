@@ -27,11 +27,18 @@ def memory_session(*modules, url: str = "sqlite://") -> Session:
     return get_session_factory()()
 
 
-def make_test_app(routers: Iterable[APIRouter], *modules, url: str = "sqlite://", settings: Settings | None = None) -> FastAPI:
+def make_test_app(routers: Iterable[APIRouter], *modules, url: str = "sqlite://", settings: Settings | None = None,
+                  rate_rules: Iterable = (), breakers=None) -> FastAPI:
+    """测试应用：建表 + create_app（默认无限流规则）。
+
+    指标：每个应用实例有自己的 `app.state.metrics`（进程内计数，新应用从 0 开始）；测试直接读
+    `client.app.state.metrics.counters[...]`。/metrics 端点只对内网地址或 LUZ_METRICS_TOKEN 开放，
+    TestClient 的对端是 "testclient"（不是 IP）会得到 404——要测端点请传 settings=Settings(metrics_token=...) 并带 Bearer。
+    """
     _import_all(modules)
     engine = init_engine(url)
     Base.metadata.create_all(engine)
-    return create_app(routers=routers, settings=settings or Settings())
+    return create_app(routers=routers, settings=settings or Settings(), rate_rules=rate_rules, breakers=breakers)
 
 
 class FakeClock:

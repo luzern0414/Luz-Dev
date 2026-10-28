@@ -9,7 +9,7 @@ from luzback.testing import FakeClock, memory_session
 
 import notification
 from notification import channels, service
-from notification.auth import set_member_checker, set_permission_resolver
+from notification.auth import set_member_checker
 from notification.config import reset_config, set_clock, set_config
 
 # 2026-10-28 10:00 北京时间 = 02:00 UTC
@@ -72,7 +72,6 @@ def teardown() -> None:
     channels.set_sms_sender(None)
     channels.set_recipient_resolver(None)
     channels.set_store_timezone_resolver(None)
-    set_permission_resolver(None)
     set_member_checker(None)
     set_clock(None)
     reset_config()

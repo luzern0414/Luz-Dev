@@ -78,7 +78,7 @@ class MiniProgramClient(Protocol):
     def reset_session_key(self, openid: str, session_key: str) -> str: ...
     def get_phone_number(self, code: str, openid: str | None = None) -> PhoneInfo: ...
     def send_subscribe_message(self, touser: str, template_id: str, data: Mapping[str, Any], page: str | None = None,
-                               miniprogram_state: str | None = None, lang: str | None = None) -> None: ...
+                               miniprogram_state: str | None = None, lang: str | None = None) -> dict[str, Any]: ...
     def msg_sec_check(self, openid: str, content: str, scene: int, title: str | None = None,
                       nickname: str | None = None, signature: str | None = None) -> SecCheckResult: ...
     def media_check_async(self, openid: str, media_url: str, media_type: int, scene: int) -> str: ...
@@ -275,14 +275,15 @@ class HttpMiniProgramClient:
                          watermark_timestamp=mark.get("timestamp"))
 
     def send_subscribe_message(self, touser: str, template_id: str, data: Mapping[str, Any], page: str | None = None,
-                               miniprogram_state: str | None = None, lang: str | None = None) -> None:
+                               miniprogram_state: str | None = None, lang: str | None = None) -> dict[str, Any]:
         body: dict[str, Any] = {
             "touser": touser, "template_id": template_id, "data": validate_subscribe_data(data),
             "miniprogram_state": miniprogram_state or self.config.miniprogram_state, "lang": lang or self.config.lang,
         }
         if page:
             body["page"] = page.lstrip("/")
-        self._call("subscribe_send", "POST", "/cgi-bin/message/subscribe/send", body=body)
+        result = self._call("subscribe_send", "POST", "/cgi-bin/message/subscribe/send", body=body)
+        return dict(result) if isinstance(result, Mapping) else {"errcode": 0, "errmsg": "ok"}
 
     def msg_sec_check(self, openid: str, content: str, scene: int, title: str | None = None,
                       nickname: str | None = None, signature: str | None = None) -> SecCheckResult:
@@ -351,3 +352,54 @@ def get_client() -> MiniProgramClient:
             raise AppError(ErrorCode.UPSTREAM_FAILED, "wechat mini program is not configured")
         _client = HttpMiniProgramClient(config)
     return _client
+
+
+# ---------------------------------------------------------------- 模块级便捷函数（其他模块只调这些，不持有客户端）
+
+
+def is_configured() -> bool:
+    """已注入客户端，或配置了真实 AppID / AppSecret（开发占位值不算）。"""
+    return _client is not None or not get_config().is_dev_placeholder
+
+
+def access_token() -> str:
+    """当前有效的接口调用凭证（stable_token，带缓存与提前刷新）；其他模块调用非本模块封装的微信接口时用
+    （例如 09-wechat-pay 的发货信息录入 upload_shipping_info）。"""
+    return get_client().access_token()
+
+
+def invalidate_access_token(bad_token: str) -> str:
+    """调用方收到 40001 / 40014 / 42001 时上报失效的 token，返回刷新后的 token（与本模块内部被动刷新同一缓存）。"""
+    client = get_client()
+    tokens = getattr(client, "tokens", None)
+    if tokens is None or not hasattr(tokens, "invalidate"):
+        return client.access_token()
+    return tokens.invalidate(bad_token)
+
+
+def send_subscribe_message(touser: str, template_id: str, data: Mapping[str, Any], page: str | None = None,
+                           miniprogram_state: str | None = None, lang: str | None = None) -> dict[str, Any]:
+    """发送订阅消息（20-notification 的 WechatMpSubscribeSender 调用）。返回 {"errcode": 0, "errmsg": "ok", "msgid"?}；
+    平台非 0 errcode 抛 WechatError 子类（带 .errcode / .errmsg，如 43101 SubscriptionRefused）；传输错误原样抛出。
+    miniprogram_state / lang 为空时用配置（WECHAT_MP_STATE / WECHAT_MP_LANG）。"""
+    return get_client().send_subscribe_message(touser, template_id, data, page=page,
+                                               miniprogram_state=miniprogram_state, lang=lang)
+
+
+def production_problems(settings: Any = None) -> list[str]:
+    """生产配置检查（luzback.register_production_check("wechat_mp", ...) 启动时执行）。"""
+    from .fake import FakeMiniProgram  # noqa: PLC0415
+
+    config = get_config()
+    problems: list[str] = []
+    if config.is_dev_placeholder:
+        problems.append("WECHAT_APPID / WECHAT_SECRET must be the real mini program credentials")
+    if isinstance(_client, FakeMiniProgram):
+        problems.append("FakeMiniProgram is installed as the process client")
+    if not config.api_base.startswith("https://"):
+        problems.append("WECHAT_MP_API_BASE must be https")
+    if config.push_token and config.push_require_aes and not config.push_aes_key:
+        problems.append("WECHAT_MP_PUSH_AES_KEY is required when push is enabled (安全模式)")
+    if config.miniprogram_state != "formal":
+        problems.append("WECHAT_MP_STATE must be formal in prod")
+    return problems

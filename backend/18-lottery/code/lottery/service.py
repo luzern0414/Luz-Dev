@@ -1186,34 +1186,39 @@ def winners(db: Session, activity_id: int, params: Mapping[str, Any], secret: st
 # ================================================================ 事件消费
 
 def handle_event(db: Session, topic: str, payload: Mapping[str, Any], event_id: str | None = None,
-                 now: datetime | None = None) -> str:
-    """发件箱消费者入口（自行 commit）：
-    - payment.succeeded → 满额送次数；payment.refunded → 收回未用次数；
-    - member.checked_in（可配置）→ 签到送次数；lottery.delivery_result → 发奖回执。
+                 now: datetime | None = None, commit: bool = True) -> str:
+    """发件箱消费者入口（commit=True 自行提交，供直接调用；25-jobs worker 经 events.py 以 commit=False 调用）：
+    - payment.succeeded → 满额送次数（读 payment_id、user_id、amount_cents、business_type、store_id、paid_at）；
+    - refund.succeeded → 收回该支付单送出的未用次数（只读 payment_id；部分退款同样收回，已用的不追溯）；
+    - 签到事件（checkin_topic 配置后才订阅，payload user_id / member_id、checkin_id 或 date、store_id?、checked_in_at?）→ 签到送次数；lottery.delivery_result → 发奖回执。
     """
     cfg = get_config()
     now = _now(now)
     try:
         if event_id and not mark_processed(db, CONSUMER, event_id):
+            if commit:
+                db.commit()
             return "duplicate"
         if topic == cfg.payment_succeeded_topic:
             result = _on_payment(db, payload, now)
-        elif topic == cfg.payment_refunded_topic:
+        elif topic == cfg.refund_succeeded_topic:
             ref = str(payload.get("payment_id") or "")
             ids = db.execute(select(LotteryChanceGrant.activity_id).where(
                 LotteryChanceGrant.source == G_PAYMENT, LotteryChanceGrant.source_ref == ref)).scalars().all()
             result = f"revoked:{sum(1 for a in ids if revoke_grant(db, a, G_PAYMENT, ref))}" if ref else "skipped"
-        elif topic == cfg.checkin_topic:
+        elif cfg.checkin_topic and topic == cfg.checkin_topic:
             result = _on_checkin(db, payload, now)
         elif topic == cfg.delivery_result_topic:
             result = ack_delivery(db, int(payload["draw_id"]), bool(payload.get("ok")), payload.get("ref"),
                                   payload.get("error"), now)
         else:
             result = "skipped"
-        db.commit()
+        if commit:
+            db.commit()
         return result
     except Exception:
-        db.rollback()
+        if commit:
+            db.rollback()
         raise
 
 
@@ -1229,13 +1234,14 @@ def _eligible(db: Session, store_id: Any, at: datetime, extra) -> list[LotteryAc
 
 
 def _member_of(payload: Mapping[str, Any]) -> int | None:
-    raw = payload.get("member_id") or payload.get("user_id")
+    raw = payload["member_id"] if "member_id" in payload else payload.get("user_id")
     return int(raw) if raw else None
 
 
 def _on_payment(db: Session, payload: Mapping[str, Any], now: datetime) -> str:
     cfg = get_config()
-    member_id, payment_id = _member_of(payload), payload.get("payment_id")
+    raw_user = payload.get("user_id")  # 09 payment.succeeded 用 user_id
+    member_id, payment_id = (int(raw_user) if raw_user else None), payload.get("payment_id")
     amount = int(payload.get("amount_cents") or 0)
     btype = payload.get("business_type")
     if not member_id or not payment_id or (btype is not None and btype not in cfg.earn_payment_business_types):

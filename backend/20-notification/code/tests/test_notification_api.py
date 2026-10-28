@@ -2,6 +2,7 @@
 import uuid
 
 import pytest
+from fastapi import Request
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -10,21 +11,28 @@ from luzback.db import get_session_factory
 
 import notif_kit as kit
 from notification import api, service
-from notification.auth import _token_kind, set_permission_resolver
+from admin_rbac.testing import staff_headers
+from luzback import decode_token
+from notification import auth
 from notification.models import NotificationDelivery, NotificationInbox
 
 PERMS = {
-    1: {"notification:*"},
-    2: set(),
-    3: {"notification:read"},
+    1: ("notification:*",),
+    2: (),
+    3: ("notification:read",),
 }
+_STAFF: dict = {}
 
 
 @pytest.fixture()
 def ctx(tmp_path):
+    import admin_rbac.models  # noqa: F401  员工会话表
     env = kit.make_env(url=f"sqlite:///{tmp_path / 'api.db'}")
-    set_permission_resolver(lambda db, staff_id, claims: PERMS.get(staff_id, set()))
-    client = TestClient(create_app(api.routers), raise_server_exceptions=False)
+    _STAFF.clear()
+    _STAFF["db"] = env.db
+    app = create_app(api.routers)
+    app.dependency_overrides[auth.current_member] = _member  # 会员 id 固定好写断言；identity 路径见 test_member_session_checked
+    client = TestClient(app, raise_server_exceptions=False)
     yield env, client
     env.db.close()
     kit.teardown()
@@ -35,9 +43,27 @@ def member(uid: int) -> dict:
     return {"Authorization": f"Bearer {create_token(str(uid), s.jwt_secret, 600, kind='access', issuer=s.jwt_issuer)}"}
 
 
-def staff(sid: int) -> dict:
+def _member(request: Request) -> int:
+    header = request.headers.get("Authorization", "")
+    if not header.startswith("Bearer "):
+        from luzback import AppError, ErrorCode
+        raise AppError(ErrorCode.UNAUTHORIZED, "missing bearer token")
     s = get_settings()
-    return {"Authorization": f"Bearer {create_token(str(sid), s.jwt_secret, 600, kind=_token_kind(), issuer=s.jwt_issuer)}"}
+    return int(decode_token(header[7:], s.jwt_secret, kind="access", issuer=s.jwt_issuer)["sub"])
+
+
+def staff(sid: int) -> dict:
+    """真实 admin_rbac 会话；sid 是测试里的逻辑编号，真实员工 id 见 staff_id(sid)。"""
+    if sid not in _STAFF:
+        h = staff_headers(_STAFF["db"], *PERMS.get(sid, ()))
+        s = get_settings()
+        _STAFF[sid] = (h, int(decode_token(h["Authorization"][7:], s.jwt_secret, kind="admin", issuer=s.jwt_issuer)["sub"]))
+    return _STAFF[sid][0]
+
+
+def staff_id(sid: int) -> int:
+    staff(sid)
+    return _STAFF[sid][1]
 
 
 def key() -> dict:
@@ -201,7 +227,7 @@ def test_admin_scene_and_template_crud(ctx):
 
 def test_staff_inbox(ctx):
     env, c = ctx
-    service.accept_request(env.db, scene="staff.device_offline", audience="staff", recipient_ids=[9],
+    service.accept_request(env.db, scene="staff.device_offline", audience="staff", recipient_ids=[staff_id(9)],
                            data={"device_name": "闸机1", "store_name": "一店"}, dedupe_key="d1", now=env.now)
     h = staff(9)
     r = c.get("/api/v1/admin/notifications/inbox", headers=h)
@@ -216,3 +242,24 @@ def test_staff_inbox(ctx):
                   headers={**h, **key()}).json()["data"]["updated"] == 0
     assert c.delete(f"/api/v1/admin/notifications/inbox/{mid}", headers={**h, **key()}).json()["code"] == 0
     assert c.get("/api/v1/admin/notifications/inbox").json()["code"] == 4010
+
+
+def test_member_session_checked_via_identity(ctx):
+    """默认会员依赖走 identity：真实令牌可用，会话吊销后 4010；伪造的员工声明令牌 4010。"""
+    import identity.models  # noqa: F401
+    from identity import service as ids
+    from identity.testing import member_tokens
+    from luzback import Base, utcnow
+
+    env, c = ctx
+    Base.metadata.create_all(env.db.get_bind())
+    c.app.dependency_overrides.pop(auth.current_member)
+    pair = member_tokens(env.db)
+    h = {"Authorization": f"Bearer {pair['access_token']}"}
+    assert c.get("/api/v1/app/notifications/messages", headers=h).json()["code"] == 0
+    ids.revoke_sessions(env.db, pair["user_id"], "test", utcnow())
+    env.db.commit()
+    assert c.get("/api/v1/app/notifications/messages", headers=h).json()["code"] == 4010
+    s = get_settings()
+    forged = create_token("1", s.jwt_secret, 600, kind="admin", issuer=s.jwt_issuer, extra={"perms": ["*"], "rv": 1})
+    assert c.get("/api/v1/admin/notifications/deliveries", headers={"Authorization": f"Bearer {forged}"}).json()["code"] == 4010

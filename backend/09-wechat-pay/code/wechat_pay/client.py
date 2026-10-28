@@ -236,29 +236,59 @@ class ShippingClient(Protocol):
     def upload_shipping_info(self, payload: Mapping[str, Any]) -> dict[str, Any]: ...
 
 
+TOKEN_EXPIRED_CODES = frozenset({40001, 42001})  # access_token 无效 / 过期：作废缓存后重试一次
+
+
+def _wechat_mp_access_token() -> str:
+    import wechat_mp  # 28-wechat-mp：进程内唯一的小程序服务端客户端（稳定版 access_token + 缓存）
+
+    return wechat_mp.get_client().access_token()
+
+
+def _wechat_mp_invalidate(bad_token: str) -> None:
+    try:
+        import wechat_mp
+    except ImportError:  # pragma: no cover
+        return
+    tokens = getattr(wechat_mp.get_client(), "tokens", None)  # HttpMiniProgramClient.tokens: AccessTokenCache
+    if tokens is not None and hasattr(tokens, "invalidate"):
+        tokens.invalidate(bad_token)
+
+
 class HttpShippingClient:
     """`POST https://api.weixin.qq.com/wxa/sec/order/upload_shipping_info?access_token=…`。
 
-    access_token 由注入的提供者给出（小程序服务端凭证，属于 identity / 小程序服务端模块）。
+    access_token 默认取 28-wechat-mp（`wechat_mp.get_client().access_token()`）；也可注入 `access_token()` 提供者。
+    返回 40001 / 42001 时作废 wechat_mp 的缓存令牌并重试一次（注入了自定义提供者时用 invalidate 参数）。
     """
 
     URL = "https://api.weixin.qq.com/wxa/sec/order/upload_shipping_info"
 
-    def __init__(self, access_token: Callable[[], str], http: Any = None, timeout_s: float = 5):
+    def __init__(self, access_token: Callable[[], str] | None = None, http: Any = None, timeout_s: float = 5,
+                 invalidate: Callable[[str], Any] | None = None):
         import httpx
 
-        self.access_token = access_token
+        self.access_token = access_token or _wechat_mp_access_token
+        self.invalidate = invalidate if invalidate is not None else (None if access_token else _wechat_mp_invalidate)
         self.http = http or httpx.Client(verify=True, timeout=timeout_s)
         self._httpx = httpx
 
-    def upload_shipping_info(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+    def _post(self, token: str, payload: Mapping[str, Any]) -> dict[str, Any]:
         try:
-            response = self.http.post(self.URL, params={"access_token": self.access_token()},
+            response = self.http.post(self.URL, params={"access_token": token},
                                       content=dumps(payload).encode(), headers={"Content-Type": "application/json"})
         except self._httpx.HTTPError as exc:
             raise TransientError(str(exc)) from exc
-        data = response.json()
+        return response.json()
+
+    def upload_shipping_info(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        token = self.access_token()
+        data = self._post(token, payload)
         code = int(data.get("errcode", 0))
+        if code in TOKEN_EXPIRED_CODES and self.invalidate is not None:
+            self.invalidate(token)
+            data = self._post(self.access_token(), payload)
+            code = int(data.get("errcode", 0))
         if code != 0:
             raise ShippingApiError(code, str(data.get("errmsg", "")))
         return data

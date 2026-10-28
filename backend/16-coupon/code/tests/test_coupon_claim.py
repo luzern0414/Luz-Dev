@@ -175,3 +175,22 @@ def test_same_member_concurrent_claims_respect_limit(file_factory):
     with file_factory() as s:
         assert s.get(CouponTemplate, t.id).issued_count == 2
         assert sorted(s.execute(select(UserCoupon.slot)).scalars().all()) == [1, 2]
+
+
+def test_default_profile_provider_from_membership(db, monkeypatch):
+    """未注入时用 14-membership 的 member_profile（dict 或对象均可），项目注入的优先。"""
+    import sys
+    import types
+
+    from coupon_fixtures import ORIGINAL_MEMBERSHIP_PROVIDER
+
+    stub = types.ModuleType("membership")
+    stub.member_profile = lambda _db, uid: {"registered_at": NOW - timedelta(days=1), "level": "2", "tags": ["vip"]} \
+        if uid == 1 else None
+    monkeypatch.setitem(sys.modules, "membership", stub)
+    monkeypatch.setattr(coupon.config, "_membership_provider", ORIGINAL_MEMBERSHIP_PROVIDER)
+    newbie = make_template(db, audience={"type": "levels", "levels": [2]})
+    service.claim(db, 1, newbie.id, now=NOW)
+    assert code_of(lambda: service.claim(db, 3, newbie.id, now=NOW)).data["reason"] == "member_unknown"
+    coupon.set_member_profile_provider(lambda _db, uid: MemberProfile(level=9))
+    assert code_of(lambda: service.claim(db, 4, newbie.id, now=NOW)).data["reason"] == "level_not_matched"

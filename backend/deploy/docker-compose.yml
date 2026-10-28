@@ -36,7 +36,8 @@ services:
 
   migrate:
     build: { context: .., dockerfile: deploy/Dockerfile, args: { PYTHON_IMAGE: "python:3.12-slim-bookworm" } }
-    command: ["alembic", "upgrade", "head"]
+    # 迁移后同步权限码与内置角色（幂等）；首个超级管理员：docker compose run --rm migrate python -m admin_rbac.bootstrap <username>
+    command: ["sh", "-c", "alembic upgrade head && python -m admin_rbac.bootstrap --seed"]
     healthcheck: { disable: true }   # 镜像自带 HEALTHCHECK 探 api 端口，非 api 进程关闭
     env_file: [.env.dev]
     depends_on:

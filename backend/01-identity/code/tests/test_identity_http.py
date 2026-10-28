@@ -19,18 +19,11 @@ from luzback.audit import AuditLog
 from luzback.db import get_session_factory
 from luzback.testing import make_test_app
 from wechat_mp import FakeMiniProgram
+from admin_rbac.testing import staff_token
 
-STAFF = {"staff-read": (1, {"member:read"}), "staff-write": (2, {"member:read", "member:write"}),
-         "staff-reveal": (3, {"member:read", "member:reveal"})}
-
-
-def fake_staff(db, token, code):
-    if token not in STAFF:
-        raise AppError(ErrorCode.UNAUTHORIZED, "bad staff token")
-    staff_id, perms = STAFF[token]
-    if code not in perms:
-        raise AppError(ErrorCode.FORBIDDEN, f"permission required: {code}")
-    return staff_id
+STAFF = {"staff-read": ("member:read",), "staff-write": ("member:read", "member:write"),
+         "staff-reveal": ("member:read", "member:reveal")}
+TOKENS: dict[str, str] = {}  # 名字 → 22-admin-rbac 真实会话令牌（每个用例重建）
 
 
 @pytest.fixture
@@ -40,19 +33,22 @@ def env(tmp_path):
     identity_api.set_mini_program(mp)
     identity_api.set_sms_sender(sms)
     identity_api.set_agreement_gateway(identity.FakeAgreements())
-    identity_api.set_staff_authorizer(fake_staff)
-    app = make_test_app([*identity_api.routers, wechat_mp.api.router], *MODULES, url=f"sqlite:///{tmp_path / 'http.db'}")
+    app = make_test_app([*identity_api.routers, wechat_mp.api.router], *MODULES, "admin_rbac.models",
+                        url=f"sqlite:///{tmp_path / 'http.db'}")
+    with get_session_factory()() as sdb:
+        TOKENS.clear()
+        TOKENS.update({name: staff_token(sdb, *codes) for name, codes in STAFF.items()})
     yield TestClient(app), mp, sms
+    TOKENS.clear()
     identity_api.set_mini_program(None)
     identity_api.set_sms_sender(None)
     identity_api.set_agreement_gateway(None)
-    identity_api.set_staff_authorizer(None)
 
 
 def H(token=None, key=None):
     headers = {}
     if token:
-        headers["Authorization"] = f"Bearer {token}"
+        headers["Authorization"] = f"Bearer {TOKENS.get(token, token)}"
     if key:
         headers["Idempotency-Key"] = key
     return headers
@@ -295,3 +291,29 @@ def test_wiring_conventions():
 
     assert isinstance(jobs.JOBS, tuple) and all(isinstance(j, Job) for j in jobs.JOBS)
     assert events.SUBSCRIPTIONS == {} and wechat_mp.events.SUBSCRIPTIONS == {} and wechat_mp.jobs.JOBS == ()
+
+
+def test_admin_routes_use_admin_rbac_sessions(env):
+    client, _, _ = env
+    assert client.get("/api/v1/admin/members").json()["code"] == 4010
+    assert client.get("/api/v1/admin/members", headers={"Authorization": "Bearer forged"}).json()["code"] == 4010
+    # 顾客令牌不能当员工令牌用（kind 不同）
+    assert client.get("/api/v1/admin/members", headers=H("staff-reveal")).json()["code"] == 0
+    with get_session_factory()() as sdb:
+        wildcard = staff_token(sdb, "member:*")
+    assert client.get("/api/v1/admin/members", headers={"Authorization": f"Bearer {wildcard}"}).json()["code"] == 0
+
+
+def test_reveal_phone_requires_fresh_admin_auth(env):
+    from datetime import timedelta
+
+    from admin_rbac import config as rbac_config
+    from luzback import utcnow
+
+    client, _, _ = env
+    rbac_config.set_clock(lambda: utcnow() + timedelta(seconds=400))  # 超过 5 分钟新鲜窗口，未到 15 分钟空闲
+    try:
+        resp = client.post("/api/v1/admin/members/1/reveal-phone", json={"reason": "客户来电核对"}, headers=H("staff-reveal"))
+        assert resp.json()["code"] == 4011 and resp.json()["data"]["reason"] == "reauth_required"
+    finally:
+        rbac_config.set_clock(None)

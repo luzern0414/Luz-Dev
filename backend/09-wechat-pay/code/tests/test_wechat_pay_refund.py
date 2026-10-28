@@ -287,3 +287,20 @@ def test_auto_refund_event_payload_has_no_pii(kit):
     event = kit.db.scalar(select(OutboxEvent).where(OutboxEvent.topic == "refund.succeeded"))
     payload = json.loads(event.payload_json)
     assert payload["amount_cents"] == 1000 and payload["business_ref"] == "after_sales:1" and "openid" not in event.payload_json
+
+
+def test_find_active_refund_by_business_ref(kit):
+    import wechat_pay
+
+    assert wechat_pay.find_active_refund(kit.db, "after_sales:1") is None
+    assert wechat_pay.find_active_refund(kit.db, "") is None
+    info = refund(kit, 1000, "after_sales:1")
+    row = wechat_pay.find_active_refund(kit.db, "after_sales:1")
+    assert row is not None and row.id == info.refund_id and row.status in wechat_pay.REFUND_ACTIVE_STATUSES
+    assert wechat_pay.find_active_refund(kit.db, "after_sales:2") is None
+    kit.db.execute(update(RefundRecord).where(RefundRecord.id == info.refund_id).values(status="failed"))
+    kit.db.commit()
+    assert wechat_pay.find_active_refund(kit.db, "after_sales:1") is None  # 失败的不算，可重新发起
+    kit.db.execute(update(RefundRecord).where(RefundRecord.id == info.refund_id).values(status="abnormal"))
+    kit.db.commit()
+    assert wechat_pay.find_active_refund(kit.db, "after_sales:1").id == info.refund_id

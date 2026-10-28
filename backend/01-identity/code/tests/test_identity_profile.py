@@ -211,3 +211,34 @@ def test_admin_disable_revokes_sessions_and_enable(db, mp):
 
 def test_fake_client_unused_guard():
     assert FakeMiniProgram().server.appid
+
+
+# ================================================================ 跨模块查询与生产配置
+
+def test_find_user_by_phone_hashed_lookup(db, mp):
+    uid = login(db, mp)["user_id"]
+    identity.attach_phone(db, uid, PHONE, "test")
+    db.commit()
+    for variant in (PHONE, "138 0013 8000", "+8613800138000", "8613800138000", "138-0013-8000"):
+        assert identity.find_user_by_phone(db, variant).id == uid, variant
+    assert identity.find_user_by_phone(db, "13900139000") is None  # 未绑定
+    assert identity.find_user_by_phone(db, "1380013") is None  # 不合法 → None，不抛
+    assert identity.find_user_by_phone(db, None) is None and identity.find_user_by_phone(db, "") is None
+    db.get(User, uid).deleted_at = utcnow()
+    db.commit()
+    assert identity.find_user_by_phone(db, PHONE) is None  # 已注销
+
+
+def test_identity_production_check():
+    import base64
+
+    from luzback import Settings
+    from luzback.config import production_checks
+
+    assert production_checks()["identity"] is identity.production_problems
+    good = Settings(field_encryption_key=base64.b64encode(b"x" * 32).decode())
+    assert identity.production_problems(good) == []
+    assert identity.production_problems(Settings(field_encryption_key="")) == ["LUZ_FIELD_KEY must be base64 of 32 bytes"]
+    assert identity.production_problems(Settings(field_encryption_key="not base64!")) == ["LUZ_FIELD_KEY must be base64 of 32 bytes"]
+    short = Settings(field_encryption_key=base64.b64encode(b"x" * 16).decode())
+    assert identity.production_problems(short) == ["LUZ_FIELD_KEY must be base64 of 32 bytes"]

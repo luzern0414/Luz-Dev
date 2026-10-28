@@ -37,9 +37,9 @@ class LotteryConfig:
     max_admin_grant: int = 100                    # 后台单次发放次数上限
     max_simulate: int = 1_000_000
     earn_payment_business_types: tuple[str, ...] = ("order",)  # 哪些支付业务类型可以送抽奖次数
-    checkin_topic: str = "member.checked_in"
+    checkin_topic: str = ""  # 签到送次数的事件主题（如 member.checked_in）；空 = 不订阅（基础包没有签到模块）
     payment_succeeded_topic: str = "payment.succeeded"
-    payment_refunded_topic: str = "payment.refunded"
+    refund_succeeded_topic: str = "refund.succeeded"  # 09-wechat-pay：payload 含 payment_id、business_type、amount_cents
     delivery_result_topic: str = "lottery.delivery_result"
     purge_batch: int = 500
 

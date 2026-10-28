@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from luz_shell import chip, fill, inline, load_tokens, shell_css, tokens_css  # noqa: E402
+from luz_shell import chip, favicon_for_tokens, fill, inline, load_tokens, shell_css, tokens_css  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DATA = ROOT / "references" / "standards.json"
@@ -187,6 +187,7 @@ def render(data: dict[str, Any], template: str, design_root: Path | None = None)
     )
     values = {
         "{{TOKENS_CSS}}": tokens_css(tokens),
+        "{{FAVICON}}": favicon_for_tokens("standards", tokens),
         "{{SHELL_CSS}}": shell_css(),
         "{{TOKEN_SOURCE}}": html.escape(token_source, quote=True),
         "{{TITLE}}": html.escape(data["title"]),

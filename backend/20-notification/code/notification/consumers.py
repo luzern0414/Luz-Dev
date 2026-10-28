@@ -12,12 +12,15 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
 from luzback.db import get_session_factory
 
 from . import rules
+from .config import get_config
+from .config import now as config_now
 from .models import AUDIENCE_MEMBER, AUDIENCE_STAFF
 from .service import TOPIC_REQUESTED, accept_request, decode_data, encode_data
 
@@ -36,19 +39,31 @@ class EventBinding:
     store_field: str = "store_id"
     fields: tuple[str, ...] | None = None
     when: tuple[tuple[str, Any], ...] = ()  # 过滤条件：payload[字段] == 值 全部满足才通知
+    rename: tuple[tuple[str, str], ...] = ()  # 生产方字段 → 模板字段（原字段保留），如 business_no → order_no
+    stamp: tuple[str, ...] = ()  # 生产方不带的时间字段：缺失时用处理时刻补上（如 refunded_at）
+    local_date: tuple[tuple[str, str], ...] = ()  # 时间字段 → 门店时区日期字段（如 ends_at → expire_date）
 
 
-# 事件名以各模块 MODULE.md 为准（09-wechat-pay：payment.succeeded；退款与会员卡事件名在对应模块定稿后在此调整）
+# 主题与字段以生产方代码为准（契约测试 tests/test_event_contracts.py 用生产方真实 payload 校验）：
+# - payment.succeeded（09）：payment_id, business_type, business_id, business_no, user_id, store_id, amount_cents,
+#   out_trade_no, transaction_id, paid_at …；只有 business_type=order 发“支付成功”（储值 / 会员卡各有自己的结果页）
+# - order.refunded（08，每次退款结算）：order_id, order_no, user_id, store_id, amount_cents, refunded_cents, full, ref；
+#   09 的 refund.succeeded 不带会员 id，所以退款通知绑定订单的结算事件
+# - member_card.expiring（29）：card_id, user_id, days_left, tier, ends_at
+# - lottery.prize_won（18）：draw_id, member_id, store_id, prize_kind, prize_name …（只提醒实物奖领取）
+# 没有生产方的场景（预约提醒、安全提醒、设备离线）由业务模块调用 notify_member / notify_staff
+# 或发 notification.requested 触发，不在这里绑定。
+
+
 EVENT_BINDINGS: dict[str, list[EventBinding]] = {
-    "payment.succeeded": [EventBinding("order.paid", "user_id", "pay:{out_trade_no}")],
-    "refund.succeeded": [EventBinding("refund.succeeded", "user_id", "refund:{out_refund_no}")],
-    "member_card.expiring": [EventBinding("card.expiring", "user_id", "card:{card_id}:{expire_date}")],
-    "booking.reminder": [EventBinding("booking.reminder", "user_id", "booking:{booking_id}:remind")],
-    "account.security_alert": [EventBinding("security.alert", "user_id", "sec:{event_id}")],
+    "payment.succeeded": [EventBinding("order.paid", "user_id", "pay:{out_trade_no}", when=(("business_type", "order"),),
+                                       rename=(("business_no", "order_no"), ("business_id", "order_id")))],
+    "order.refunded": [EventBinding("refund.succeeded", "user_id", "order_refund:{order_id}:{ref}:{refunded_cents}",
+                                    stamp=("refunded_at",))],
+    "member_card.expiring": [EventBinding("card.expiring", "user_id", "card:{card_id}:{tier}",
+                                          local_date=(("ends_at", "expire_date"),))],
     "lottery.prize_won": [EventBinding("lottery.prize_won", "member_id", "prize:{draw_id}",
                                        when=(("prize_kind", "physical"),))],
-    "device.offline": [EventBinding("staff.device_offline", "staff_ids", "device:{device_id}:{offline_at}",
-                                    audience=AUDIENCE_STAFF)],
 }
 
 
@@ -112,6 +127,25 @@ def _coerce(data: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _shape(binding: EventBinding, payload: Mapping[str, Any]) -> dict[str, Any]:
+    out = dict(payload)
+    for src, dst in binding.rename:
+        if src in payload and dst not in out:
+            out[dst] = payload[src]
+    for name in binding.stamp:
+        out.setdefault(name, config_now().isoformat())
+    for src, dst in binding.local_date:
+        raw = payload.get(src)
+        if raw and dst not in out:
+            try:
+                at = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            at = at if at.tzinfo else at.replace(tzinfo=timezone.utc)
+            out[dst] = at.astimezone(ZoneInfo(get_config().timezone)).date().isoformat()
+    return out
+
+
 def handle_event(db: Session, topic: str, payload: Mapping[str, Any], event_id: str | None = None,
                  commit: bool = True) -> int:
     """处理一个事件，返回新建的通知请求数。未绑定的主题返回 0。commit=False 时不提交（events.SUBSCRIPTIONS）。"""
@@ -134,6 +168,7 @@ def handle_event(db: Session, topic: str, payload: Mapping[str, Any], event_id: 
         if not key:
             log.warning("event %s has no dedupe key; notification skipped", topic)
             continue
+        payload = _shape(binding, payload)
         data = dict(payload) if binding.fields is None else {f: payload.get(f) for f in binding.fields}
         data = {k: v for k, v in data.items() if k not in ("event_id", "topic", "published_at")}
         created += len(accept_request(
@@ -173,11 +208,11 @@ def install_wechat_mp_push_handlers() -> bool:
     register = getattr(wechat_mp, "register_push_handler", None)
     if not callable(register):
         return False
-    from .service import handle_push_event  # noqa: PLC0415
+    from .service import handle_push_message  # noqa: PLC0415
 
     for name in SUBSCRIBE_PUSH_EVENTS:
         try:
-            register(name, handle_push_event)
+            register(name, handle_push_message)
         except Exception:  # noqa: BLE001  (重复登记等)
             log.warning("register_push_handler(%s) failed", name, exc_info=True)
             return False

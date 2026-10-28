@@ -121,13 +121,15 @@ def dispatch_pending(
 
 
 def mark_processed(db: Session, consumer: str, event_id: str) -> bool:
-    """消费去重：首次返回 True，重复返回 False。与消费者的业务写同事务使用（调用方 commit）。"""
-    db.add(ProcessedEvent(consumer=consumer, event_id=event_id))
+    """消费去重：首次返回 True，重复返回 False。与消费者的业务写同事务使用（调用方 commit）。
+
+    用保存点插入去重记录：重复时只撤销这一条插入，不回滚调用方事务里已经做的其他写入。
+    """
     try:
-        db.flush()
+        with db.begin_nested():
+            db.add(ProcessedEvent(consumer=consumer, event_id=event_id))
         return True
     except IntegrityError:
-        db.rollback()
         return False
 
 

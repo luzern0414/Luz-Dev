@@ -229,3 +229,76 @@ def test_refund_rows_reconcile_against_local_success(kit):
     kit.db.commit()
     service.reconcile_bill(kit.db, BILL_DAY, now=kit.clock.now, force=True)
     assert diffs(kit.db) == []
+
+
+class _Resp:
+    def __init__(self, data):
+        self._data = data
+
+    def json(self):
+        return self._data
+
+
+class _Http:
+    def __init__(self, replies):
+        self.replies = list(replies)
+        self.tokens = []
+
+    def post(self, url, params=None, content=None, headers=None):
+        self.tokens.append(params["access_token"])
+        return _Resp(self.replies.pop(0))
+
+
+def test_http_shipping_client_uses_wechat_mp_token_and_refreshes_on_40001():
+    import wechat_mp
+    from wechat_pay.client import HttpShippingClient, ShippingApiError
+
+    class Tokens:
+        def __init__(self):
+            self.current, self.invalidated = "T1", []
+
+        def get(self):
+            return self.current
+
+        def invalidate(self, bad):
+            self.invalidated.append(bad)
+            self.current = "T2"
+            return self.current
+
+    class Mp:
+        def __init__(self):
+            self.tokens = Tokens()
+
+        def access_token(self):
+            return self.tokens.get()
+
+    mp = Mp()
+    wechat_mp.set_client(mp)
+    try:
+        http = _Http([{"errcode": 40001, "errmsg": "invalid credential"}, {"errcode": 0, "errmsg": "ok"}])
+        assert HttpShippingClient(http=http).upload_shipping_info({"x": 1})["errcode"] == 0
+        assert http.tokens == ["T1", "T2"] and mp.tokens.invalidated == ["T1"]
+        bad = _Http([{"errcode": 10060001, "errmsg": "no order"}])
+        with pytest.raises(ShippingApiError):
+            HttpShippingClient(http=bad).upload_shipping_info({"x": 1})
+        custom = _Http([{"errcode": 42001, "errmsg": "expired"}])  # 自定义提供者且未给 invalidate：不重试
+        with pytest.raises(ShippingApiError) as exc:
+            HttpShippingClient(lambda: "C1", http=custom).upload_shipping_info({"x": 1})
+        assert exc.value.errcode == 42001 and custom.tokens == ["C1"]
+    finally:
+        wechat_mp.set_client(None)
+
+
+def test_wechat_pay_registers_production_check():
+    import wechat_pay
+    from luzback import Settings
+    from luzback.config import production_checks
+    from wechat_pay.config import WechatPayConfig, set_config
+
+    check = production_checks()["wechat_pay"]
+    set_config(WechatPayConfig(client_mode="fake"))
+    try:
+        assert "WECHAT_PAY_CLIENT must be http in prod" in check(Settings(env="prod"))
+    finally:
+        set_config(None)
+    assert wechat_pay.production_problems is not None

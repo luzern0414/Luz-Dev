@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
@@ -929,6 +930,23 @@ MEMBER_COUPON_SPEC = ListSpec(
     keyword_columns=(UserCoupon.name, cast(UserCoupon.user_id, String), UserCoupon.source_ref),
     default_sort="-claimed_at",
 )
+
+_PHONE = re.compile(r"^1\d{10}$")
+
+
+def looks_like_phone(keyword: str | None) -> bool:
+    return bool(keyword and _PHONE.match(keyword.strip()))
+
+
+def user_id_by_phone(db: Session, phone: str) -> int | None:
+    """手机号 → 会员 id：01-identity 的 find_user_by_phone（哈希查找）；identity 未装配时返回 None。"""
+    try:
+        from identity import find_user_by_phone  # type: ignore[attr-defined]  # noqa: PLC0415
+    except ImportError:
+        return None
+    user = find_user_by_phone(db, phone.strip())
+    return int(user.id) if user is not None else None
+
 
 MY_COUPON_SPEC = ListSpec(
     fields={

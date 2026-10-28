@@ -4,6 +4,8 @@
 对外（其他模块只从这里导入）：issue_gift、consume、reverse_use、handle_event、quote_refund、check_usable、
 outstanding_cents 以及模型与常量。用例函数不 commit。
 """
+from wallet import declare_permissions
+
 from .models import (
     CARD_STATUSES, KIND_COUNT, KIND_PERIOD, KIND_TIME_SLOT, CardFreeze, CardLedger, CardOrder, CardProduct, CardRefund,
     CardReminder, CardTransfer, CardUsage, MemberCard,
@@ -29,6 +31,7 @@ PERMISSIONS = (
     ("member_card:refund", "退卡报价、发起、审批、线下退款确认"),
     ("member_card:export", "导出"),
 )
+declare_permissions("member_card", PERMISSIONS)
 
 __all__ = [
     "CARD_STATUSES", "KIND_COUNT", "KIND_PERIOD", "KIND_TIME_SLOT", "CardFreeze", "CardLedger", "CardOrder",

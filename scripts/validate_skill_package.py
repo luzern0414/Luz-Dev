@@ -21,6 +21,18 @@ REQUIRED = [
     "references/module-specs/README.md",
     "tests/test_module_specs.py",
     "tests/test_research_tracks.py",
+    "references/standard-modules.json",
+    "references/dev-checklist.json",
+    "references/dev-checklist.html",
+    "scripts/build_checklist.py",
+    "backend/25-jobs/code/jobs/runner.py",
+    "backend/tests/test_app_wiring.py",
+    "backend/tests/test_event_contracts.py",
+    "backend/tests/test_migrations.py",
+    "backend/tests/event_contracts.py",
+    "backend/alembic/versions/0001_baseline.py",
+    "backend/22-admin-rbac/code/admin_rbac/testing.py",
+    "backend/requirements-dev.txt",
     "WORKFLOW.md",
     "MIGRATION.md",
     "agents/openai.yaml",
@@ -134,6 +146,21 @@ EXPERIENCE_NAME = re.compile(r"^EXP-(\d{4,})-.+\.md$")
 SECRET_PATTERN = re.compile(
     r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\bsk-[A-Za-z0-9_-]{20,}\b"
 )
+# Generated pages are self-contained: the only <link> allowed is the inline SVG tab icon.
+EXTERNAL_LINK = re.compile(r'<link rel=(?!"icon" href="data:image/svg\+xml,)')
+INLINE_ICON = '<link rel="icon" href="data:image/svg+xml,'
+
+
+def page_safety_problems(page: str) -> list[str]:
+    """Forbidden dependencies or unsafe rendering in a generated page, plus a missing tab icon."""
+    problems = [marker for marker in ("<script src=", ".innerHTML") if marker in page]
+    if EXTERNAL_LINK.search(page):
+        problems.append("<link rel= (non-icon)")
+    if INLINE_ICON not in page:
+        problems.append('missing <link rel="icon"> tab icon')
+    return problems
+
+
 STATUSES = {"candidate", "verified", "deprecated"}
 TASK_MODES = {"implementation", "review", "diagnosis", "analysis", "operations"}
 TECH_PLAN_SECTIONS = {
@@ -153,7 +180,7 @@ TECH_PLAN_SECTIONS = {
 }
 TECH_PLAN_TOKENS = {
     "{{TOKENS_CSS}}", "{{SHELL_CSS}}", "{{TOKEN_SOURCE}}", "{{PLAN_NUMBER}}", "{{TITLE}}", "{{TASK_MODE}}",
-    "{{STATUS}}", "{{SECTIONS}}",
+    "{{STATUS}}", "{{SECTIONS}}", "{{FAVICON}}",
 }
 
 
@@ -209,6 +236,7 @@ def validate_tech_plan_template(path: Path) -> list[str]:
             errors.append(f"rendered implementation plan missing section: {section}")
     if '<main class="doc">' not in rendered or "<nav" in rendered:
         errors.append("rendered plan is not a Luz Design reading page")
+    errors.extend(f"rendered plan: {problem}" for problem in page_safety_problems(rendered))
     if not plan["checklist"]["rules"] or not plan["checklist"]["baselines"]:
         errors.append("implementation plan did not derive standards checklist")
     return errors
@@ -238,9 +266,8 @@ def validate_standards() -> list[str]:
     expected = build_standards.render(data, template_path.read_text(encoding="utf-8"))
     if html_path.read_text(encoding="utf-8") != expected:
         errors.append("references/standards.html is stale; run scripts/build_standards.py")
-    for forbidden in ("<script src=", "<link rel=", ".innerHTML"):
-        if forbidden in expected:
-            errors.append(f"standards.html contains forbidden dependency or unsafe rendering: {forbidden}")
+    for forbidden in page_safety_problems(expected):
+        errors.append(f"standards.html contains forbidden dependency or unsafe rendering: {forbidden}")
     rule_ids = {rule["id"] for rule in data["rules"]}
     for required in ("PAY-001", "PAY-005", "PAY-006", "PAY-009", "PAY-010", "RFD-002", "RFD-003", "FACE-001", "FACE-002", "AUTHZ-001", "MONEY-001"):
         if required not in rule_ids:
@@ -577,9 +604,8 @@ def validate_function_catalog() -> list[str]:
         if embedded != data:
             errors.append("function-catalog.html embedded data differs from canonical JSON")
 
-    for forbidden in ("<script src=", "<link rel=", ".innerHTML"):
-        if forbidden in html:
-            errors.append(f"function-catalog.html contains forbidden dependency or unsafe rendering: {forbidden}")
+    for forbidden in page_safety_problems(html):
+        errors.append(f"function-catalog.html contains forbidden dependency or unsafe rendering: {forbidden}")
     for control_id in (
         "search-input",
         "module-filter",

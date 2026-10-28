@@ -78,3 +78,51 @@ def test_concurrent_buyers_never_oversell(tmp_path):
     with factory() as s:
         assert s.execute(select(Sku.stock).where(Sku.id == 1)).scalar_one() == 0
     engine.dispose()
+
+
+# ---------------------------------------------------------------- 按业务引用去重的回补 / 扣减
+
+def test_restore_with_ref_is_idempotent(db):
+    assert restore(db, 1, 2, ref="after_sales:9") is True
+    assert restore(db, 1, 2, ref="after_sales:9") is False  # 重放不再回补
+    assert restore(db, 1, 1, ref="after_sales:10") is True  # 另一张售后单照常回补
+    db.commit()
+    assert db.get(Sku, 1).stock == 6 and inventory.restocked(db, "after_sales:9", 1)
+    assert not inventory.restocked(db, "after_sales:11", 1)
+    rows = db.execute(select(inventory.StockLedger).where(inventory.StockLedger.reason == "restore")).scalars().all()
+    assert sorted(r.delta for r in rows) == [1, 2]
+
+
+def test_restore_unknown_sku_and_deduct_with_ref(db):
+    with pytest.raises(AppError) as exc:
+        restore(db, 999, 1, ref="x:1")
+    assert exc.value.code == ErrorCode.NOT_FOUND
+    db.rollback()
+    assert deduct(db, 1, 1, ref="pos:1") is True and deduct(db, 1, 1, ref="pos:1") is False
+    db.commit()
+    assert db.get(Sku, 1).stock == 2
+
+
+def test_restore_with_same_ref_under_race(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'restock.db'}", connect_args={"check_same_thread": False, "timeout": 30})
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, expire_on_commit=False)
+    with factory() as s:
+        s.add(Sku(id=1, name="退货款", price_cents=100, stock=0))
+        s.commit()
+
+    def worker(_):
+        with factory() as s:
+            try:
+                done = restore(s, 1, 3, ref="after_sales:race")
+                s.commit()
+                return done
+            except Exception:  # noqa: BLE001 - SQLite 写锁冲突视为未执行
+                s.rollback()
+                return False
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(worker, range(16)))
+    with factory() as s:
+        assert s.get(Sku, 1).stock == 3 and results.count(True) == 1
+    engine.dispose()

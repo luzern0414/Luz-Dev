@@ -20,7 +20,7 @@
 
 ## 1 状态与依赖
 
-状态：**标准**（可直接复用）。依赖：00-framework（db、errors、idempotency、outbox、audit、listing、export、statemachine、ratelimit、crypto、scheduler）；identity（`current_user_id` 解析会员令牌）；admin_rbac（`load_staff`，通过本地适配器 `deps.py`，见 §13）。发奖对 coupon / membership / member_card **不做导入**，只通过事件 `lottery.prize_won` 交互。
+状态：**标准**（可直接复用）。依赖：00-framework（db、errors、idempotency、outbox、audit、listing、export、statemachine、ratelimit、crypto、scheduler）；identity（`decode_access` + `assert_session_active` 校验会员令牌与会话）；admin_rbac（`require_permission` 正式依赖，`deps.py` 只把 Staff 映射为 StaffActor，见 §13）。发奖对 coupon / membership / member_card **不做导入**，只通过事件 `lottery.prize_won` 交互。
 
 ## 2 职责与边界
 
@@ -61,7 +61,7 @@
 11. 次数：先用当日免费（free_used < free_daily_chances），再用获得的（used < granted）；同时日计数 < limit_daily、月计数 < limit_monthly、总计数 < limit_total；任何一步 0 行 → 4225（data.reason = daily_limit / no_chance / monthly_limit / total_limit），整笔回滚。
 12. 获得次数幂等：(activity, source, source_ref) 唯一；支付按 payment_id、签到按 `member:checkin_id`、后台按 `staff:id:幂等键`。
 13. 支付送次数：活动 published / running 且支付时间在窗口内、门店匹配（全局活动或同门店）、实付 ≥ 门槛、business_type ∈ 配置（默认只 `order`）。
-14. 支付退款（`payment.refunded`）：撤销该笔发放，只收回未用的次数（granted 不低于 used），已用的不追溯。
+14. 支付退款（`refund.succeeded`，按 payment_id；部分退款同样收回）：撤销该笔发放，只收回未用的次数（granted 不低于 used），已用的不追溯。
 15. 次数来源不包含分享、订阅消息等（小程序 §2.5.1 / §2.5.21）；项目接入新来源须同样遵守。
 16. 抽奖只在服务端：`secrets.randbelow(range)`，累积权重 + 二分定位；客户端只传活动 id 与门店 id。
 17. 人群钩子、风控钩子在随机数之前执行，只能拒绝（4220 / 4290 等），被拒不扣次数，不能影响奖品。
@@ -169,8 +169,8 @@ agent 标记：无（抽奖不开放给智能体写操作）。
 | 主题 | 需要的 payload | 动作 |
 |---|---|---|
 | `payment.succeeded` | payment_id, user_id / member_id, amount_cents, store_id?, business_type?, paid_at? | 满额送次数 |
-| `payment.refunded` | payment_id | 收回该笔未用次数 |
-| `member.checked_in`（可配置） | user_id / member_id, checkin_id 或 date, store_id?, checked_in_at? | 签到送次数 |
+| `refund.succeeded` | payment_id（09 退款事件不含会员 id，按本模块的发放记录 source_ref=payment_id 反查） | 收回该笔未用次数 |
+| 签到主题（`checkin_topic` 配置后订阅，默认空 = 不订阅；基础包没有签到模块） | user_id / member_id, checkin_id 或 date, store_id?, checked_in_at? | 签到送次数 |
 | `lottery.delivery_result` | draw_id, ok, ref?, error? | 发奖回执 |
 
 ## 8 并发与一致性
@@ -198,7 +198,7 @@ agent 标记：无（抽奖不开放给智能体写操作）。
 | default_claim_days | 7 | 实物领奖期限默认值（活动可改，1–90） |
 | max_prizes / max_admin_grant / max_simulate | 12 / 100 / 1_000_000 | 上限 |
 | earn_payment_business_types | ("order",) | 可送次数的支付业务类型 |
-| checkin_topic / payment_succeeded_topic / payment_refunded_topic / delivery_result_topic | member.checked_in / payment.succeeded / payment.refunded / lottery.delivery_result | 消费主题 |
+| checkin_topic / payment_succeeded_topic / refund_succeeded_topic / delivery_result_topic | "" / payment.succeeded / refund.succeeded / lottery.delivery_result | 消费主题（checkin_topic 为空不订阅） |
 
 ## 10 错误码
 
@@ -242,7 +242,7 @@ agent 标记：无（抽奖不开放给智能体写操作）。
 
 - 配置：§9 全部键（`set_config` 或环境变量）。
 - 钩子（`lottery.hooks`）：`set_audience_checker(fn(db, activity, member_id) -> bool)`（如会员等级、排除员工账号）；`set_risk_checker(fn(db, RiskContext))`（黑名单、设备指纹，拒绝即抛 AppError）；`set_member_display(fn(db, member_id) -> 昵称)`（公示）；`set_limiters(member, ip)`（多实例换 Redis 实现，`allow(key)` 接口）；`set_random_source(src)`（只用于测试，生产保持 secrets）。
-- 鉴权适配（`lottery.deps`）：`set_staff_resolver(fn(request, db, token, code) -> StaffActor)`；默认用 `admin_rbac.load_staff` 校验权限，不可用时 4010。权限码 `lottery.PERMISSIONS`，导入时向 `admin_rbac.declare_permissions` 登记（可用时）。
+- 鉴权（`lottery.deps`）：后台 `require_permission(code, fresh=False)` = `admin_rbac.require_permission` + Staff→StaffActor 映射（服务端会话、权限码含 `lottery:*` 通配、门店范围）；没有本地替换钩子，令牌里的声明不算数。顾客端 `current_member` 走 identity 会话检查。权限码 `lottery.PERMISSIONS` 导入时登记到 admin_rbac。事件消费经 `events.py` 以 `handle_event(..., commit=False)` 调用（不提交，worker 统一提交）。
 - 次数来源：其他模块调用 `lottery.grant_chances(db, activity_id, member_id, chances, source="event", source_ref=唯一业务号)`。
 - 任务：`lottery.jobs.JOBS` / `register_jobs(registry)`：advance_activities（60s）、retry_deliveries（60s）、expire_unclaimed（600s）、purge_expired（每天）。
 

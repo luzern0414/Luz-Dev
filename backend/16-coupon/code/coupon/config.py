@@ -97,8 +97,30 @@ def set_member_profile_provider(fn: ProfileProvider | None) -> None:
     _profile_provider = fn
 
 
+def _membership_provider() -> ProfileProvider | None:
+    """默认：14-membership 的 member_profile(db, user_id)（返回带 registered_at / level / tags 的对象）；未装配返回 None。"""
+    try:
+        from membership import member_profile  # type: ignore[attr-defined]  # noqa: PLC0415
+    except ImportError:
+        return None
+
+    def provider(db: Any, user_id: int) -> MemberProfile | None:
+        raw = member_profile(db, user_id)
+        if raw is None:
+            return None
+        if isinstance(raw, MemberProfile):
+            return raw
+        get = raw.get if isinstance(raw, dict) else (lambda k, d=None: getattr(raw, k, d))
+        level = get("level")
+        return MemberProfile(registered_at=get("registered_at"), level=None if level is None else int(level),
+                             tags=frozenset(get("tags") or ()))
+
+    return provider
+
+
 def get_member_profile_provider() -> ProfileProvider | None:
-    return _profile_provider
+    """项目注入的优先；未注入时用 14-membership（可导入时）；都没有 → None（非 all 人群一律不可领）。"""
+    return _profile_provider if _profile_provider is not None else _membership_provider()
 
 
 def set_audience_checker(fn: AudienceChecker | None) -> None:

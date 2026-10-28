@@ -122,15 +122,14 @@
 | 方向 | 主题 | 内容 |
 |---|---|---|
 | 发出 | `notification.requested` | notify / notify_staff 写入；本模块自己消费 |
-| 消费 | `payment.succeeded` → `order.paid` | 收件人 `user_id`，去重 `pay:{out_trade_no}` |
-| 消费 | `refund.succeeded` → `refund.succeeded` | `user_id`，`refund:{out_refund_no}` |
-| 消费 | `member_card.expiring` → `card.expiring` | `user_id`，`card:{card_id}:{expire_date}` |
-| 消费 | `booking.reminder` → `booking.reminder` | `user_id`，`booking:{booking_id}:remind` |
-| 消费 | `account.security_alert` → `security.alert` | `user_id`，`sec:{event_id}` |
-| 消费 | `lottery.prize_won` → `lottery.prize_won` | 仅 `prize_kind == "physical"`；收件人 `member_id`，去重 `prize:{draw_id}`；payload `{draw_id, activity_id, member_id, prize_kind, prize_name, delivery_key, …}`，提醒中奖者填写收货信息领取 |
-| 消费 | `device.offline` → `staff.device_offline` | `staff_ids`（员工），`device:{device_id}:{offline_at}` |
+| 消费 | `payment.succeeded`（09）→ `order.paid` | 仅 `business_type == "order"`；收件人 `user_id`；`business_no`→`order_no`、`business_id`→`order_id`；去重 `pay:{out_trade_no}`；时间用 `paid_at` |
+| 消费 | `order.refunded`（08，每次退款结算）→ `refund.succeeded` | 收件人 `user_id`；`order_no`、`order_id`、`amount_cents`（本次退款）；`refunded_at` 取处理时刻；去重 `order_refund:{order_id}:{ref}:{refunded_cents}`。09 的 `refund.succeeded` 不带会员 id，因此不绑定 |
+| 消费 | `member_card.expiring`（29）→ `card.expiring` | 收件人 `user_id`；`ends_at` 转门店时区日期 `expire_date`；去重 `card:{card_id}:{tier}`；卡名缺省“会员卡” |
+| 消费 | `lottery.prize_won`（18）→ `lottery.prize_won` | 仅 `prize_kind == "physical"`；收件人 `member_id`，去重 `prize:{draw_id}`；payload `{draw_id, activity_id, member_id, prize_kind, prize_name, delivery_key, …}`，提醒中奖者填写收货信息领取 |
 
-映射集中在 `consumers.EVENT_BINDINGS`（`EventBinding.when` 做字段过滤），用 `set_event_binding()` 改主题名 / 字段名；去重模板缺字段时退回 event_id。payload 里 `*_at` / `*_date` 字符串自动转为时间类型。接入（25-jobs 约定）：`notification/events.py` 的 `SUBSCRIPTIONS = {topic: handler(db, payload, event_id)}`，覆盖 `notification.requested` 与上表全部主题；handler 不提交（worker 成功提交、异常回滚并退避重试），幂等靠请求去重键唯一（重投返回 0）；`set_event_binding` 同步增删该表。备用：`dispatch_pending(db, consumers.outbox_handler)` 或 `broker.consume(topic, group, consumers.consume_message)`（自开会话并提交）；推送：`handle_push_event(db, message)`（wechat_mp 提供 `register_push_handler` 时导入即自动登记三类事件）。
+预约提醒、账号安全提醒、设备离线等场景没有对应的生产事件，由业务模块调用 `notify` / `notify_staff` 或发 `notification.requested` 触发。
+
+映射集中在 `consumers.EVENT_BINDINGS`（`EventBinding.when` 过滤、`rename` 字段改名、`stamp` 补时间、`local_date` 时间转门店日期），用 `set_event_binding()` 改主题名 / 字段名；去重模板缺字段时退回 event_id。payload 里 `*_at` / `*_date` 字符串自动转为时间类型。接入（25-jobs 约定）：`notification/events.py` 的 `SUBSCRIPTIONS = {topic: handler(db, payload, event_id)}`，覆盖 `notification.requested` 与上表全部主题；handler 不提交（worker 成功提交、异常回滚并退避重试），幂等靠请求去重键唯一（重投返回 0）；`set_event_binding` 同步增删该表。备用：`dispatch_pending(db, consumers.outbox_handler)` 或 `broker.consume(topic, group, consumers.consume_message)`（自开会话并提交）；推送：`handle_push_message(db, message)`（导入时登记到 `wechat_mp.register_push_handler` 的三类订阅消息事件；不提交、每项保存点，由 `wechat_mp.dispatch` 与推送去重记录一起提交）；直接调用可用 `handle_push_event(db, message, commit=True)`。
 
 ## 8 并发与一致性
 
@@ -176,7 +175,7 @@
 | code | 场景 |
 |---|---|
 | 4001 | 参数错误：scene / dedupe_key 格式、模板关键词类型、占位符、page、上报超过 5 个、未知筛选参数、导出超过 31 天、缺幂等键 |
-| 4010 | 未登录 / 令牌类型不符 |
+| 4010 | 未登录 / 令牌类型不符 / 会话已失效（会员 identity 会话、员工 admin_rbac 会话） |
 | 4030 | 缺少 `notification:*` 权限码 |
 | 4040 | 场景 / 模板 / 投递不存在；他人站内信 |
 | 4090 | 场景重名；重发非 failed 投递；并发修改订阅 |
@@ -192,7 +191,8 @@
 |---|---|
 | `test_notification_rules.py`（51） | 每种关键词类型的合法 / 截断 / 无效；控制字符；占位符注入；映射校验；静默时段跨午夜与门店时区；微信与短信错误码分类；退避；推送 List 对象 / 数组 / XML 外层 / sent 事件 |
 | `test_notification_service.py`（60） | 发件箱入队与端到端投递、去重；渠道策略；额度消耗、无额度、43101 不消耗（reset / keep）、长期模板、拒收 / 封禁 / 上限；推送计数模式与重投去重；-1 重试退避、传输错误耗尽后 failed + 短信兜底、异常永久失败、45009 与日上限延后、格式错误不发送；卡死回收不重复扣；静默时段（FakeClock）与门店时区钩子；每会员频控；员工告警短信、短信分钟 / 小时 / 天频控、厂商频控码；事件绑定与覆盖；站内信全流程；重发状态边与审计；列表筛选与统计；CSV 导出；模板 CRUD 与校验；任务注册；events.SUBSCRIPTIONS 约定（不提交、回滚后重放、重投幂等、实物奖品过滤、绑定同步）；默认发送器；wechat_mp 适配器；并发（额度、计数、多 worker 同一投递） |
-| `test_notification_api.py`（8） | 会员 / 员工 4010、4030、4001、幂等重放与 4093、4040、信封；订阅上报；站内信；投递日志筛选、导出、重发、统计；场景与模板 CRUD；员工站内信 |
+| `test_notification_api.py`（9） | 会员 / 员工 4010、4030、4001、幂等重放与 4093、4040、信封；订阅上报；站内信；投递日志筛选、导出、重发、统计；场景与模板 CRUD；员工站内信（真实 admin_rbac 会话）；identity 会话吊销 4010、伪造员工声明 4010 |
+| `test_notification_wechat_mp.py`（4） | 默认发送器 → wechat_mp.send_subscribe_message → FakeMiniProgram 端到端（平台额度用完 43101）；适配器签名；wechat_mp.dispatch → handle_push_message（不提交、推送去重）；生产检查 |
 
 运行：`cd backend && python -X utf8 -m pytest -q 20-notification`。
 
@@ -212,13 +212,13 @@
 | 类型 | 入口 |
 |---|---|
 | 配置 | §9 环境变量；运行时 `notification.set_config(**overrides)` |
-| 订阅消息发送器 | `set_subscribe_sender(SubscribeMessageSender)`；默认：wechat_mp 可用 → `WechatMpSubscribeSender`，否则生产 `NotConfiguredSender`（failed / channel_not_configured）、开发 `FakeSubscribeSender` |
+| 订阅消息发送器 | `set_subscribe_sender(SubscribeMessageSender)`；默认：wechat_mp 可用（生产，或开发环境已注入客户端 / 配置真实 AppID）→ `WechatMpSubscribeSender`（调用 `wechat_mp.send_subscribe_message`），否则生产 `NotConfiguredSender`（failed / channel_not_configured）、开发 `FakeSubscribeSender` |
 | 短信发送器 | `set_sms_sender(SmsSender)`：`send(phone, template_code, params) -> SendResult(ok, errcode, errmsg, msg_id, retryable)`；默认同上（生产未配置即失败可见） |
 | 收件人 | `set_recipient_resolver(RecipientResolver)`：`member(db, id)`、`staff(db, id)`、`member_id_by_openid(db, openid)`；默认读 identity / admin_rbac |
 | 门店时区 | `set_store_timezone_resolver(fn(store_id) -> tz)` |
 | 事件映射 | `set_event_binding(topic, [EventBinding(scene, recipient_field, dedupe, audience, store_field, fields)])` |
 | 场景与模板 | 后台 CRUD；默认 8 个场景（含 `lottery.prize_won`）；种子 `ensure_default_scenes(db)`（`defaults.DEFAULT_SCENES`，外部渠道模板 id 留空停用） |
-| 鉴权 | `set_permission_resolver(fn(db, staff_id, claims))`、`set_member_checker(fn(db, claims))` |
+| 鉴权 | 后台固定 `admin_rbac.require_permission`（会话、`notification:*` 通配；无替换钩子，令牌声明不算数）；会员 identity 会话检查 + 可选 `set_member_checker(fn(db, claims))` |
 | 时钟 | `set_clock(fn)`（测试用 FakeClock） |
 
 期望 28-wechat-mp 提供：`send_subscribe_message(touser, template_id, data, page=None, miniprogram_state="formal", lang="zh_CN") -> dict{errcode, errmsg, msgid}`（非 0 errcode 也可抛带 `.errcode/.errmsg` 的 `WechatError`；内部完成 access_token 获取与 40001/42001 刷新重试一次；传输错误抛 `TransientError` / `UpstreamError`）；`register_push_handler(event: str, fn(db, message: dict))`（验签解密后按 Event 分发）。

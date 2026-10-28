@@ -233,7 +233,7 @@ def test_registration_event_issues_trigger_templates_once(db):
     first = handle_event(db, "member.registered", payload, Evt("e-1"))
     assert first["issued"] and first["failed"] == []
     assert handle_event(db, "member.registered", payload, Evt("e-1")) == {"skipped": "duplicate"}
-    again = handle_event(db, "user.registered", payload, Evt("e-2"))  # 另一事件、同业务键
+    again = handle_event(db, "member.registered", payload, Evt("e-2"))  # 另一事件、同业务键
     assert again["issued"] == first["issued"]
     assert db.execute(select(func.count()).select_from(UserCoupon)).scalar_one() == 1
     assert db.get(CouponTemplate, gift.id).issued_count == 1
@@ -356,4 +356,4 @@ def test_subscriptions_do_not_commit(db):
                                                  "channel": "compensation"}, "ev-x")
     db.rollback()  # worker 失败回滚：券与去重记录都不留下，重试时会重新发
     assert db.execute(select(func.count()).select_from(UserCoupon)).scalar_one() == 0
-    assert set(SUBSCRIPTIONS) == {"member.registered", "user.registered", "lottery.prize_won", "coupon.issue_requested"}
+    assert set(SUBSCRIPTIONS) == {"member.registered", "lottery.prize_won", "coupon.issue_requested"}

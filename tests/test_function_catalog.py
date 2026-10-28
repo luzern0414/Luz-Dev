@@ -115,7 +115,9 @@ class CatalogBuildTests(unittest.TestCase):
             self.assertIn("textContent", html)
             self.assertNotIn(".innerHTML", html)
             self.assertNotIn("<script src=", html)
-            self.assertNotIn("<link rel=", html)
+            # The only <link> is the inline SVG tab icon; nothing is fetched from outside.
+            self.assertEqual(html.count("<link rel="), 1)
+            self.assertIn('<link rel="icon" href="data:image/svg+xml,', html)
             self.assertIn('aria-live="polite"', html)
             self.assertIn("prefers-reduced-motion", html)
 

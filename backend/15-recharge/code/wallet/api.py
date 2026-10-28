@@ -34,6 +34,14 @@ def _run(db: Session, scope: str, key: str, actor: str, body, fn):
                              require_key=True))
 
 
+def _submit(db: Session, response: dict) -> dict:
+    """退款进入处理中后（事务已提交）把原路退款交给支付模块。"""
+    data = response.get("data") or {}
+    if data.get("status") == "processing" and data.get("route") == "original" and data.get("id"):
+        response["data"] = jsonable_encoder(service.submit_refund(db, int(data["id"])))
+    return response
+
+
 def _secret() -> str:
     return get_settings().jwt_secret
 
@@ -229,8 +237,18 @@ def app_plans(request: Request, store_id: int | None = Query(default=None, ge=1)
 @app_router.post("/recharge-orders")
 def app_create_order(body: RechargeOrderIn, key: str = Depends(idempotency_key), user_id: int = Depends(current_user),
                      db: Session = Depends(get_db)):
-    return _run(db, "wallet.recharge_order.create", key, f"user:{user_id}", body,
-                lambda: service.create_recharge_order(db, user_id, body.store_id, body.plan_id, body.amount_cents))
+    created = run_idempotent(db, "wallet.recharge_order.create", key,
+                             lambda: jsonable_encoder(service.create_recharge_order(db, user_id, body.store_id, body.plan_id,
+                                                                                    body.amount_cents)),
+                             actor=f"user:{user_id}", fingerprint=_fp(body), require_key=True)
+    # 充值单已提交；调起支付在独立步骤（支付模块自行提交）。重放时复用同一支付单
+    return ok(jsonable_encoder(service.start_payment(db, user_id, created["id"])))
+
+
+@app_router.post("/recharge-orders/{batch_id}/pay")
+def app_pay_order(batch_id: int = Path(ge=1), user_id: int = Depends(current_user), db: Session = Depends(get_db)):
+    """继续支付（支付模块按业务单复用 prepay 或换单；天然幂等）。"""
+    return ok(jsonable_encoder(service.start_payment(db, user_id, batch_id)))
 
 
 @app_router.get("/account")
@@ -263,8 +281,9 @@ def app_refund_quote(batch_id: int = Path(ge=1), user_id: int = Depends(current_
 @app_router.post("/recharge-orders/{batch_id}/refund-request")
 def app_refund_request(body: RefundRequestIn, batch_id: int = Path(ge=1), key: str = Depends(idempotency_key),
                        user_id: int = Depends(current_user), db: Session = Depends(get_db)):
-    return _run(db, f"wallet.refund.request:{batch_id}", key, f"user:{user_id}", body,
-                lambda: service.request_refund(db, batch_id, "customer", body.reason, f"user:{user_id}", user_id=user_id))
+    return _submit(db, _run(db, f"wallet.refund.request:{batch_id}", key, f"user:{user_id}", body,
+                            lambda: service.request_refund(db, batch_id, "customer", body.reason, f"user:{user_id}",
+                                                           user_id=user_id)))
 
 
 @app_router.get("/refunds")
@@ -397,7 +416,7 @@ def admin_account(user_id: int = Path(ge=1), staff: StaffContext = Depends(requi
 
 @admin_router.post("/accounts/{user_id}/adjust")
 def admin_adjust(body: AdjustIn, user_id: int = Path(ge=1), key: str = Depends(idempotency_key),
-                 staff: StaffContext = Depends(require_permission("wallet:adjust")), db: Session = Depends(get_db)):
+                 staff: StaffContext = Depends(require_permission("wallet:adjust", fresh=True)), db: Session = Depends(get_db)):
     return _run(db, f"wallet.adjust:{user_id}", key, f"staff:{staff.id}", body,
                 lambda: service.adjust(db, staff.id, user_id, body.principal_delta, body.bonus_delta, body.reason,
                                        f"adjust:{staff.id}:{key}"))
@@ -405,7 +424,7 @@ def admin_adjust(body: AdjustIn, user_id: int = Path(ge=1), key: str = Depends(i
 
 @admin_router.post("/accounts/{user_id}/offline-recharge")
 def admin_offline_recharge(body: OfflineRechargeIn, user_id: int = Path(ge=1), key: str = Depends(idempotency_key),
-                           staff: StaffContext = Depends(require_permission("wallet:recharge")),
+                           staff: StaffContext = Depends(require_permission("wallet:recharge", fresh=True)),
                            db: Session = Depends(get_db)):
     assert_store_scope(staff, body.store_id) if body.store_id else None
     return _run(db, f"wallet.offline_recharge:{user_id}", key, f"staff:{staff.id}", body,
@@ -424,7 +443,7 @@ def admin_consume(body: CounterConsumeIn, user_id: int = Path(ge=1), key: str = 
 
 @admin_router.post("/accounts/{user_id}/reverse")
 def admin_reverse(body: CounterReverseIn, user_id: int = Path(ge=1), key: str = Depends(idempotency_key),
-                  staff: StaffContext = Depends(require_permission("wallet:consume")), db: Session = Depends(get_db)):
+                  staff: StaffContext = Depends(require_permission("wallet:consume", fresh=True)), db: Session = Depends(get_db)):
     return _run(db, f"wallet.reverse:{user_id}", key, f"staff:{staff.id}", body,
                 lambda: service.counter_reverse(db, staff.id, user_id, f"counter:{body.ref}", body.reason))
 
@@ -440,10 +459,10 @@ def admin_refund_quote(batch_id: int = Path(ge=1), cause: Literal["customer", "m
 
 @admin_router.post("/recharge-orders/{batch_id}/refunds")
 def admin_create_refund(body: AdminRefundIn, batch_id: int = Path(ge=1), key: str = Depends(idempotency_key),
-                        staff: StaffContext = Depends(require_permission("wallet:refund")), db: Session = Depends(get_db)):
-    return _run(db, f"wallet.refund.create:{batch_id}", key, f"staff:{staff.id}", body,
-                lambda: service.request_refund(db, batch_id, body.cause, body.reason, f"staff:{staff.id}",
-                                               staff_id=staff.id))
+                        staff: StaffContext = Depends(require_permission("wallet:refund", fresh=True)), db: Session = Depends(get_db)):
+    return _submit(db, _run(db, f"wallet.refund.create:{batch_id}", key, f"staff:{staff.id}", body,
+                            lambda: service.request_refund(db, batch_id, body.cause, body.reason, f"staff:{staff.id}",
+                                                           staff_id=staff.id)))
 
 
 @admin_router.get("/refunds")
@@ -454,21 +473,21 @@ def admin_refunds(request: Request, staff: StaffContext = Depends(require_permis
 
 @admin_router.post("/refunds/{refund_id}/approve")
 def admin_approve(refund_id: int = Path(ge=1), key: str = Depends(idempotency_key),
-                  staff: StaffContext = Depends(require_permission("wallet:refund")), db: Session = Depends(get_db)):
-    return _run(db, f"wallet.refund.approve:{refund_id}", key, f"staff:{staff.id}", None,
-                lambda: service.approve_refund(db, refund_id, staff.id))
+                  staff: StaffContext = Depends(require_permission("wallet:refund", fresh=True)), db: Session = Depends(get_db)):
+    return _submit(db, _run(db, f"wallet.refund.approve:{refund_id}", key, f"staff:{staff.id}", None,
+                            lambda: service.approve_refund(db, refund_id, staff.id)))
 
 
 @admin_router.post("/refunds/{refund_id}/reject")
 def admin_reject(body: RejectIn, refund_id: int = Path(ge=1), key: str = Depends(idempotency_key),
-                 staff: StaffContext = Depends(require_permission("wallet:refund")), db: Session = Depends(get_db)):
+                 staff: StaffContext = Depends(require_permission("wallet:refund", fresh=True)), db: Session = Depends(get_db)):
     return _run(db, f"wallet.refund.reject:{refund_id}", key, f"staff:{staff.id}", body,
                 lambda: service.reject_refund(db, refund_id, staff.id, body.reason))
 
 
 @admin_router.post("/refunds/{refund_id}/offline-complete")
 def admin_offline_complete(body: OfflineCompleteIn, refund_id: int = Path(ge=1), key: str = Depends(idempotency_key),
-                           staff: StaffContext = Depends(require_permission("wallet:refund")),
+                           staff: StaffContext = Depends(require_permission("wallet:refund", fresh=True)),
                            db: Session = Depends(get_db)):
     return _run(db, f"wallet.refund.offline:{refund_id}", key, f"staff:{staff.id}", body,
                 lambda: service.complete_offline_refund(db, refund_id, staff.id, body.success, body.note))

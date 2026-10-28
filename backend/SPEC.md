@@ -29,32 +29,17 @@
 
 ## 2 模块清单（全集）
 
-| 目录 | 职责 | 状态 | 依赖 |
+状态：**标准** = 代码 + 测试 + MODULE.md（按 `MODULE-TEMPLATE.md`）；**基础** = 早期代码，未按模板重建；**规划** = 只有设计。每个模块的范围、规则、事件、权限码与定制点见 `MODULES.md` 与各自的 `MODULE.md`；对外接口见 `CONTRACTS.md`。
+
+| 分类 | 标准 | 基础 | 规划 |
 |---|---|---|---|
-| `00-framework/` | 配置、数据库、错误码、信封、JWT、幂等、发件箱、限流、安全头、trace、测试工具 | 已实现 | — |
-| `01-identity/` | 微信登录、刷新、登出、手机号绑定（短信 / 一键）、用户资料、注销 | 登录 / 刷新已实现；其余设计 | framework |
-| `store/` | 门店信息、营业时间、履约参数、打印机、连锁复制 | 待建 | identity |
-| `catalog/` | 分类、商品、规格组 / 选项、套餐、标签、可售渠道与时段、估清、搜索与热词 | 待建 | store、inventory |
-| `cart/` | 服务端购物车（登录合并本地）、失效项清理 | 待建 | catalog |
-| `address/` | 收货地址 CRUD、默认地址 | 已实现（PUT 设计） | identity |
-| `06-geo/` | 距离、配送范围、逆地理、地理编码缓存 | 函数已实现；接口设计 | store |
-| `07-inventory/` | SKU 库存条件扣减 / 回补、预留、热点预扣、变动记录 | 函数已实现；接口设计 | catalog |
-| `order/` | 下单（报价预览、幂等）、状态机、列表 / 详情、取消、催单、改地址、核销、堂食加菜与结账 | 创建 / 详情 / 取消已实现；其余设计 | catalog、inventory、address、marketing、membership |
-| `09-wechat-pay/` | 支付单（业务类型：订单 / 充值 / 会员）、渠道、回调、查询、超时关闭、退款与退款回调 | 主路径已实现；退款设计 | order |
-| `after-sales/` | 售后单（退款 / 部分退款 / 补发）、审核、退款执行与失败处理 | 待建 | order、payment |
-| `delivery-dispatch/` | 配送任务、骑手、指派 / 改派、轨迹、异常、第三方配送适配 | 设计 | order |
-| `queue/` | 排队取号、叫号、过号、入座、桌台管理、桌台码 | 设计 | store |
-| `membership/` | 会员等级、权益、积分获取 / 抵扣 / 过期、开通与续费 | 积分已实现；等级 / 开通设计 | identity、payment |
-| `recharge/` | 充值档位、储值账户与流水、充值退款、对账 | 设计 | payment |
-| `16-coupon/` | 优惠券模板、领取 / 核销 / 退回、定向发放、活动（满减 / 限时 / 第二件半价 / 新人礼 / 专题）、冲突与优先级 | 领券已实现；其余设计 | catalog、order |
-| `review/` | 评价、图片、审核、商家回复、汇总 | 创建已实现；其余设计 | order、media |
-| `notification/` | 事件消费、订阅消息 / 短信 / 企微、模板、失败重发 | 设计 | outbox |
-| `media/` | 预签名上传、图片校验与裁切、CDN 地址 | 待建 | — |
-| `22-admin-rbac/` | 后台账号、角色、权限码、门店范围、MFA、审计 | 设计 | identity |
-| `settings/` | 分组参数（营业 / 费用 / 积分 / 通知 / 打印 / 隐私 / 品牌），版本与生效时间 | 待建 | admin-rbac |
-| `report/` | 驾驶舱汇总、日报 / 周报、导出任务 | 待建 | order、payment、membership |
-| `scheduler/` | 定时任务注册、分布式锁、运行记录 | 待建 | framework |
-| `agent-support/` | 为智能体提供 `price_preview`、知识库文档表与索引接口、服务签名校验 | 待建 | order、marketing |
+| 账号与权限 | 01-identity、22-admin-rbac | 05-address、27-legal | — |
+| 交易与资金 | 07-inventory、08-order、09-wechat-pay、10-after-sales、15-recharge、29-member-card | — | 02-store、03-catalog、04-cart、11-delivery |
+| 会员与营销 | 14-membership、16-coupon、18-lottery | 17-campaign | — |
+| 通知与内容 | 20-notification、28-wechat-mp | 19-review | 21-media、26-agent-support |
+| 运营与基础设施 | 00-framework、25-jobs | 06-geo、13-reservation | 12-queue、23-app-settings、24-report |
+
+数据库：所有表由 `alembic upgrade head` 建立（`alembic/versions/0001_baseline.py` 起），发布后执行 `python -m admin_rbac.bootstrap --seed` 同步权限码与内置角色；生产禁止 `create_all`。
 
 规则：只挂载需要的模块；未开启的模块不导入、不建表、不暴露接口；项目的模块开关记录在 `requirements/<项目名>.md`。
 
@@ -145,10 +130,10 @@ Pydantic 模型；字符串去首尾空格；长度与范围约束在模型上�
 | 主体 | 方式 | 说明 |
 |---|---|---|
 | 顾客 | 微信 code2session → 访问令牌 2h + 刷新令牌 30d（旋转，`refresh_version`） | 手机号绑定后 `phone_verified` 声明；敏感操作（注销）需 `fresh` 声明（15 分钟内登录） |
-| 后台员工 | 账号密码（bcrypt / argon2）+ TOTP MFA → 访问 2h 滑动 + 刷新 7d | 5 次失败锁 15 分钟；权限码装饰器；门店范围过滤 |
+| 后台员工 | 账号口令（Argon2id）+ TOTP MFA → 服务端会话（空闲 15 分钟、绝对 8 小时） | 按账号失败锁定（递增）；`admin_rbac.require_permission(code, fresh=…)`；`store_scope` 门店范围过滤（`SECURITY.md` §1–2） |
 | 员工端 / 骑手 | 员工令牌（`kind=staff`），权限限 queue / order 核销 / delivery | — |
 | 智能体服务 | 转发用户令牌 + `X-Service: agent` + HMAC 签名（时间戳 ± 5 分钟，nonce 去重） | 后端按用户令牌做数据范围；写接口只对签名有效的请求开放 `agent: yes` |
-| 渠道回调 | 微信支付 RSA / HMAC 验签；第三方配送签名 | 失败 4010，不重试 |
+| 渠道回调 | 微信支付 APIv3 验签（微信支付公钥 / 平台证书，RSA-SHA256）+ AES-256-GCM 解密；第三方配送签名 | 失败 4010，不重试 |
 
 数据范围：顾客只能访问 `user_id = 自己` 的资源，他人资源返回 4040；后台按 `store_scope`；全局管理员除外。
 

@@ -152,6 +152,9 @@ class WalletLedger(Base, BigIdMixin):
     store_id: Mapped[int | None] = mapped_column(BigId, nullable=True)
     operator_id: Mapped[int | None] = mapped_column(BigId, nullable=True)
     note: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # 冲回：reverse 流水指向被冲回的 consume 流水；consume 流水上累计已冲回金额（条件 UPDATE 封顶，部分退款可多次）
+    origin_ledger_id: Mapped[int | None] = mapped_column(BigId, nullable=True, index=True)
+    reversed_cents: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
 
@@ -191,6 +194,9 @@ class WalletRefund(Base, BigIdMixin, TimestampMixin):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     fail_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
     overdue_notified: Mapped[bool] = mapped_column(default=False)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # 已提交支付模块
+    channel_refund_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    submit_error: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
 class WalletMismatch(Base, BigIdMixin):

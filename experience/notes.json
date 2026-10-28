@@ -16,6 +16,15 @@
       "last_confirmed": "2026-10-28"
     },
     {
+      "key": "html-tab-icon-required",
+      "kind": "preference",
+      "text": "每个生成的 HTML 页面都必须有贴合主题的标签页图标，不能空白：模板放 {{FAVICON}}，生成器调用 luz_shell.favicon_for_tokens(kind, tokens) 输出内联 SVG（主题主色线稿 + 浅色圆角底；技术方案=文档、规范=盾牌、知识库=书本、功能目录=宫格），新增页面类型时同步新增图标。",
+      "why": "用户要求：所有 HTML 交付物的浏览器标签页都要有主题图标",
+      "uses": 1,
+      "first_seen": "2026-10-28",
+      "last_confirmed": "2026-10-28"
+    },
+    {
       "key": "one-task-one-folder",
       "kind": "preference",
       "text": "一个需求只建一个项目文件夹（skill输出/Luz-Dev/序号-主题/，成品 HTML 加 raw/）；后续修改用 revise 修订同一方案，只告诉用户一个要打开的 HTML。",
@@ -56,6 +65,33 @@
       "kind": "preference",
       "text": "生产页面只显示真实后端数据；原型里的模拟数据、DEMO 数据和 mock 引用必须全部换成接口数据。",
       "why": "SKILL.md Engineering rules；design_intake.py check 拒绝原型数据残留",
+      "uses": 1,
+      "first_seen": "2026-10-28",
+      "last_confirmed": "2026-10-28"
+    },
+    {
+      "key": "delivery-mark-only-evidenced",
+      "kind": "lesson",
+      "text": "核对表只把有测试或实测证据的条目标为完成，运维类（恢复演练、HTTPS、回滚、日志、限流）未做就保持计划中并在交付时列为缺口",
+      "why": "02 交付检查",
+      "uses": 1,
+      "first_seen": "2026-10-28",
+      "last_confirmed": "2026-10-28"
+    },
+    {
+      "key": "plan-spec-sync-readd",
+      "kind": "lesson",
+      "text": "spec --file 会按方案模块重新同步库内详设，替换自定义详设后要再逐个 spec --remove 不适用的库内详设并确认 moduleSpecs；方案页面避免 哈希、sha256、数据来源、输出目录 等被 check_document 拦截的词",
+      "why": "02 方案提交被拦与目录残留",
+      "uses": 1,
+      "first_seen": "2026-10-28",
+      "last_confirmed": "2026-10-28"
+    },
+    {
+      "key": "research-source-recheck-before-publish",
+      "kind": "lesson",
+      "text": "平台驱动 Luz-System 会话时，调研来源可能在调研后被站点临时封锁（如 HTTP 423），发布前要复核来源、失败重试一次、仍不可达则从经验库替换同类来源再跑 strict 校验",
+      "why": "02 真实联调首次发布被 strict 拦截",
       "uses": 1,
       "first_seen": "2026-10-28",
       "last_confirmed": "2026-10-28"

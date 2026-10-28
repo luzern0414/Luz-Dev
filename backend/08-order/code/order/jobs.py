@@ -1,76 +1,36 @@
-"""订单超时关单任务（references/patterns/order.md §超时关单）。
+"""order 定时任务（25-jobs 按 JOBS 装配；每个任务幂等、可重跑，逐单提交）。
 
-顺序与微信支付开发指引一致：先查单，再决定。
-    paid    → 按支付成功处理（不能取消已付款的订单）
-    unknown → 本轮跳过，下轮再查（查询失败不等于未支付）
-    unpaid / closed → 关闭渠道订单（unpaid 时）→ 取消本地订单并回补库存
-
-每个订单独立提交：一个订单失败不影响其他订单；任务可重复执行（状态机条件更新保证幂等）。
-定时扫描是默认方案；订单量大时改用延迟队列触发同一个函数，扫描保留为兜底。
+| 任务 | 间隔 | 做什么 |
+|---|---|---|
+| order.close_expired | 60s | 超时未支付：先查单（已付 → 支付钩子成交）→ 关单 → 关闭订单、释放库存 / 券 / 限购（R1 关单规则） |
+| order.auto_complete | 3600s | 已履约（或已发货）超过 ORDER_AUTO_COMPLETE_DAYS 天且无处理中售后 → 完成 |
+| order.shipping_sync | 300s | 微信支付订单发货信息补录（09 request_shipping_upload） |
 """
 from __future__ import annotations
 
-from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
-
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from luzback import AppError
+from luzback.scheduler import Job
 
-from . import PENDING, Order, cancel_order, mark_paid
-
-PAID_STATE = "paid"
-UNPAID_STATE = "unpaid"
-CLOSED_STATE = "closed"
-UNKNOWN_STATE = "unknown"
+from . import service
 
 
-def _aware(value: datetime) -> datetime:
-    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+def close_expired_job(db: Session) -> dict:
+    report = service.close_expired(db)
+    return {k: len(v) for k, v in report.items()}
 
 
-def close_expired_orders(
-    db: Session,
-    *,
-    now: datetime,
-    timeout_minutes: int,
-    query_payment: Callable[[Order], str],
-    close_channel: Callable[[Order], None],
-    limit: int = 100,
-) -> dict[str, list[int]]:
-    """处理超时未支付订单，返回各结果对应的订单 ID。"""
-    deadline = now - timedelta(minutes=timeout_minutes)
-    candidates = db.execute(
-        select(Order).where(Order.status == PENDING).order_by(Order.created_at).limit(limit)
-    ).scalars().all()
-    report: dict[str, list[int]] = {"paid": [], "cancelled": [], "retry": [], "skipped": []}
-    for order in candidates:
-        if _aware(order.created_at) > deadline:
-            continue
-        try:
-            state = query_payment(order)
-        except Exception:  # noqa: BLE001 - 渠道查询失败：保持待支付，下轮重试
-            report["retry"].append(order.id)
-            continue
-        try:
-            if state == PAID_STATE:
-                mark_paid(db, order.id)
-                report["paid"].append(order.id)
-            elif state in (UNPAID_STATE, CLOSED_STATE):
-                if state == UNPAID_STATE:
-                    close_channel(order)
-                cancel_order(db, order.id)
-                report["cancelled"].append(order.id)
-            else:
-                report["retry"].append(order.id)
-                continue
-            db.commit()
-        except AppError:
-            # 状态已被并发请求改变（例如回调刚好把订单标记为已支付）：放弃本单，不覆盖
-            db.rollback()
-            report["skipped"].append(order.id)
-        except Exception:  # noqa: BLE001 - 关单接口失败：不取消本地订单，下轮重试
-            db.rollback()
-            report["retry"].append(order.id)
-    return report
+def auto_complete_job(db: Session) -> dict:
+    report = service.auto_complete(db)
+    return {k: len(v) for k, v in report.items()}
+
+
+def shipping_sync_job(db: Session) -> int:
+    return service.shipping_sync(db)
+
+
+JOBS = (
+    Job("order.close_expired", interval_seconds=60, fn=close_expired_job, lock_ttl=55),
+    Job("order.auto_complete", interval_seconds=3600, fn=auto_complete_job, lock_ttl=600),
+    Job("order.shipping_sync", interval_seconds=300, fn=shipping_sync_job, lock_ttl=280),
+)

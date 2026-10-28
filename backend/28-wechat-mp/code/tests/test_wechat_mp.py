@@ -507,3 +507,49 @@ def test_threads_share_one_client_safely(mp):
     assert len(set(phones)) == 20
     assert mp.server.calls.count("/cgi-bin/stable_token") == 1
     assert threading.active_count() >= 1 and os.getpid()
+
+
+# ---------------------------------------------------------------- 模块级函数与生产检查
+
+
+def test_module_level_helpers_delegate_to_process_client(mp):
+    wechat_mp.set_client(mp)
+    try:
+        assert wechat_mp.is_configured()
+        token = wechat_mp.access_token()
+        assert token and wechat_mp.access_token() == token  # 缓存
+        mp.server.revoke_token(token)
+        fresh = wechat_mp.invalidate_access_token(token)
+        assert fresh != token and wechat_mp.access_token() == fresh
+        mp.grant_subscription("o-1", "TPL-ORDER")
+        result = wechat_mp.send_subscribe_message("o-1", "TPL-ORDER", {"thing1": {"value": "x"}}, page="/pages/a",
+                                                  miniprogram_state="trial", lang="en_US")
+        assert result["errcode"] == 0
+        body = mp.server.sent[-1]
+        assert body["page"] == "pages/a" and body["miniprogram_state"] == "trial" and body["lang"] == "en_US"
+        with pytest.raises(wechat_mp.SubscriptionRefused) as exc:
+            wechat_mp.send_subscribe_message("o-1", "TPL-ORDER", {"thing1": {"value": "x"}})
+        assert exc.value.errcode == 43101
+    finally:
+        wechat_mp.set_client(None)
+
+
+def test_production_check_registered(monkeypatch):
+    from luzback.config import production_checks
+
+    assert production_checks()["wechat_mp"] is wechat_mp.production_problems
+    wechat_mp.set_client(None)
+    problems = wechat_mp.production_problems()
+    assert any("WECHAT_APPID" in p for p in problems)  # 开发占位值
+    monkeypatch.setenv("WECHAT_APPID", "wx1234567890abcdef")
+    monkeypatch.setenv("WECHAT_SECRET", "real-secret-value")
+    monkeypatch.setenv("WECHAT_MP_PUSH_TOKEN", "tok")
+    monkeypatch.setenv("WECHAT_MP_PUSH_AES_KEY", "")
+    wechat_mp.reload_config()
+    try:
+        problems = wechat_mp.production_problems()
+        assert not any("WECHAT_APPID" in p for p in problems)
+        assert any("WECHAT_MP_PUSH_AES_KEY" in p for p in problems)
+    finally:
+        monkeypatch.undo()
+        wechat_mp.reload_config()

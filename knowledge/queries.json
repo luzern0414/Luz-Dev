@@ -288,6 +288,142 @@
       "runs": 7,
       "lastRunAt": "2026-10-28T09:54:39+08:00",
       "outcome": "ok"
+    },
+    {
+      "platform": "bing",
+      "query": "Demo一键生成助手重构技术方案 技术方案 系统架构 模块设计",
+      "module": "topic",
+      "runs": 7,
+      "lastRunAt": "2026-10-28T17:32:55+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "github",
+      "query": "Demo一键生成助手重构技术方案",
+      "module": "topic",
+      "runs": 7,
+      "lastRunAt": "2026-10-28T17:32:55+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "gitee",
+      "query": "Demo一键生成助手重构技术方案",
+      "module": "topic",
+      "runs": 7,
+      "lastRunAt": "2026-10-28T17:32:55+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "csdn",
+      "query": "Demo一键生成助手重构技术方案 系统设计 数据库设计",
+      "module": "topic",
+      "runs": 7,
+      "lastRunAt": "2026-10-28T17:32:55+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "juejin",
+      "query": "分布式定时任务 幂等 补偿 重试 设计",
+      "module": "jobs",
+      "runs": 7,
+      "lastRunAt": "2026-10-28T17:32:55+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "cnblogs",
+      "query": "密码存储 bcrypt argon2 加盐 迁移",
+      "module": "admin-security",
+      "runs": 7,
+      "lastRunAt": "2026-10-28T17:32:55+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "google",
+      "query": "网络安全等级保护 二级 三级 技术要求 GB/T 22239-2019 清单",
+      "module": "data-protection",
+      "runs": 7,
+      "lastRunAt": "2026-10-28T17:32:55+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "cnblogs",
+      "query": "GitHub Actions GitLab CI 自动部署 服务器 密钥 安全",
+      "module": "container-deploy",
+      "runs": 6,
+      "lastRunAt": "2026-10-28T17:32:55+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "bing",
+      "query": "getStableAccessToken 接口调用凭据 site:developers.weixin.qq.com",
+      "module": "login",
+      "runs": 6,
+      "lastRunAt": "2026-10-28T17:32:55+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "github",
+      "query": "fastapi security best practices",
+      "module": "web-security",
+      "runs": 6,
+      "lastRunAt": "2026-10-28T17:32:55+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "csdn",
+      "query": "系统配置 中心 动态配置 字典 设计 缓存",
+      "module": "settings",
+      "runs": 6,
+      "lastRunAt": "2026-10-28T17:32:55+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "juejin",
+      "query": "JWT 刷新令牌 退出登录 令牌吊销 黑名单 实践",
+      "module": "admin-security",
+      "runs": 6,
+      "lastRunAt": "2026-10-28T17:32:55+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "cnblogs",
+      "query": "PostgreSQL 时间点恢复 PITR WAL 归档 备份 实践",
+      "module": "backup-dr",
+      "runs": 6,
+      "lastRunAt": "2026-10-28T17:32:55+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "bing",
+      "query": "OWASP Authentication Cheat Sheet",
+      "module": "auth",
+      "runs": 6,
+      "lastRunAt": "2026-10-28T17:32:55+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "bing",
+      "query": "OWASP File Upload Cheat Sheet",
+      "module": "upload",
+      "runs": 5,
+      "lastRunAt": "2026-10-28T17:32:55+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "bing",
+      "query": "数据库迁移 零停机 发布 先兼容后切换 expand contract",
+      "module": "container-deploy",
+      "runs": 4,
+      "lastRunAt": "2026-10-28T17:32:55+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "zhihu",
+      "query": "Demo一键生成助手重构技术方案 系统 设计 经验",
+      "module": "topic",
+      "runs": 3,
+      "lastRunAt": "2026-10-28T17:32:55+08:00",
+      "outcome": "ok"
     }
   ]
 }

@@ -5,17 +5,17 @@
 - 充值单与支付：create_recharge_order、handle_event（payment.* 发件箱消费入口）、on_payment_succeeded
 - 退款：quote_refund、request_refund、approve_refund、reject_refund、complete_offline_refund
 - 预付限额扩展点：PrepaidPolicy、PRESETS、policy_for、set_policy_resolver、register_outstanding_provider
-- 适配层：set_payment_port、FakePaymentPort、parse_paid、parse_refund_result、current_staff、require_permission、
-  set_grants_resolver、set_member_resolver、set_store_timezone_resolver、find_member、store_timezone
+- 适配层：set_payment_port、FakePaymentPort、parse_paid、parse_refund_result、require_permission（委托 admin_rbac）、
+  register_payment_hooks、set_member_resolver、set_store_timezone_resolver、find_member、store_timezone
 金额单位为分；用例函数不 commit（接口层 / 事件消费 / 任务负责提交）。
 """
 from .models import (
     BatchAllocation, RechargeBatch, RechargePlan, WalletAccount, WalletLedger, WalletMismatch, WalletRefund,
 )
 from .ports import (
-    FakePaymentPort, MemberRef, PaidEvent, RefundResultEvent, StaffContext, WechatPayPort, assert_store_scope,
-    current_staff, find_member, parse_paid, parse_refund_result, payment_port, phone_lookup_hash, require_permission,
-    set_grants_resolver, set_member_resolver, set_payment_port, set_store_timezone_resolver, set_user_token_decoder,
+    REFUND_TOPICS, FakePaymentPort, MemberRef, PaidEvent, RefundResultEvent, StaffContext, WechatPayPort,
+    assert_store_scope, declare_permissions, find_member, parse_paid, parse_refund_result, payment_port,
+    phone_lookup_hash, register_payment_hooks, require_permission, staff_context, set_member_resolver, set_payment_port, set_store_timezone_resolver, set_user_token_decoder,
     store_timezone, current_user,
 )
 from .prepaid import (
@@ -39,12 +39,14 @@ PERMISSIONS = (
     ("wallet:export", "导出"),
     ("wallet:reconcile", "对账查看与执行"),
 )
+declare_permissions("wallet", PERMISSIONS)
 
 __all__ = [
     "BatchAllocation", "RechargeBatch", "RechargePlan", "WalletAccount", "WalletLedger", "WalletMismatch", "WalletRefund",
     "FakePaymentPort", "MemberRef", "PaidEvent", "RefundResultEvent", "StaffContext", "WechatPayPort",
-    "assert_store_scope", "current_staff", "find_member", "parse_paid", "parse_refund_result", "payment_port",
-    "phone_lookup_hash", "require_permission", "set_grants_resolver", "set_member_resolver", "set_payment_port",
+    "REFUND_TOPICS", "assert_store_scope", "declare_permissions", "find_member", "parse_paid", "parse_refund_result",
+    "payment_port", "phone_lookup_hash", "register_payment_hooks", "require_permission", "staff_context",
+    "set_member_resolver", "set_payment_port",
     "set_store_timezone_resolver", "set_user_token_decoder", "store_timezone", "current_user",
     "CATEGORY_COUNT", "CATEGORY_PERIOD", "CATEGORY_STORED_VALUE", "CONSERVATIVE", "PRESETS", "PrepaidPolicy",
     "custom_policy", "member_outstanding_cents", "policy_for", "register_outstanding_provider", "set_policy_resolver",

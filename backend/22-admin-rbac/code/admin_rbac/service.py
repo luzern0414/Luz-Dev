@@ -34,7 +34,7 @@ from .models import (
     AdminStoreScope, AdminUser, AdminUserRole,
 )
 from .passwords import hash_secret
-from .permissions import WILDCARD, expand, registered, registered_codes, sync_permissions
+from .permissions import WILDCARD, is_module_wildcard, registered, registered_codes, sync_permissions, validate_grant
 from .rules import aware, field_error, validate_phone, validate_username
 from .seed import BUILTIN_ROLES, SUPER_ADMIN
 
@@ -68,7 +68,10 @@ def grants_of(db: Session, staff: Staff | AdminUser) -> tuple[frozenset[str], li
 
 
 def ensure_seed(db: Session) -> dict[str, int]:
-    """幂等：同步权限码注册表；补齐缺失的内置角色（已存在的不覆盖，允许项目调整）。"""
+    """幂等：同步权限码注册表；补齐缺失的内置角色（已存在的不覆盖，允许项目调整）。
+
+    内置角色的 `module:*` 原样存为通配授予（前缀匹配，模块以后新增的码自动覆盖），精确码原样存储；
+    因此种子不依赖业务模块的导入顺序。"""
     added_perms = sync_permissions(db)
     existing = set(db.execute(select(AdminRole.builtin_code).where(AdminRole.builtin_code.is_not(None))).scalars().all())
     added_roles = 0
@@ -80,8 +83,8 @@ def ensure_seed(db: Session) -> dict[str, int]:
         db.add(role)
         db.flush()
         if code != SUPER_ADMIN:
-            for perm in expand(patterns):
-                db.add(AdminRolePermission(role_id=role.id, code=perm))
+            for perm in sorted(set(patterns)):
+                db.add(AdminRolePermission(role_id=role.id, code=validate_grant(perm)))
         added_roles += 1
     db.commit()
     return {"permissions": added_perms, "roles": added_roles}
@@ -168,7 +171,7 @@ def _escalation(message: str, extra: Any = None) -> AppError:
 def assert_can_grant_codes(actor: Staff, codes: Iterable[str]) -> None:
     if actor.has(WILDCARD):
         return
-    extra = sorted(set(codes) - set(actor.permissions))
+    extra = sorted(c for c in set(codes) if not actor.has(c))
     if extra:
         raise _escalation("you cannot grant permissions you do not hold", extra)
 
@@ -597,9 +600,12 @@ def get_role(db: Session, role_id: int) -> dict:
 
 
 def _validate_codes(codes: Iterable[str]) -> list[str]:
+    """精确码必须已登记；`module:*` 要求该模块至少登记了一个码。`*` 只属于超级管理员角色，不能授予。"""
     codes = sorted({c.strip() for c in codes})
     known = registered_codes()
-    unknown = [c for c in codes if c not in known]
+    prefixes = {c.split(":", 1)[0] for c in known}
+    unknown = [c for c in codes
+               if not (c in known or (is_module_wildcard(c) and c.split(":", 1)[0] in prefixes))]
     if unknown:
         raise field_error("permissions", f"unknown permission code: {unknown}")
     return codes

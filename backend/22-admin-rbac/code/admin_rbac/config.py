@@ -25,7 +25,9 @@ def _list(name: str, default: str) -> tuple[str, ...]:
     return tuple(x.strip() for x in os.getenv(name, default).split(",") if x.strip())
 
 
-DEFAULT_MFA_PERMISSIONS = "staff:write,role:write,order:refund,aftersales:approve,report:export,recharge:adjust"
+# 持有这些码（含 `module:*` 覆盖）的员工必须绑定 MFA：资金、权限、批量导出类高风险操作。
+DEFAULT_MFA_PERMISSIONS = ("staff:write,role:write,after_sale:approve,after_sale:refund,payment:refund,report:export,"
+                           "wallet:adjust,wallet:refund,member_card:adjust,member_card:refund,member:reveal")
 
 
 @dataclass(frozen=True)

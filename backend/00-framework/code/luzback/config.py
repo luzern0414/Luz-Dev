@@ -10,6 +10,8 @@
 from __future__ import annotations
 
 import os
+import threading
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from functools import lru_cache
 
@@ -63,7 +65,8 @@ class Settings:
     admin_access_ttl_seconds: int = field(default_factory=lambda: _int("LUZ_ADMIN_ACCESS_TTL", 7200))
     admin_refresh_ttl_seconds: int = field(default_factory=lambda: _int("LUZ_ADMIN_REFRESH_TTL", 7 * 86400))
     fresh_window_seconds: int = field(default_factory=lambda: _int("LUZ_FRESH_WINDOW", 900))
-    password_min_length: int = field(default_factory=lambda: _int("LUZ_PASSWORD_MIN_LENGTH", 10))
+    # NIST SP 800-63B-4 §3.1.1.2：仅口令单因素 ≥ 15 位；与 MFA 合用时 ≥ 8 位；不做组成规则（见 security.check_password_policy）
+    password_min_length: int = field(default_factory=lambda: _int("LUZ_PASSWORD_MIN_LENGTH", 15))
     login_max_failures: int = field(default_factory=lambda: _int("LUZ_LOGIN_MAX_FAILURES", 5))
     login_lock_seconds: int = field(default_factory=lambda: _int("LUZ_LOGIN_LOCK_SECONDS", 900))
 
@@ -81,9 +84,7 @@ class Settings:
     wechat_api_v3_key: str = field(default_factory=lambda: _env("WECHAT_API_V3_KEY", ""))  # 32 字节
     wechat_mch_serial_no: str = field(default_factory=lambda: _env("WECHAT_MCH_SERIAL_NO", ""))
     wechat_mch_private_key_pem: str = field(default_factory=lambda: _env("WECHAT_MCH_PRIVATE_KEY_PEM", ""))
-    wechat_platform_cert_pem: str = field(default_factory=lambda: _env("WECHAT_PLATFORM_CERT_PEM", ""))
     wechat_notify_url: str = field(default_factory=lambda: _env("WECHAT_NOTIFY_URL", "https://example.com/api/v1/webhooks/wechat/pay"))
-    pay_notify_hmac_secret: str = field(default_factory=lambda: _env("LUZ_PAY_NOTIFY_SECRET", "dev-notify-secret"))  # 仅开发联调
 
     # ---- 业务默认值（可被 app_settings 覆盖）----
     order_pay_timeout_minutes: int = field(default_factory=lambda: _int("ORDER_PAY_TIMEOUT_MINUTES", 15))
@@ -139,7 +140,12 @@ class Settings:
         return None
 
     def assert_production_safe(self) -> None:
-        """生产环境禁止开发默认值；启动时调用，失败即拒绝启动。"""
+        """生产环境禁止开发默认值；启动时调用，失败即拒绝启动（列出全部问题）。
+
+        框架只检查通用项；各模块用 `register_production_check(name, fn)` 登记自己的检查
+        （例如 wechat_pay 的商户证书 / APIv3 密钥、wechat_mp 的 AppSecret、identity 的字段密钥），这里统一执行。
+        微信支付回调只走 APIv3 验签（平台公钥 / 平台证书由 wechat_pay 配置），没有 HMAC 联调通道。
+        """
         if not self.is_prod:
             return
         problems: list[str] = []
@@ -151,12 +157,50 @@ class Settings:
             problems.append("LUZ_REDIS_URL is required in prod")
         if not self.field_encryption_key:
             problems.append("LUZ_FIELD_KEY is required in prod")
-        if self.pay_notify_hmac_secret == "dev-notify-secret" and not self.wechat_platform_cert_pem:
-            problems.append("WECHAT_PLATFORM_CERT_PEM is required in prod")
         if any(item.endswith(":dev-agent-secret") for item in self.service_secrets):
             problems.append("LUZ_SERVICE_SECRETS contains a dev secret")
+        problems.extend(run_production_checks(self))
         if problems:
             raise RuntimeError("unsafe production settings: " + "; ".join(problems))
+
+
+# ---------- 模块生产配置检查（启动时由 assert_production_safe 统一执行）----------
+
+ProductionCheck = Callable[["Settings"], "Iterable[str] | None"]
+_checks_lock = threading.Lock()
+_production_checks: dict[str, ProductionCheck] = {}
+
+
+def register_production_check(name: str, fn: ProductionCheck) -> None:
+    """登记模块的生产配置检查：fn(settings) 返回问题列表（空 / None = 通过），或抛 RuntimeError / ValueError。
+
+    在模块包导入时调用（同名覆盖）；只在 LUZ_ENV=prod 时执行。
+    """
+    with _checks_lock:
+        _production_checks[name] = fn
+
+
+def unregister_production_check(name: str) -> None:
+    with _checks_lock:
+        _production_checks.pop(name, None)
+
+
+def production_checks() -> dict[str, ProductionCheck]:
+    with _checks_lock:
+        return dict(_production_checks)
+
+
+def run_production_checks(settings: "Settings") -> list[str]:
+    """执行全部已登记检查，返回带模块名前缀的问题列表（不抛异常）。"""
+    problems: list[str] = []
+    for name, fn in sorted(production_checks().items()):
+        try:
+            result = fn(settings)
+        except (RuntimeError, ValueError) as exc:
+            problems.append(f"{name}: {exc}")
+            continue
+        problems.extend(f"{name}: {item}" for item in (result or ()))
+    return problems
 
 
 @lru_cache(maxsize=1)

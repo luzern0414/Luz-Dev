@@ -5,7 +5,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 import wallet
-from luzback import AppError, ErrorCode, create_token, get_settings
+from luzback import AppError, ErrorCode
+from admin_rbac.testing import staff_headers
+from luzback.db import get_session_factory
 from luzback.testing import make_test_app
 from wallet import api, config as wconfig
 from wallet.prepaid import CONSERVATIVE, set_policy_resolver
@@ -24,22 +26,23 @@ def client(tmp_path):
     port = wallet.FakePaymentPort()
     wallet.set_payment_port(port)
     wallet.set_user_token_decoder(user_decoder)
-    wallet.set_grants_resolver(lambda db, sid, claims: (frozenset(claims.get("perms", [])),
-                                                         tuple(claims["stores"]) if claims.get("stores") else None))
-    app = make_test_app(api.routers, wallet, url=f"sqlite:///{tmp_path / 'api.db'}")
+    app = make_test_app(api.routers, wallet, "admin_rbac.models", url=f"sqlite:///{tmp_path / 'api.db'}")
+    global _staff_db
+    _staff_db = get_session_factory()()
     with TestClient(app) as c:
         yield c
+    _staff_db.close()
     wallet.set_user_token_decoder(None)
-    wallet.set_grants_resolver(None)
     wallet.set_payment_port(wallet.WechatPayPort())
     set_policy_resolver(None)
 
 
-def staff(perms=("wallet:*",), stores=None):
-    s = get_settings()
-    token = create_token("7", s.jwt_secret, 600, kind="admin", extra={"perms": list(perms), "stores": stores},
-                         issuer=s.jwt_issuer)
-    return {"Authorization": f"Bearer {token}"}
+_staff_db = None
+
+
+def staff(perms=tuple(c for c, _ in wallet.PERMISSIONS), stores=None):
+    """真实 admin_rbac 会话令牌（admin_rbac.testing）：stores=None 全部门店，列表 = 仅这些门店。"""
+    return staff_headers(_staff_db, *perms, store_ids=stores)
 
 
 def user(uid=1):
@@ -143,3 +146,37 @@ def test_app_plan_cursor_pagination(client):
     assert first["has_more"] is True and first["next_cursor"]
     second = client.get(f"/api/v1/app/wallet/plans?limit=1&cursor={first['next_cursor']}", headers=user()).json()["data"]
     assert second["has_more"] is False and second["items"][0]["id"] != first["items"][0]["id"]
+
+
+def test_empty_store_scope_means_no_stores(client):
+    client.post("/api/v1/admin/wallet/accounts/5/offline-recharge", json={"amount_cents": 2000, "store_id": 3},
+                headers=staff() | key())
+    assert client.get("/api/v1/admin/wallet/recharge-orders", headers=staff()).json()["data"]["total"] == 1
+    assert client.get("/api/v1/admin/wallet/recharge-orders", headers=staff(stores=[])).json()["data"]["total"] == 0
+    assert wallet.staff_context(type("S", (), {"id": 1, "permissions": [], "store_scope": []})()).store_scope == ()
+
+
+def test_admin_auth_is_real_admin_rbac_session(client):
+    """真实会话：伪造的 kind=admin 令牌 4010；资金类写要求新鲜认证（超过 fresh_auth_seconds → 4011 reauth_required）。"""
+    from datetime import timedelta
+
+    from admin_rbac import config as rbac_config
+    from luzback import create_token, get_settings, utcnow
+
+    s = get_settings()
+    forged = create_token("7", s.jwt_secret, 600, kind="admin", extra={"sid": 999, "rv": 999, "role": "staff"},
+                          issuer=s.jwt_issuer)
+    assert client.get("/api/v1/admin/wallet/plans", headers={"Authorization": f"Bearer {forged}"}).json()["code"] == 4010
+    h = staff(("wallet:read", "wallet:adjust"))
+    assert client.get("/api/v1/admin/wallet/plans", headers=h).json()["code"] == 0
+    later = utcnow() + timedelta(seconds=rbac_config.get_config().fresh_auth_seconds + 5)
+    rbac_config.set_clock(lambda: later)
+    try:
+        assert client.get("/api/v1/admin/wallet/plans", headers=h).json()["code"] == 0  # 读不要求新鲜认证
+        r = client.post("/api/v1/admin/wallet/accounts/5/adjust", json={"principal_delta": 100, "reason": "补偿"},
+                        headers=h | key()).json()
+        assert r["code"] == 4011 and r["data"]["reason"] == "reauth_required"
+    finally:
+        rbac_config.set_clock(None)
+    wild = staff(("wallet:*",))  # 模块通配授予
+    assert client.get("/api/v1/admin/wallet/accounts/5", headers=wild).json()["code"] in (0, 4040)

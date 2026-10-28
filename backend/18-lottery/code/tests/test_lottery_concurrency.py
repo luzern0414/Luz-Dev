@@ -2,7 +2,7 @@
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import create_engine, event, func, select
 from sqlalchemy.orm import sessionmaker
 
 import lottery  # noqa: F401  注册模型
@@ -18,6 +18,18 @@ def factory(tmp_path):
     setup_hooks()
     engine = create_engine(f"sqlite:///{tmp_path / 'lottery-race.db'}", future=True,
                            connect_args={"check_same_thread": False, "timeout": 60})
+
+    # pysqlite 默认 DEFERRED 事务：先读后写时“读锁升级写锁”遇到另一写者会立即 SQLITE_BUSY（不等 timeout，
+    # 这是偶发 "database is locked" 的根因）。改为 BEGIN IMMEDIATE：写者在事务开始处排队等锁，
+    # 语义接近 Postgres 的行锁等待；业务的条件 UPDATE 仍是唯一的裁决手段。
+    @event.listens_for(engine, "connect")
+    def _no_pysqlite_begin(dbapi_conn, _record):
+        dbapi_conn.isolation_level = None
+
+    @event.listens_for(engine, "begin")
+    def _begin_immediate(conn):
+        conn.exec_driver_sql("BEGIN IMMEDIATE")
+
     Base.metadata.create_all(engine)
     yield sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     engine.dispose()

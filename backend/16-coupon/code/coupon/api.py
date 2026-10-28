@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from luzback import AppError, ErrorCode, get_db, get_settings, idempotency_key, ok, run_idempotent, utcnow, write_audit
@@ -24,7 +24,7 @@ from luzback.export import cents_to_yuan, export_csv, safe_cell
 
 from . import service
 from .config import get_cart_lines_provider
-from .deps import current_member, optional_member, require_permission
+from .deps import Staff, assert_template_scope, current_member, optional_member, require_permission, store_scope
 from .models import CouponCodeBatch, CouponIssueBatch, CouponIssueBatchItem, CouponTemplate, UserCoupon
 
 app_router = APIRouter(prefix="/api/v1/app", tags=["coupon"])
@@ -237,59 +237,80 @@ def redeem_code(body: RedeemCodeBody, user_id: int = Depends(current_member), ke
 # ================================================================ 后台：模板
 
 
-def _staff_write(db: Session, scope: str, key: str, staff_id: int, body: BaseModel | None, fn):
-    return ok(run_idempotent(db, scope, key, lambda: _json(fn()), actor=f"staff:{staff_id}",
+def _scoped(stmt, staff: Staff, column):
+    """门店员工：只看自己门店的模板与全局模板（store_id 为空）；全门店员工不加条件。"""
+    scope = store_scope(staff)
+    if scope is None:
+        return stmt
+    return stmt.where(or_(column.is_(None), column.in_(scope))) if scope else stmt.where(column.is_(None))
+
+
+def _check_template(db: Session, staff: Staff, template_id: int | None, write: bool = True) -> None:
+    """按模板门店校验范围（模板不存在交给 service 报 4040）。"""
+    t = db.get(CouponTemplate, template_id) if template_id else None
+    if t is not None:
+        assert_template_scope(staff, t.store_id, write)
+
+
+def _staff_write(db: Session, scope: str, key: str, staff: Staff, body: BaseModel | None, fn):
+    return ok(run_idempotent(db, scope, key, lambda: _json(fn()), actor=f"staff:{staff.id}",
                              fingerprint=_fingerprint(body), require_key=True))
 
 
 @admin_router.get("/coupon-templates")
-def admin_templates(request: Request, _: int = Depends(require_permission("coupon:read")), db: Session = Depends(get_db)):
-    stmt = select(CouponTemplate).where(CouponTemplate.deleted_at.is_(None))
+def admin_templates(request: Request, staff: Staff = Depends(require_permission("coupon:read")), db: Session = Depends(get_db)):
+    stmt = _scoped(select(CouponTemplate).where(CouponTemplate.deleted_at.is_(None)), staff, CouponTemplate.store_id)
     return ok(_json(service.TEMPLATE_SPEC.page(db, stmt, request.query_params,
                                                serialize=lambda t: service.template_view(t, admin=True))))
 
 
 @admin_router.get("/coupon-templates/export")
-def export_templates(request: Request, staff_id: int = Depends(require_permission("coupon:export")),
+def export_templates(request: Request, staff: Staff = Depends(require_permission("coupon:export")),
                      db: Session = Depends(get_db)):
-    stmt = select(CouponTemplate).where(CouponTemplate.deleted_at.is_(None))
+    stmt = _scoped(select(CouponTemplate).where(CouponTemplate.deleted_at.is_(None)), staff, CouponTemplate.store_id)
     stream = export_csv(db, service.TEMPLATE_SPEC, stmt, request.query_params,
                         ["ID", "名称", "类型", "状态", "规则", "总量", "已发", "已用", "发布时间"],
                         lambda t: [t.id, t.name, t.type, t.status, service.template_view(t)["rules_text"],
                                    t.total_stock if t.total_stock is not None else "不限", t.issued_count, t.used_count,
                                    t.published_at])
-    write_audit(db, "staff", staff_id, "coupon.template.export", "coupon_template", "*",
+    write_audit(db, "staff", staff.id, "coupon.template.export", "coupon_template", "*",
                 after={"params": dict(request.query_params)})
     db.commit()
     return _csv_response(stream, "coupon-templates.csv")
 
 
 @admin_router.post("/coupon-templates")
-def create_template(body: TemplateBody, staff_id: int = Depends(require_permission("coupon:write")),
+def create_template(body: TemplateBody, staff: Staff = Depends(require_permission("coupon:write")),
                     key: str = Depends(idempotency_key), db: Session = Depends(get_db)):
-    return _staff_write(db, "coupon.template.create", key, staff_id, body,
-                        lambda: service.template_view(service.create_template(db, staff_id, body.model_dump()), admin=True))
+    assert_template_scope(staff, body.store_id)
+    return _staff_write(db, "coupon.template.create", key, staff, body,
+                        lambda: service.template_view(service.create_template(db, staff.id, body.model_dump()), admin=True))
 
 
 @admin_router.get("/coupon-templates/{template_id}")
-def admin_template(template_id: int, _: int = Depends(require_permission("coupon:read")), db: Session = Depends(get_db)):
+def admin_template(template_id: int, staff: Staff = Depends(require_permission("coupon:read")), db: Session = Depends(get_db)):
+    _check_template(db, staff, template_id, write=False)
     return ok(_json(service.template_view(service.get_template(db, template_id), admin=True)))
 
 
 @admin_router.patch("/coupon-templates/{template_id}")
-def update_template(template_id: int, body: TemplatePatch, staff_id: int = Depends(require_permission("coupon:write")),
+def update_template(template_id: int, body: TemplatePatch, staff: Staff = Depends(require_permission("coupon:write")),
                     key: str = Depends(idempotency_key), db: Session = Depends(get_db)):
     changes = body.model_dump(exclude_unset=True, exclude={"version", "apply_to_issued"})
-    return _staff_write(db, f"coupon.template.update:{template_id}", key, staff_id, body,
+    _check_template(db, staff, template_id)
+    if "store_id" in changes:
+        assert_template_scope(staff, changes["store_id"])
+    return _staff_write(db, f"coupon.template.update:{template_id}", key, staff, body,
                         lambda: service.template_view(service.update_template(
-                            db, staff_id, template_id, changes, body.version, body.apply_to_issued), admin=True))
+                            db, staff.id, template_id, changes, body.version, body.apply_to_issued), admin=True))
 
 
 def _transition_route(action: str, fn):
-    def route(template_id: int, staff_id: int = Depends(require_permission("coupon:write")),
+    def route(template_id: int, staff: Staff = Depends(require_permission("coupon:write")),
               key: str = Depends(idempotency_key), db: Session = Depends(get_db)):
-        return _staff_write(db, f"coupon.template.{action}:{template_id}", key, staff_id, None,
-                            lambda: service.template_view(fn(db, staff_id, template_id), admin=True))
+        _check_template(db, staff, template_id)
+        return _staff_write(db, f"coupon.template.{action}:{template_id}", key, staff, None,
+                            lambda: service.template_view(fn(db, staff.id, template_id), admin=True))
 
     route.__name__ = f"{action}_template"
     admin_router.post(f"/coupon-templates/{{template_id}}/{action}")(route)
@@ -302,17 +323,19 @@ _transition_route("end", service.end_template)
 
 
 @admin_router.delete("/coupon-templates/{template_id}")
-def delete_template(template_id: int, staff_id: int = Depends(require_permission("coupon:write")),
+def delete_template(template_id: int, staff: Staff = Depends(require_permission("coupon:write")),
                     key: str = Depends(idempotency_key), db: Session = Depends(get_db)):
     def work():
-        service.delete_template(db, staff_id, template_id)
+        service.delete_template(db, staff.id, template_id)
         return {"deleted": template_id}
 
-    return _staff_write(db, f"coupon.template.delete:{template_id}", key, staff_id, None, work)
+    _check_template(db, staff, template_id)
+    return _staff_write(db, f"coupon.template.delete:{template_id}", key, staff, None, work)
 
 
 @admin_router.get("/coupon-templates/{template_id}/stats")
-def template_stats(template_id: int, _: int = Depends(require_permission("coupon:read")), db: Session = Depends(get_db)):
+def template_stats(template_id: int, staff: Staff = Depends(require_permission("coupon:read")), db: Session = Depends(get_db)):
+    _check_template(db, staff, template_id, write=False)
     return ok(service.template_stats(db, template_id))
 
 
@@ -320,14 +343,15 @@ def template_stats(template_id: int, _: int = Depends(require_permission("coupon
 
 
 @admin_router.post("/coupon-issue-batches")
-def create_issue_batch(body: IssueBatchBody, staff_id: int = Depends(require_permission("coupon:issue")),
+def create_issue_batch(body: IssueBatchBody, staff: Staff = Depends(require_permission("coupon:issue")),
                        key: str = Depends(idempotency_key), db: Session = Depends(get_db)):
     def work():
-        batch = service.create_issue_batch(db, staff_id, body.template_id, body.user_ids, body.reason, body.channel,
+        batch = service.create_issue_batch(db, staff.id, body.template_id, body.user_ids, body.reason, body.channel,
                                            body.ignore_limit)
         return _batch_view(batch)
 
-    return _staff_write(db, "coupon.issue_batch.create", key, staff_id, body, work)
+    _check_template(db, staff, body.template_id)
+    return _staff_write(db, "coupon.issue_batch.create", key, staff, body, work)
 
 
 def _batch_view(b: CouponIssueBatch) -> dict[str, Any]:
@@ -337,13 +361,13 @@ def _batch_view(b: CouponIssueBatch) -> dict[str, Any]:
 
 
 @admin_router.get("/coupon-issue-batches")
-def issue_batches(request: Request, _: int = Depends(require_permission("coupon:read")), db: Session = Depends(get_db)):
+def issue_batches(request: Request, staff: Staff = Depends(require_permission("coupon:read")), db: Session = Depends(get_db)):
     return ok(_json(service.ISSUE_BATCH_SPEC.page(db, select(CouponIssueBatch), request.query_params,
                                                   serialize=_batch_view)))
 
 
 @admin_router.get("/coupon-issue-batches/{batch_id}")
-def issue_batch(batch_id: int, _: int = Depends(require_permission("coupon:read")), db: Session = Depends(get_db)):
+def issue_batch(batch_id: int, staff: Staff = Depends(require_permission("coupon:read")), db: Session = Depends(get_db)):
     batch = db.get(CouponIssueBatch, batch_id)
     if batch is None:
         raise AppError(ErrorCode.NOT_FOUND, "issue batch not found")
@@ -362,22 +386,25 @@ def _code_batch_view(b: CouponCodeBatch, used: int | None = None) -> dict[str, A
 
 
 @admin_router.post("/coupon-code-batches")
-def create_code_batch(body: CodeBatchBody, staff_id: int = Depends(require_permission("coupon:code")),
+def create_code_batch(body: CodeBatchBody, staff: Staff = Depends(require_permission("coupon:code")),
                       key: str = Depends(idempotency_key), db: Session = Depends(get_db)):
-    return _staff_write(db, "coupon.codes.create", key, staff_id, body, lambda: _code_batch_view(
-        service.create_code_batch(db, staff_id, body.template_id, body.count, body.name)))
+    _check_template(db, staff, body.template_id)
+    return _staff_write(db, "coupon.codes.create", key, staff, body, lambda: _code_batch_view(
+        service.create_code_batch(db, staff.id, body.template_id, body.count, body.name)))
 
 
 @admin_router.get("/coupon-code-batches")
-def code_batches(request: Request, _: int = Depends(require_permission("coupon:read")), db: Session = Depends(get_db)):
+def code_batches(request: Request, staff: Staff = Depends(require_permission("coupon:read")), db: Session = Depends(get_db)):
     return ok(_json(service.CODE_BATCH_SPEC.page(db, select(CouponCodeBatch), request.query_params,
                                                  serialize=_code_batch_view)))
 
 
 @admin_router.get("/coupon-code-batches/{batch_id}/export")
-def export_codes(batch_id: int, staff_id: int = Depends(require_permission("coupon:code")),
+def export_codes(batch_id: int, staff: Staff = Depends(require_permission("coupon:code")),
                  db: Session = Depends(get_db)):
-    rows = service.export_code_rows(db, staff_id, batch_id)
+    batch = db.get(CouponCodeBatch, batch_id)
+    _check_template(db, staff, batch.template_id if batch else None)
+    rows = service.export_code_rows(db, staff.id, batch_id)
     db.commit()
     buffer = io.StringIO()
     buffer.write("﻿")
@@ -389,10 +416,12 @@ def export_codes(batch_id: int, staff_id: int = Depends(require_permission("coup
 
 
 @admin_router.post("/coupon-code-batches/{batch_id}/void")
-def void_codes(batch_id: int, staff_id: int = Depends(require_permission("coupon:code")),
+def void_codes(batch_id: int, staff: Staff = Depends(require_permission("coupon:code")),
                key: str = Depends(idempotency_key), db: Session = Depends(get_db)):
-    return _staff_write(db, f"coupon.codes.void:{batch_id}", key, staff_id, None,
-                        lambda: {"voided": service.void_code_batch(db, staff_id, batch_id)})
+    batch = db.get(CouponCodeBatch, batch_id)
+    _check_template(db, staff, batch.template_id if batch else None)
+    return _staff_write(db, f"coupon.codes.void:{batch_id}", key, staff, None,
+                        lambda: {"voided": service.void_code_batch(db, staff.id, batch_id)})
 
 
 # ================================================================ 后台：会员券
@@ -403,33 +432,51 @@ def _member_coupon_row(c: UserCoupon) -> dict[str, Any]:
             "revoke_reason": c.revoke_reason, "returned_at": c.returned_at}
 
 
+def _member_coupon_query(db: Session, staff: Staff, params) -> tuple[Any, dict[str, Any]]:
+    """会员券查询：门店范围（按模板门店）+ 关键词是手机号时走 identity 的哈希查找（手机号不明文入库，不能 LIKE）。"""
+    params = dict(params)
+    stmt = select(UserCoupon)
+    if store_scope(staff) is not None:
+        stmt = _scoped(stmt.join(CouponTemplate, CouponTemplate.id == UserCoupon.template_id), staff,
+                       CouponTemplate.store_id)
+    keyword = (params.get("keyword") or "").strip()
+    if service.looks_like_phone(keyword):
+        params.pop("keyword")
+        user_id = service.user_id_by_phone(db, keyword)
+        stmt = stmt.where(UserCoupon.user_id == user_id) if user_id is not None else stmt.where(UserCoupon.id < 0)
+    return stmt, params
+
+
 @admin_router.get("/user-coupons")
-def member_coupons(request: Request, _: int = Depends(require_permission("coupon:read")), db: Session = Depends(get_db)):
+def member_coupons(request: Request, staff: Staff = Depends(require_permission("coupon:read")), db: Session = Depends(get_db)):
     """会员券列表：status / template_id / channel / user_id / order_id 筛选，领取、使用、到期时间区间，
     keyword 匹配券名、会员 id、来源。"""
-    return ok(_json(service.MEMBER_COUPON_SPEC.page(db, select(UserCoupon), request.query_params,
-                                                    serialize=_member_coupon_row)))
+    stmt, params = _member_coupon_query(db, staff, request.query_params)
+    return ok(_json(service.MEMBER_COUPON_SPEC.page(db, stmt, params, serialize=_member_coupon_row)))
 
 
 @admin_router.get("/user-coupons/export")
-def export_member_coupons(request: Request, staff_id: int = Depends(require_permission("coupon:export")),
+def export_member_coupons(request: Request, staff: Staff = Depends(require_permission("coupon:export")),
                           db: Session = Depends(get_db)):
-    stream = export_csv(db, service.MEMBER_COUPON_SPEC, select(UserCoupon), request.query_params,
+    stmt, params = _member_coupon_query(db, staff, request.query_params)
+    stream = export_csv(db, service.MEMBER_COUPON_SPEC, stmt, params,
                         ["券ID", "会员ID", "模板ID", "券名", "状态", "渠道", "领取时间", "到期时间", "使用时间", "订单",
                          "抵扣(元)"],
                         lambda c: [c.id, c.user_id, c.template_id, c.name, c.status, c.channel, c.claimed_at,
                                    c.valid_to, c.used_at, c.order_id, cents_to_yuan(c.discount_cents)])
-    write_audit(db, "staff", staff_id, "coupon.user_coupons.export", "user_coupon", "*",
+    write_audit(db, "staff", staff.id, "coupon.user_coupons.export", "user_coupon", "*",
                 after={"params": dict(request.query_params)})
     db.commit()
     return _csv_response(stream, "user-coupons.csv")
 
 
 @admin_router.post("/user-coupons/{coupon_id}/revoke")
-def revoke_coupon(coupon_id: int, body: ReasonBody, staff_id: int = Depends(require_permission("coupon:write")),
+def revoke_coupon(coupon_id: int, body: ReasonBody, staff: Staff = Depends(require_permission("coupon:write")),
                   key: str = Depends(idempotency_key), db: Session = Depends(get_db)):
-    return _staff_write(db, f"coupon.revoke:{coupon_id}", key, staff_id, body,
-                        lambda: _member_coupon_row(service.revoke(db, staff_id, coupon_id, body.reason)))
+    target = db.get(UserCoupon, coupon_id)
+    _check_template(db, staff, target.template_id if target else None)
+    return _staff_write(db, f"coupon.revoke:{coupon_id}", key, staff, body,
+                        lambda: _member_coupon_row(service.revoke(db, staff.id, coupon_id, body.reason)))
 
 
 def _csv_response(stream, filename: str) -> StreamingResponse:
@@ -442,4 +489,4 @@ def _csv_response(stream, filename: str) -> StreamingResponse:
 router = APIRouter()
 router.include_router(app_router)
 router.include_router(admin_router)
-routers = [router]
+routers = [app_router, admin_router]  # app.py 逐个挂载；router 保留给只挂一个路由器的旧用法

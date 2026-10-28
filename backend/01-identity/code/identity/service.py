@@ -426,6 +426,25 @@ def _consume_sms(db: Session, phone: str, purpose: str, request_id: str, code: s
         raise _sms_invalid()
 
 
+def find_user_by_phone(db: Session, phone: str | None) -> User | None:
+    """按手机号查会员（其他模块用：后台按手机号搜索、线下充值 / 发卡找人）。
+
+    规范化（去空格 / 短横线、去 +86 / 86 前缀）后用 phone_hash（HMAC）等值查询；不做模糊匹配、不解密。
+    号码不合法、未绑定、已注销（deleted_at 非空 / 已匿名化）→ None。只读，不写审计（需要展示明文手机号仍走 reveal_phone）。
+    """
+    raw = "".join(ch for ch in (phone or "") if ch not in " -")
+    if raw.startswith("+86"):
+        raw = raw[3:]
+    elif raw.startswith("86") and len(raw) == 13:
+        raw = raw[2:]
+    try:
+        normalized = rules.normalize_cn_mobile(raw)
+    except AppError:
+        return None
+    return db.execute(select(User).where(User.phone_hash == _cipher().lookup_hash(normalized),
+                                         User.deleted_at.is_(None))).scalar_one_or_none()
+
+
 def login_with_sms(db: Session, phone: str, request_id: str, code: str, *, ip: str | None = None,
                    user_agent: str | None = None, now: datetime | None = None) -> dict:
     """短信登录：只登录已绑定该手机号的账号（注册走微信登录）。验证码通过后才告知未绑定。"""

@@ -102,10 +102,12 @@ return redis.call('DECRBY', KEYS[1], ARGV[1])
 | 下架商品 | 4091 |
 | 回补 | 库存恢复 |
 | 50 线程抢 10 件 | 成功 10 次，失败 40 次，最终库存 0 |
+| 带 ref 回补重放 / 不同 ref | 同一 ref 只回补一次（返回 False），不同 ref 各回补 |
+| 16 线程同一 ref 回补 | 只成功 1 次（流水唯一约束兜底） |
 
 ## 10 可复用代码
 
-`07-inventory/code/inventory/__init__.py`：`Sku`、`deduct`、`restore`。并发测试可直接复用到其他“数量类”资源（优惠券名额、活动名额）。
+`inventory`（包导出）：`Sku`（唯一定义在 `inventory/models.py`）、`StockReservation`、`StockLedger`；`deduct(db, sku_id, qty, ref=None) -> bool`、`restore(db, sku_id, qty, ref=None) -> bool`、`restocked(db, ref, sku_id) -> bool`；预占 `reserve / confirm / release / expired_refs / ledger_balance`。带 `ref` 的扣减 / 回补按 `stock_ledger (ref, sku_id, reason)` 唯一去重：同一业务引用只生效一次，重放返回 False（08-order 退货入库用 `refund:order:{id}:item:{item}:upto:{累计退货件数}`）。并发测试可直接复用到其他“数量类”资源（优惠券名额、活动名额）。
 
 ## 11 前端对接
 

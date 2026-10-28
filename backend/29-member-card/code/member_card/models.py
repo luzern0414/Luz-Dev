@@ -268,6 +268,9 @@ class CardRefund(Base, BigIdMixin, TimestampMixin):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     fail_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
     overdue_notified: Mapped[bool] = mapped_column(default=False)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # 已提交支付模块
+    channel_refund_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    submit_error: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
 class CardReminder(Base, BigIdMixin):

@@ -23,11 +23,11 @@
 
 | 文件 | 内容 | 关键 API |
 |---|---|---|
-| `config.py` | 环境变量配置（存储、令牌、加密、微信、业务默认值、限流、弹性、请求限制、功能开关） | `get_settings()`, `reload_settings()`, `Settings.assert_production_safe()`, `service_secret(name)` |
+| `config.py` | 环境变量配置（存储、令牌、加密、微信、业务默认值、限流、弹性、请求限制、功能开关） | `get_settings()`, `reload_settings()`, `Settings.assert_production_safe()`（框架项 + 模块登记的检查）, `register_production_check(name, fn)`, `service_secret(name)` |
 | `errors.py` | 错误码（SPEC §4）与 `AppError` | `ErrorCode`, `AppError(code, message, data, retry_after)`, `not_found()`, `conflict()`, `rule()` |
 | `db.py` | 引擎、会话、`Base`（约束命名）、`BigIdMixin`、`TimestampMixin`、`SoftDeleteMixin`、`transaction()`、`utcnow()`、`supports_skip_locked()` | `init_engine(url, pool_size, statement_timeout_ms)`, `get_db()` |
 | `responses.py` | 信封与分页包装 | `ok()`, `cursor_page()`, `offset_page()` |
-| `security.py` | JWT（iss / jti / kind / leeway）、口令哈希与策略、TOTP、服务签名与 nonce 去重、脱敏、安全头、请求 / trace id | `create_token`, `decode_token`, `hash_password`, `verify_password`, `check_password_policy`, `totp_*`, `service_signature`, `verify_service_signature`, `NonceStore`, `mask_phone` |
+| `security.py` | JWT（iss / jti / kind / leeway）、口令哈希与策略、TOTP、服务签名与 nonce 去重、脱敏、安全头、请求 / trace id | `create_token`, `decode_token`, `hash_password`, `verify_password`, `check_password_policy`（NIST 800-63B-4：长度 15 / MFA 时 8、上限 128、黑名单与上下文，无组成规则）, `totp_*`, `service_signature`, `verify_service_signature`, `NonceStore`, `mask_phone` |
 | `crypto.py` | AES-256-GCM 字段加密与哈希查询；微信 APIv3 解密 | `FieldCipher(key_b64).encrypt/decrypt/lookup_hash`, `aes_gcm_decrypt` |
 | `ratelimit.py` | 令牌桶、固定窗口、Redis 令牌桶、规则 | `TokenBucketLimiter`, `FixedWindowLimiter`, `RedisTokenBucket`, `RateLimitRule`, `require_rate_limit` |
 | `logging.py` | JSON 日志、contextvar、脱敏 | `configure_logging`, `log_event`, `redact`, `trace_id_var` |
@@ -40,7 +40,7 @@
 | `scheduler.py` | 任务、注册表、锁、运行记录、调度循环 | `Job`, `JobRegistry`, `InMemoryLock`, `RedisLock`, `run_job`, `Scheduler` |
 | `contracts.py` | 跨模块数据结构 | `Quote`, `QuoteLine`, `allocate`, `RangeResult`, `PaymentInfo`, `RefundInfo` |
 | `app.py` | 应用工厂与系统端点 | `create_app(routers, settings, rate_rules, breakers, readiness_checks)`, `idempotency_key`, `client_ip`, `Metrics` |
-| `testing.py` | 内存会话、测试应用、可控时钟 | `memory_session`, `make_test_app`, `FakeClock` |
+| `testing.py` | 内存会话、测试应用（可传 rate_rules / breakers；每个应用独立 `app.state.metrics`，测试直接读计数，/metrics 端点只对内网或令牌开放）、可控时钟 | `memory_session`, `make_test_app`, `FakeClock` |
 
 ## 3 用法
 

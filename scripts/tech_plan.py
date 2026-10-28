@@ -33,7 +33,7 @@ from typing import Any, Iterator, Mapping
 from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from luz_shell import chip, fill, inline, load_tokens, render_table, resolve_design_root, shell_css, tokens_css  # noqa: E402
+from luz_shell import chip, favicon_for_tokens, fill, inline, load_tokens, render_table, resolve_design_root, shell_css, tokens_css  # noqa: E402
 import knowledge as kb  # noqa: E402
 import module_specs as ms  # noqa: E402
 
@@ -45,6 +45,7 @@ RAW_DIRNAME = "raw"
 LEGACY_DATA_DIRNAME = "_data"  # layout before 2026-10-26 evening; migrate with `migrate-layout`
 TEMPLATE = ROOT / "assets" / "tech-plan" / "template.html"
 STANDARDS = ROOT / "references" / "standards.json"
+STANDARD_MODULES = ROOT / "references" / "standard-modules.json"
 RESEARCH_SOURCES = ROOT / "references" / "research-sources.json"
 CATALOG = ROOT / "references" / "function-catalog.json"
 SCHEMA = "luz-dev-plan/2"
@@ -320,6 +321,37 @@ def resolve_crawl_root(cli_value: str | Path | None = None) -> Path:
 # ---------------------------------------------------------------- reference data
 
 
+def load_standard_modules() -> list[dict[str, Any]]:
+    """The backend standard-module catalog: plans reference these instead of copying their design."""
+    if not STANDARD_MODULES.is_file():
+        return []
+    return json.loads(STANDARD_MODULES.read_text(encoding="utf-8")).get("modules", [])
+
+
+def standard_entries(plan_modules: list[str]) -> list[dict[str, Any]]:
+    wanted = set(plan_modules)
+    return [m for m in load_standard_modules() if wanted.intersection(m.get("planModules", []))]
+
+
+def sync_standard_modules(plan: dict[str, Any]) -> list[str]:
+    """Add a standardModules entry for every catalog module the plan uses; existing entries keep their values."""
+    chosen = plan.setdefault("standardModules", [])
+    have = {item["id"] for item in chosen}
+    added = []
+    for entry in standard_entries(plan.get("modules", [])):
+        if entry["id"] not in have:
+            chosen.append({"id": entry["id"], "params": {}, "deviations": []})
+            added.append(entry["id"])
+    order = {m["id"]: i for i, m in enumerate(load_standard_modules())}
+    chosen.sort(key=lambda item: order.get(item["id"], 999))
+    return added
+
+
+def standard_spec_ids(plan: Mapping[str, Any]) -> set[str]:
+    """Module-spec ids replaced by a standard module (same id in both catalogs)."""
+    return {item["id"] for item in plan.get("standardModules") or []}
+
+
 def load_standards() -> dict[str, Any]:
     return load_json(STANDARDS, {"rules": [], "baselines": [], "domains": [], "modules": []})
 
@@ -506,16 +538,21 @@ def new_plan_data(
         },
         "checklist": {"rules": [], "baselines": []},
         "customFeatures": [],
-        "moduleSpecs": ms.specs_for(modules) if mode == "implementation" else [],
+        "standardModules": [],
+        "moduleSpecs": [],
         "decisions": [],
         "approval": None,
         "revisions": [{"at": created, "version": "0.1", "change": "由 Luz Dev 方案生成器创建草稿。", "basis": "用户请求"}],
     }
+    if mode == "implementation":
+        sync_standard_modules(plan)
+        replaced = standard_spec_ids(plan)
+        plan["moduleSpecs"] = [spec for spec in ms.specs_for(modules) if spec["id"] not in replaced]
     try:
         apply_knowledge(plan)
     except (OSError, ValueError):
         pass  # knowledge base unreadable: research will fetch everything
-    if plan["moduleSpecs"]:
+    if plan["moduleSpecs"] or plan["standardModules"]:
         for section in plan["sections"]:
             if SECTION_LIBRARY[section["id"]].get("specDriven"):
                 section["blocks"] = [b for b in section["blocks"] if b.get("type") != "todo"]
@@ -612,6 +649,7 @@ def content_hash(plan: Mapping[str, Any]) -> str:
         "decisions": plan.get("decisions"),
         "customFeatures": plan.get("customFeatures"),
         "moduleSpecs": plan.get("moduleSpecs") or [],
+        "standardModules": plan.get("standardModules") or [],
         "rules": normalize(checklist.get("rules", [])),
         "baselines": normalize(checklist.get("baselines", [])),
     }
@@ -726,13 +764,21 @@ def check_plan(plan: Mapping[str, Any], stage: str = "review") -> tuple[list[str
 
     # Module detailed design.
     specs = plan.get("moduleSpecs") or []
-    if mode == "implementation" and "backend" in (plan.get("projectTypes") or []) and not specs:
-        errors.append("后端实施方案缺少模块详细设计；运行 spec NN --sync 从模块库复制后按项目调整")
+    standard = plan.get("standardModules") or []
+    if mode == "implementation" and "backend" in (plan.get("projectTypes") or []) and not specs and not standard:
+        errors.append("后端实施方案既没有采用标准模块也没有模块详细设计；运行 standard NN --sync 与 spec NN --sync")
+    catalog = {m["id"]: m for m in load_standard_modules()}
+    for item in standard:
+        if item.get("id") not in catalog:
+            errors.append(f"标准模块 {item.get('id')} 不在 references/standard-modules.json")
     errors += ms.validate_specs(specs, with_library=True)
-    for spec_id, table_name in ms.unknown_write_tables(specs):
+    standard_tables = {t.get("name") for spec in ms.load_library() if spec.get("id") in standard_spec_ids(plan)
+                       for t in spec.get("tables", [])}  # 标准模块的表由标准库定义
+    for spec_id, table_name in ms.unknown_write_tables(specs, standard_tables):
         warnings.append(f"模块 {spec_id} 写入的表 {table_name} 属于未纳入的模块，确认是否需要或删去这条写入")
-    if specs:
+    if specs or standard:
         covered = {m for spec in specs for m in spec.get("modules", [])}
+        covered |= {m for item in standard for m in catalog.get(item.get("id"), {}).get("planModules", [])}
         missing = [m for m in plan.get("modules", []) if m not in covered and m not in SPECLESS_MODULES]
         if missing:
             warnings.append(f"这些模块没有详细设计：{'、'.join(missing)}")
@@ -763,7 +809,10 @@ def check_plan(plan: Mapping[str, Any], stage: str = "review") -> tuple[list[str
             errors.append(f"官方或法规来源 {summary['official']} 个，少于要求的 {need['minOfficial']} 个")
         if summary["opensource"] < need["minOpenSource"]:
             errors.append(f"同类系统开源参考 {summary['opensource']} 个，少于要求的 {need['minOpenSource']} 个（GitHub / Gitee 实现）")
-        uncovered = [m for m in plan.get("modules", []) if m not in summary["modules"]]
+        # 标准模块已带官方来源（MODULE.md §0），方案只需调研定制模块
+        by_standard = {m for item in plan.get("standardModules") or [] for e in load_standard_modules()
+                       if e["id"] == item.get("id") for m in e.get("planModules", [])}
+        uncovered = [m for m in plan.get("modules", []) if m not in summary["modules"] and m not in by_standard]
         if uncovered and need["minRead"]:
             warnings.append(f"这些模块还没有对应的已读来源：{'、'.join(uncovered)}")
         for module in need["officialModules"]:
@@ -1478,6 +1527,8 @@ def section_parts(plan: Mapping[str, Any], section: Mapping[str, Any]) -> list[t
     if section_id in HIDDEN_SECTIONS:
         return []
     specs = plan.get("moduleSpecs") or []
+    standard = plan.get("standardModules") or []
+    designed = bool(specs or standard)
     body = "".join(render_block(block) for block in section.get("blocks", []))
     if section_id == "features":
         body = render_features(plan) + body
@@ -1485,16 +1536,19 @@ def section_parts(plan: Mapping[str, Any], section: Mapping[str, Any]) -> list[t
         body += render_research(plan)
     elif section_id == "security":
         body += render_checklist(plan)
-    elif section_id == "data" and specs:
+    elif section_id == "data" and designed:
         body += ms.render_data_overview(specs)
-    elif section_id == "routes" and specs:
+    elif section_id == "routes" and designed:
         body = ms.render_api_overview(specs) + body
-    elif section_id == "modules" and specs:
-        body = ms.render_module_overview(specs) + body
+    elif section_id == "modules" and designed:
+        overview = render_standard_modules(plan)
+        if specs:
+            overview += ("<h3>定制模块</h3>" if standard else "") + ms.render_module_overview(specs)
+        body = overview + body
     title = SECTION_TITLES.get(section_id, section.get("title", ""))
-    if section_id == "modules" and specs:
+    if section_id == "modules" and designed:
         title = SECTION_LIBRARY["modules"]["title"]
-    elif section_id in ("data", "routes") and specs:
+    elif section_id in ("data", "routes") and designed:
         title = SECTION_LIBRARY[section_id]["title"]
     parts = [(section_id, str(title), body)] if body.strip() else []
     if section_id == "modules":
@@ -1502,6 +1556,29 @@ def section_parts(plan: Mapping[str, Any], section: Mapping[str, Any]) -> list[t
             name, spec_body = ms.render_spec(spec)
             parts.append((f"module-{spec['id']}", name, spec_body))
     return parts
+
+
+def render_standard_modules(plan: Mapping[str, Any]) -> str:
+    """Standard modules: what each covers (once, from the catalog), this project's values, and deviations.
+
+    The full design of a standard module lives in backend/<dir>/MODULE.md; the plan does not repeat it.
+    """
+    chosen = plan.get("standardModules") or []
+    if not chosen:
+        return ""
+    catalog = {m["id"]: m for m in load_standard_modules()}
+    rows = []
+    for item in chosen:
+        entry = catalog.get(item.get("id"))
+        if entry is None:
+            continue
+        values = item.get("params") or {}
+        settings = "；".join(f"{meaning}：{values.get(key, default)}" for key, default, meaning in entry.get("params", []))
+        extra = [f"{key}：{value}" for key, value in values.items() if key not in {p[0] for p in entry.get("params", [])}]
+        settings = "；".join([settings, *extra]) if extra else settings
+        deviations = "；".join(text(d) for d in item.get("deviations") or []) or "无"
+        rows.append([text(entry["name"]), text(entry["covers"]), text(settings) or "—", deviations])
+    return "<h3>采用的标准模块</h3>" + table(["模块", "内容", "本项目取值", "与标准的差异"], rows, raw=True)
 
 
 H3 = re.compile(r"<h3>")
@@ -1564,6 +1641,7 @@ def render_plan(plan: Mapping[str, Any], design_root: Path | None = None) -> str
     tokens, token_source = load_tokens(design_root)
     values = {
         "{{TOKENS_CSS}}": tokens_css(tokens),
+        "{{FAVICON}}": favicon_for_tokens("plan", tokens),
         "{{SHELL_CSS}}": shell_css(),
         "{{TOKEN_SOURCE}}": html.escape(token_source, quote=True),
         "{{PLAN_NUMBER}}": html.escape(str(plan.get("number", "")), quote=True),
@@ -1917,7 +1995,10 @@ def sync_specs(plan: dict[str, Any]) -> list[str]:
     covered = {m for spec in specs for m in spec.get("modules", [])}
     have = {spec.get("id") for spec in specs}
     added = []
+    replaced = standard_spec_ids(plan)
     for spec in ms.specs_for(plan.get("modules", [])):
+        if spec["id"] in replaced:
+            continue
         if spec["id"] not in have and not covered.issuperset(spec.get("modules", [])):
             specs.append(spec)
             added.append(spec["id"])
@@ -1954,6 +2035,41 @@ def command_spec(args: argparse.Namespace) -> int:
         save_plan(plan, html_path, data_path, args.design_root)
     result["modules"] = [{"id": s.get("id"), "name": s.get("name"), "apis": len(s.get("apis", [])), "tables": len(s.get("tables", []))} for s in specs]
     result["problems"] = ms.validate_specs(specs, with_library=True)
+    print_result(result)
+    return 0
+
+
+def command_standard(args: argparse.Namespace) -> int:
+    """Standard modules the plan reuses: sync from the catalog, set a parameter, record a deviation, remove."""
+    plan, html_path, data_path = _load(args.plan, args.output_root)
+    chosen = plan.setdefault("standardModules", [])
+    catalog = {m["id"]: m for m in load_standard_modules()}
+    result: dict[str, Any] = {"ok": True}
+    if args.sync:
+        result["added"] = sync_standard_modules(plan)
+        replaced = standard_spec_ids(plan)
+        dropped = [s["id"] for s in plan.get("moduleSpecs", []) if s.get("id") in replaced]
+        plan["moduleSpecs"] = [s for s in plan.get("moduleSpecs", []) if s.get("id") not in replaced]
+        result["specsReplaced"] = dropped
+    if args.module:
+        if args.module not in catalog:
+            raise PlanError(f"标准模块 {args.module} 不存在；可选：{'、'.join(catalog)}")
+        item = next((m for m in chosen if m["id"] == args.module), None)
+        if item is None:
+            item = {"id": args.module, "params": {}, "deviations": []}
+            chosen.append(item)
+        if args.remove:
+            chosen[:] = [m for m in chosen if m["id"] != args.module]
+        for pair in args.set or []:
+            key, sep, value = pair.partition("=")
+            if not sep or not key.strip():
+                raise PlanError(f"--set 需要 KEY=VALUE：{pair}")
+            item["params"][key.strip()] = value.strip()
+        for deviation in args.deviation or []:
+            if deviation.strip():
+                item["deviations"].append(deviation.strip())
+    save_plan(plan, html_path, data_path, args.design_root)
+    result["standardModules"] = [{"id": m["id"], "params": m.get("params"), "deviations": m.get("deviations")} for m in chosen]
     print_result(result)
     return 0
 
@@ -2101,6 +2217,14 @@ def build_parser() -> argparse.ArgumentParser:
     spec_group.add_argument("--file", help="用调整后的 JSON 文件新增或替换同 id 的模块设计")
     spec_group.add_argument("--remove", help="删除指定 id 的模块设计")
     spec.set_defaults(func=command_spec)
+
+    standard = with_plan("standard", "采用的标准模块：同步、设置本项目取值、记录与标准的差异")
+    standard.add_argument("--sync", action="store_true", help="按方案模块加入标准模块，并去掉被标准模块取代的详细设计")
+    standard.add_argument("--module", help="标准模块编号，见 references/standard-modules.json")
+    standard.add_argument("--set", action="append", help="KEY=VALUE，本项目取值")
+    standard.add_argument("--deviation", action="append", help="与标准模块的差异（写进方案）")
+    standard.add_argument("--remove", action="store_true", help="不采用该标准模块")
+    standard.set_defaults(func=command_standard)
 
     design = with_plan("design", "方案批准后登记前端地址：Luz System 设计会话（核验批准与哈希）和/或前端工程目录")
     design.add_argument("--session", help=r"Luz System 会话目录，例如 D:\Codes\skill输出\Luz-System\001-项目")

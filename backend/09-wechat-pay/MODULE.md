@@ -133,7 +133,7 @@
 
 ## 9 配置
 
-见 §13 配置表；所有密钥只从环境变量 / 密钥服务注入，`assert_production_ready()` 在生产拒绝：假客户端、APIv3 密钥非 32 字节、缺私钥 / 序列号 / 公钥或平台证书、回调地址非 https 或带查询参数。
+见 §13 配置表；所有密钥只从环境变量 / 密钥服务注入，`assert_production_ready()`（导入时另登记 `luzback.register_production_check("wechat_pay", …)`，app / jobs 启动时由 `Settings.assert_production_safe()` 统一执行）在生产拒绝：假客户端、APIv3 密钥非 32 字节、缺私钥 / 序列号 / 公钥或平台证书、回调地址非 https 或带查询参数。
 
 ## 10 错误码
 
@@ -150,7 +150,7 @@
 | 熔断打开 | 5030 | 503 |
 | 回调（渠道格式例外） | 204；验签失败 401、报文 / 核对失败 400、未知单号 404、内部错误 500，体 `{"code":"FAIL","message":…}` | — |
 
-## 11 测试清单（145 项）
+## 11 测试清单（149 项）
 
 | 文件 | 覆盖 |
 |---|---|
@@ -201,6 +201,6 @@
 | WECHAT_PAY_SHIPPING_ENABLED / SHIPPING_MAX_ATTEMPTS | true / 8 | 发货信息上传 |
 | WECHAT_PAY_TZ | Asia/Shanghai | 单号日期与账单日 |
 
-扩展钩子：`register_payable(business_type, fn(db, user_id, business_id) -> Payable)`；`register_on_paid(business_type, fn(db, PaymentInfo))`；`register_on_refunded(key, fn(db, RefundInfo))`（key = business_ref 前缀或 business_type）；`set_openid_resolver`；`set_client(WechatPayClient)`；`set_shipping_client(ShippingClient)`（生产注入 `HttpShippingClient(access_token_provider)`）；`api.set_staff_authorizer`；`set_config(WechatPayConfig)`。`adapters.install_defaults` 只在 order 模块未注册时为 v1 订单兜底。测试：`wechat_pay.testing.wechat_pay_kit()` + `FakeWechatPay`（可作 httpx MockTransport 假服务器）。
+扩展钩子：`register_payable(business_type, fn(db, user_id, business_id) -> Payable)`；`register_on_paid(business_type, fn(db, PaymentInfo))`；`register_on_refunded(key, fn(db, RefundInfo))`（key = business_ref 前缀或 business_type）；`set_openid_resolver`；`set_client(WechatPayClient)`；`set_shipping_client(ShippingClient)`（生产注入 `HttpShippingClient()`：access_token 默认取 28-wechat-mp `get_client().access_token()`，40001 / 42001 作废缓存后重试一次；也可传 `access_token=` / `invalidate=`）；后台鉴权为 22-admin-rbac `require_permission`（发起退款、异常退款、关单、对账差异处理 fresh=True），无本地授权器；对外查询 `find_active_refund(db, business_ref) -> RefundRecord | None`（pending / processing / succeeded / abnormal，最新一笔；10-after-sales 重提前查重）；`set_config(WechatPayConfig)`。`adapters.install_defaults` 只在 order 模块未注册时为 v1 订单兜底。测试：`wechat_pay.testing.wechat_pay_kit()` + `FakeWechatPay`（可作 httpx MockTransport 假服务器）。
 
 不包含：小程序虚拟支付（`virtual_content` 一律拒绝）、服务商 / 合单 / 付款码 / H5 / Native / APP 支付、分账、资金账单、平台证书自动下载轮换（需配置文件热更新）、电子发票、代金券明细核算、合单发货与特殊发货报备、发货事件推送（trade_manage_*）接收。

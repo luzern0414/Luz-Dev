@@ -38,7 +38,7 @@ FIELD_TYPE = re.compile(r"^(BIGINT|INTEGER|SMALLINT|BOOLEAN|DATE|TIMESTAMPTZ|TEX
 METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE", "MQTT", "TASK", "CALLBACK"}
 PARTS = (
     ("features", "功能说明"), ("flows", "业务流程"), ("inputs", "页面与输入"), ("apis", "接口"),
-    ("results", "结果与页面跳转"), ("writes", "数据写入"), ("tables", "数据表"), ("states", "状态流转"),
+    ("results", "结果与页面跳转"), ("tables", "数据表"), ("states", "状态流转"),
     ("exceptions", "异常与边界"),
 )
 REQUIRED_PARTS = ("features", "flows", "apis", "tables", "exceptions")
@@ -146,9 +146,9 @@ def write_tables(write: Mapping[str, Any]) -> list[str]:
     return [name for name in re.split(r"[,，、\s]+", str(write.get("table", ""))) if name]
 
 
-def unknown_write_tables(specs: list[Mapping[str, Any]]) -> list[tuple[str, str]]:
-    """(spec id, table) pairs written by a spec but defined by none of the given specs."""
-    known = {t.get("name") for spec in specs for t in spec.get("tables", [])} | FRAMEWORK_TABLES
+def unknown_write_tables(specs: list[Mapping[str, Any]], also_known: Iterable[str] = ()) -> list[tuple[str, str]]:
+    """(spec id, table) pairs written by a spec but defined by none of the given specs (nor in also_known)."""
+    known = {t.get("name") for spec in specs for t in spec.get("tables", [])} | FRAMEWORK_TABLES | set(also_known)
     return [(spec.get("id"), name) for spec in specs for write in spec.get("writes", [])
             for name in write_tables(write) if name not in known]
 
@@ -215,8 +215,11 @@ def render_part(part: str, spec: Mapping[str, Any]) -> str:
 
 
 def render_spec(spec: Mapping[str, Any]) -> tuple[str, str]:
-    """Return (title, body); the page renderer numbers h2 and h3 headings."""
-    parts = [f"<p>{_text(spec['summary'])}</p>"]
+    """Return (title, body); the page renderer numbers h2 and h3 headings.
+
+    The summary is shown once, in the module overview; data writes are already in the flows and tables.
+    """
+    parts = []
     for part, title in PARTS:
         body = render_part(part, spec)
         if body:
@@ -225,24 +228,19 @@ def render_spec(spec: Mapping[str, Any]) -> tuple[str, str]:
 
 
 def render_module_overview(specs: list[Mapping[str, Any]]) -> str:
-    rows = [[_text(s["name"]), _text(s["summary"]), str(len(s.get("apis", []))), str(len(s.get("tables", [])))] for s in specs]
-    return _table(["模块", "职责", "接口数", "表数"], rows)
+    rows = [[f'<a href="#module-{html.escape(str(s["id"]), quote=True)}">{_text(s["name"])}</a>', _text(s["summary"])] for s in specs]
+    return _table(["模块", "职责"], rows)
 
 
 def render_data_overview(specs: list[Mapping[str, Any]]) -> str:
     conventions = [
-        "数据库为 PostgreSQL；表名与字段名使用小写下划线；每张表都有 `id BIGINT` 主键、`created_at TIMESTAMPTZ`、`updated_at TIMESTAMPTZ`，下文字段表不再重复列出这三列。",
+        "数据库为 PostgreSQL；表名与字段名使用小写下划线；每张表都有 `id BIGINT` 主键、`created_at TIMESTAMPTZ`、`updated_at TIMESTAMPTZ`，模块字段表不再列出这三列。",
         "金额一律为整数“分”，字段以 `_cents` 结尾；时间存带时区的时间戳，按门店时区展示。",
         "多门店数据带 `store_id`，查询在数据访问层统一附加门店范围；业务删除使用 `deleted_at` 软删除。",
         "状态字段只通过状态机条件更新修改；资金、次数、库存类变化写只追加的流水表。",
         "手机号、证件号等敏感字段加密存储，另存检索值与脱敏值；日志与导出只出现脱敏值。",
     ]
-    rows = []
-    for spec in specs:
-        for table in spec.get("tables", []):
-            rows.append([_code(table["name"]), _text(table.get("label", "")), _text(spec["name"]), _text(table.get("purpose", ""))])
-    return ("<h3>统一约定</h3><ul>" + "".join(f"<li>{_text(c)}</li>" for c in conventions) + "</ul>"
-            + "<h3>数据表总览</h3>" + _table(["表名", "中文名", "所属模块", "用途"], rows))
+    return "<h3>统一约定</h3><ul>" + "".join(f"<li>{_text(c)}</li>" for c in conventions) + "</ul>"
 
 
 def render_api_overview(specs: list[Mapping[str, Any]]) -> str:
@@ -251,11 +249,6 @@ def render_api_overview(specs: list[Mapping[str, Any]]) -> str:
              '设备接口前缀 <code>/api/v1/device</code>，使用设备凭证。</li>'
              '<li>写接口必须携带 <code>Idempotency-Key</code>；返回统一为 <code>{code, message, data, trace_id}</code>，code 为 0 表示成功。</li>'
              '<li>分页使用游标：请求 <code>cursor</code>、<code>limit</code>（不超过 50），返回 <code>next_cursor</code>。</li></ul>']
-    rows = []
-    for spec in specs:
-        for api in spec.get("apis", []):
-            rows.append([_text(spec["name"]), f"{_code(api['method'], True)} {_code(api['path'], True)}", _text(api.get("caller", "")), _text(api["purpose"])])
-    parts.append(_table(["模块", "方法与路径", "调用方", "用途"], rows, dense=True))
     return "".join(parts)
 
 

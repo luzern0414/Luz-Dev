@@ -35,11 +35,11 @@ DEFAULT_SCENES: list[dict[str, Any]] = [
         "scene": "card.expiring", "name": "会员卡即将到期", "category": "reminder", "audience": "member", "urgent": False,
         "sms_mode": "fallback",
         "templates": {
-            "inapp": {"title_tpl": "会员卡即将到期", "body_tpl": "您的{card_name}将于 {expire_date} 到期", "page": "pages/member/card"},
+            "inapp": {"title_tpl": "会员卡即将到期", "body_tpl": "您的会员卡将于 {expire_date} 到期", "page": "pages/member/card"},
             "subscribe": {"keywords": [
-                {"key": "thing1", "source": "{card_name}"}, {"key": "date2", "source": "expire_date"},
+                {"key": "thing1", "source": "{card_name}", "default": "会员卡"}, {"key": "date2", "source": "expire_date"},
             ]},
-            "sms": {"params": [{"name": "card", "source": "card_name"}, {"name": "date", "source": "expire_date"}]},
+            "sms": {"params": [{"name": "date", "source": "expire_date"}]},
         },
     },
     {

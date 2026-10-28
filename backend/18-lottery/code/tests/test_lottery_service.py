@@ -394,12 +394,15 @@ def test_payment_and_checkin_events_grant_chances_once(db):
                                 now=NOW) == "granted:0"
     assert service.handle_event(db, "payment.succeeded", dict(pay, payment_id=9003, business_type="recharge"),
                                 "ev-4", now=NOW) == "skipped"
+    assert service.handle_event(db, "member.checked_in", {"user_id": 100, "checkin_id": 77}, "ev-x",
+                                now=NOW) == "skipped"  # 默认不订阅签到
+    set_config(checkin_topic="member.checked_in")
     assert service.handle_event(db, "member.checked_in", {"user_id": 100, "checkin_id": 77}, "ev-5",
                                 now=NOW) == "granted:1"
     assert service.my_chances(db, aid, 100, now=NOW)["earned_left"] == 3
     draw(db, act)  # 免费
     draw(db, act)  # 获得 1
-    assert service.handle_event(db, "payment.refunded", {"payment_id": 9001}, "ev-6", now=NOW) == "revoked:1"
+    assert service.handle_event(db, "refund.succeeded", {"refund_id": 1, "payment_id": 9001, "business_type": "order", "business_id": 1, "business_ref": "after_sales:1", "amount_cents": 100, "out_refund_no": "R1", "out_trade_no": "T1", "status": "succeeded"}, "ev-6", now=NOW) == "revoked:1"
     acc = db.execute(select(LotteryChanceAccount).where(LotteryChanceAccount.member_id == 100)).scalar_one()
     db.refresh(acc)
     assert acc.granted - acc.used == 0  # 退款收回未用的 2 次中的余量，已用的不追溯
@@ -499,4 +502,4 @@ def test_amendment_rows_and_jobs_registry(db):
 
     reg = Reg()
     jobs.register_jobs(reg)
-    assert reg.jobs == [name for name, *_ in jobs.JOBS]
+    assert reg.jobs == [job.name for job in jobs.JOBS]

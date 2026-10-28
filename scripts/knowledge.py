@@ -26,7 +26,7 @@ from typing import Any, Iterable, Mapping
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from luz_shell import chip, fill, inline, load_tokens, shell_css, tokens_css  # noqa: E402
+from luz_shell import chip, favicon_for_tokens, fill, inline, load_tokens, shell_css, tokens_css  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 KNOWLEDGE = ROOT / "knowledge"
@@ -272,7 +272,7 @@ def render(knowledge: Knowledge, design_root: Path | None = None, moment: dateti
     kpis = [("事实", len(knowledge.facts["facts"]), "可直接复用的结论"), ("来源", len(knowledge.sources["sources"]), "已阅读的原文"),
             ("检索记录", len(knowledge.queries["queries"]), "已执行的搜索"), ("待复核", len(stale["facts"]) + len(stale["sources"]), "超过复核周期")]
     values = {
-        "{{TOKENS_CSS}}": tokens_css(tokens), "{{SHELL_CSS}}": shell_css(), "{{TOKEN_SOURCE}}": html.escape(token_source, quote=True),
+        "{{TOKENS_CSS}}": tokens_css(tokens), "{{FAVICON}}": favicon_for_tokens("knowledge", tokens), "{{SHELL_CSS}}": shell_css(), "{{TOKEN_SOURCE}}": html.escape(token_source, quote=True),
         "{{KPIS}}": "".join(f'<div class="kpi"><span class="kpi-label">{a}</span><strong class="kpi-value">{b}</strong><span class="kpi-foot">{c}</span></div>' for a, b, c in kpis),
         "{{KIND_OPTIONS}}": "".join(f'<option value="{k}">{v[0]}</option>' for k, v in KINDS.items()),
         "{{FACT_ROWS}}": "".join(fact_rows) or '<tr><td colspan="5">暂无</td></tr>',

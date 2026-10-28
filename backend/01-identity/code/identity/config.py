@@ -75,3 +75,31 @@ def get_config() -> IdentityConfig:
 def reload_config() -> IdentityConfig:
     get_config.cache_clear()
     return get_config()
+
+
+def production_problems(settings) -> list[str]:
+    """生产配置检查（identity/__init__ 登记到 luzback.register_production_check("identity", ...)）。
+
+    - LUZ_FIELD_KEY 必须能解出 32 字节（手机号 AES-GCM 加密与 phone_hash 查询都用它；换钥会使已有 phone_hash 失效）；
+    - 需要安装 cryptography（否则密文退化为可逆编码）；
+    - 配置项自身的取值范围（IdentityConfig.validate）。
+    """
+    import base64
+    import binascii
+
+    problems: list[str] = []
+    key = getattr(settings, "field_encryption_key", "") or ""
+    try:
+        if len(base64.b64decode(key, validate=True)) != 32:
+            problems.append("LUZ_FIELD_KEY must be base64 of 32 bytes")
+    except (binascii.Error, ValueError):
+        problems.append("LUZ_FIELD_KEY must be base64 of 32 bytes")
+    try:
+        import cryptography  # noqa: F401
+    except ImportError:
+        problems.append("package cryptography is required for phone encryption")
+    try:
+        IdentityConfig().validate()
+    except ValueError as exc:
+        problems.append(str(exc))
+    return problems

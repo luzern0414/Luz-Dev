@@ -35,7 +35,7 @@ def test_full_reduction_threshold_and_allocation():
 def test_scope_limits_discount_to_matching_lines():
     q = quote(LINES, [Promotion("饮品8折", PERCENT, rate_percent=80, categories=frozenset({"饮品"}))])
     assert q.line_discount_cents[0] == 0
-    assert q.discount_cents == 1999 - 1999 * 80 // 100  # 向下取整到分
+    assert q.discount_cents == 1999 * 20 // 100  # 优惠额向下取整到分（399）
 
 
 def test_exclusive_group_keeps_best_only():
@@ -92,3 +92,23 @@ def test_random_quotes_are_consistent():
         assert sum(q.line_discount_cents) == q.discount_cents
         assert all(paid >= 0 for paid in q.line_paid_cents(lines))
         assert q.payable_cents == q.subtotal_cents - q.discount_cents
+
+
+def test_rate_bp_and_discount_rounds_down():
+    from pricing import COUPON_PERCENT, Line, Promotion, quote
+
+    # 999 分打八八五折：优惠 999 × 1150 / 10000 = 114.885 → 114 分（优惠向下取整）
+    q = quote([Line(1, 1, 999)], [Promotion("c", COUPON_PERCENT, rate_bp=8850)])
+    assert q.discount_cents == 114 and q.payable_cents == 885
+    # rate_percent 与 rate_bp 等价
+    a = quote([Line(1, 1, 999)], [Promotion("a", COUPON_PERCENT, rate_percent=90)])
+    b = quote([Line(1, 1, 999)], [Promotion("b", COUPON_PERCENT, rate_bp=9000)])
+    assert a.discount_cents == b.discount_cents == 99
+
+
+def test_line_indexes_limit_scope():
+    from pricing import COUPON_AMOUNT, Line, Promotion, quote
+
+    lines = [Line(1, 1, 1000), Line(1, 1, 3000)]  # 同一 sku，只让第二行参与
+    q = quote(lines, [Promotion("c", COUPON_AMOUNT, amount_cents=500, line_indexes=frozenset({1}))])
+    assert q.line_discount_cents == [0, 500]

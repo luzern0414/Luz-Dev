@@ -8,14 +8,20 @@ import json
 import os
 import re
 import secrets
+import sys
 from pathlib import Path
 from typing import Any
+
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from luz_shell import favicon_for_tokens  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DATA = ROOT / "references" / "function-catalog.json"
 DEFAULT_TEMPLATE = ROOT / "assets" / "reference" / "function-catalog.template.html"
 DEFAULT_OUTPUT = ROOT / "references" / "function-catalog.html"
 PLACEHOLDER = "{{CATALOG_DATA_JSON}}"
+FAVICON_PLACEHOLDER = "{{FAVICON}}"
 ID_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$")
 MODULE_STATUSES = {"implemented", "design", "planned", "mixed", "deprecated"}
 FUNCTION_STATUSES = {"implemented", "design", "planned", "deprecated"}
@@ -172,7 +178,11 @@ def safe_json_for_script(data: Any) -> str:
 def render_catalog(template: str, data: Any) -> str:
     if template.count(PLACEHOLDER) != 1:
         raise ValueError("catalog template must contain exactly one data placeholder")
-    return template.replace(PLACEHOLDER, safe_json_for_script(data))
+    # The catalog carries its own palette; the tab icon uses the template's --action / --action-tint.
+    theme = dict(re.findall(r"--(action|action-tint):\s*(#[0-9A-Fa-f]{6})", template))
+    return template.replace(FAVICON_PLACEHOLDER, favicon_for_tokens("catalog", theme)).replace(
+        PLACEHOLDER, safe_json_for_script(data)
+    )
 
 
 def extract_embedded_catalog(html: str) -> Any:

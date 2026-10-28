@@ -6,6 +6,7 @@ from fastapi import Request
 from fastapi.testclient import TestClient
 
 import wechat_pay.models
+from admin_rbac.testing import staff_token
 from luzback import AppError, ErrorCode, create_token, get_settings
 from luzback.db import get_session_factory
 from luzback.testing import make_test_app
@@ -18,17 +19,15 @@ PERMS = {1: {"payment:read", "payment:refund", "payment:reconcile"}, 2: {"paymen
 SCOPES = {4: [2]}
 
 
-def authorizer(db, claims, code):
-    staff_id = int(claims["sub"])
-    if code not in PERMS.get(staff_id, set()):
-        raise AppError(ErrorCode.FORBIDDEN, f"permission required: {code}")
-    return api.StaffContext(id=staff_id, store_ids=SCOPES.get(staff_id))
+_TOKENS: dict[int, str] = {}
 
 
 def staff(staff_id):
-    s = get_settings()
-    token = create_token(str(staff_id), s.jwt_secret, 600, kind="admin", extra={"role": "staff", "rv": 0}, issuer=s.jwt_issuer)
-    return {"Authorization": f"Bearer {token}"}
+    """编号 → 22-admin-rbac 真实员工会话（PERMS 权限码、SCOPES 门店范围），每个用例重建。"""
+    if staff_id not in _TOKENS:
+        with get_session_factory()() as sdb:
+            _TOKENS[staff_id] = staff_token(sdb, *sorted(PERMS.get(staff_id, set())), store_ids=SCOPES.get(staff_id))
+    return {"Authorization": f"Bearer {_TOKENS[staff_id]}"}
 
 
 def user(user_id, key=None):
@@ -42,9 +41,9 @@ def user(user_id, key=None):
 def env():
     with wechat_pay_kit() as kit:
         kit.clock.now = datetime.now(timezone.utc)  # 接口内部用真实时间验签
-        app = make_test_app([api.router], wechat_pay.models)
+        app = make_test_app([api.router], wechat_pay.models, "admin_rbac.models")
+        _TOKENS.clear()
         app.dependency_overrides[api.current_user] = _test_user
-        api.set_staff_authorizer(authorizer)
         kit.client = TestClient(app)
         kit.db = get_session_factory()()
         kit.goods = {}
@@ -60,7 +59,6 @@ def env():
         service.register_on_paid(BT, lambda db, info: None)
         yield kit
         kit.db.close()
-        api.set_staff_authorizer(None)
 
 
 def _test_user(request: Request) -> int:
@@ -312,3 +310,17 @@ def test_verify_failure_increments_metric(env):
     headers, body = env.fake.payment_notification(data["out_trade_no"], tamper=True)
     env.client.post("/api/v1/webhooks/wechat/refund", content=body, headers=headers)
     assert env.client.app.state.metrics.counters[api.VERIFY_FAILED_METRIC] == 2
+
+
+def test_admin_refund_requires_fresh_auth(env):
+    from admin_rbac import config as rbac_config
+
+    h = staff(1)
+    rbac_config.set_clock(lambda: datetime.now(timezone.utc) + timedelta(seconds=400))
+    try:
+        resp = env.client.post("/api/v1/admin/payments/1/refunds", json={"amount_cents": 1, "reason": "x"},
+                               headers={**h, "Idempotency-Key": "admin-refund-stale"})
+        assert resp.json()["code"] == 4011 and resp.json()["data"]["reason"] == "reauth_required"
+        assert env.client.get("/api/v1/admin/payments", headers=h).json()["code"] == 0  # 只读不要求新鲜认证
+    finally:
+        rbac_config.set_clock(None)

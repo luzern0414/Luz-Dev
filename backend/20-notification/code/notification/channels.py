@@ -143,8 +143,13 @@ def _wechat_mp():
 
 
 def wechat_mp_available() -> bool:
+    """28-wechat-mp 已部署且可用：有 send_subscribe_message，并且（生产环境，或已注入客户端 / 配了真实 AppID）。
+    开发环境没配小程序时退回 FakeSubscribeSender，不让每条通知都失败重试。"""
     mod = _wechat_mp()
-    return mod is not None and callable(getattr(mod, "send_subscribe_message", None))
+    if mod is None or not callable(getattr(mod, "send_subscribe_message", None)):
+        return False
+    configured = getattr(mod, "is_configured", None)
+    return _is_prod() or not callable(configured) or bool(configured())
 
 
 class WechatMpSubscribeSender:

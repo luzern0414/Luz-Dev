@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="luz-design-tokens" content="Luz Design 2026-10-28.v7 · ai-agent">
+<title>后端开发到运营清单</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23E6E9FA'/%3E%3Cg fill='none' stroke='%234A5BD6' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 5l9 3.5v7c0 5.5-3.8 9.3-9 11.5-5.2-2.2-9-6-9-11.5v-7z'/%3E%3Cpath d='M12 16l3 3 5.5-6'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+:root{color-scheme:light;--canvas:#F5F5F5;--surface:#FFFFFF;--surface-2:#F0F2F7;--surface-3:#E7EAF3;--ink:#2B2326;--ink-2:#6E6064;--ink-3:#6F6266;--line:#EEEEEE;--line-strong:#D7DBE8;--action:#4A5BD6;--action-press:#3A48B0;--action-tint:#E6E9FA;--accent:#D98C3F;--accent-tint:#F9EBDD;--success:#18794E;--success-tint:#E4F3EC;--warning:#A15C00;--warning-tint:#FBF0DE;--danger:#C93644;--danger-tint:#FBE7E9;--info:#2F5F8A;--info-tint:#E6EEF5;--focus:rgba(74,91,214,.34);--radius-control:8px;--radius-card:12px;--shadow-1:0 1px 6px rgba(43,35,38,.06);--shadow-2:0 8px 24px rgba(43,35,38,.09)}
+/* Reading-page style for Luz Dev deliverables, following the Luz Design visual baseline:
+   light surfaces, one accent, one font family, type scale 14/16/20/24/32, 4-multiple spacing,
+   centered container. Colour variables are injected by the generator from the Luz Design theme. */
+*{box-sizing:border-box}
+html{background:#fff}
+body{margin:0;background:#fff;color:var(--ink);font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;font-size:16px;line-height:1.75;font-variant-numeric:tabular-nums}
+.doc{width:min(1120px,100%);margin:0 auto;padding:48px 24px 64px}
+.doc:has(>.toc){width:min(1240px,100%);display:grid;grid-template-columns:minmax(0,1fr) 200px;column-gap:48px;align-items:start}
+.doc:has(>.toc)>h1,.doc:has(>.toc)>section{grid-column:1}
+.doc:has(>.toc)>.toc{grid-column:2;grid-row:1/span 999;position:sticky;top:32px;max-height:calc(100vh - 64px);overflow-y:auto}
+h1{margin:0 0 40px;font-size:32px;line-height:1.25;font-weight:600}
+h2{margin:56px 0 16px;font-size:24px;line-height:1.3;font-weight:600}
+h3{margin:32px 0 12px;font-size:20px;line-height:1.4;font-weight:600}
+section>h2:first-child{margin-top:0}
+section{margin:0 0 56px;padding:0}
+section+section{padding-top:8px}
+p{margin:0 0 16px;max-width:880px}
+ul,ol{margin:0 0 16px;padding-left:24px;max-width:880px}
+li{margin:4px 0}
+a{color:var(--action-press);text-underline-offset:3px}
+a:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--action-press);outline-offset:2px}
+code{padding:0 4px;border-radius:4px;background:var(--surface-2);font-family:"Cascadia Code",Consolas,monospace;font-size:14px;overflow-wrap:anywhere}
+pre{margin:0 0 16px;padding:16px;overflow-x:auto;border-radius:8px;background:var(--surface-2);font-family:"Cascadia Code",Consolas,monospace;font-size:14px;line-height:1.6}
+pre code{padding:0;background:transparent}
+.lead{padding:16px 24px;margin:0 0 24px;border-left:4px solid var(--action);background:var(--action-tint);max-width:none}
+.table-wrap{margin:0 0 24px;overflow-x:auto;border-top:1px solid var(--line-strong)}
+table{width:100%;border-collapse:collapse}
+th,td{padding:12px 14px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;font-size:16px;line-height:1.75}
+th{background:var(--surface-2);color:var(--ink);font-weight:600;white-space:nowrap;text-align:center;line-height:1.5}
+td.c{text-align:center;white-space:nowrap}
+table td:first-child{font-weight:600}
+table.plain td:first-child{font-weight:400}
+table.grouped td{font-weight:400}
+table.grouped td[rowspan]{font-weight:600}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right}
+table.dense th,table.dense td{font-size:14px;line-height:1.5}
+.tag{display:inline-block;padding:0 8px;border-radius:4px;font-size:14px;line-height:24px;white-space:nowrap}
+.tag-strong{background:var(--action-tint);color:var(--action-press)}
+.tag-good{background:var(--success-tint);color:var(--success)}
+.tag-warn{background:var(--warning-tint);color:var(--warning)}
+.tag-plain{background:var(--surface-2);color:var(--ink-2)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:0 0 24px}
+.card{min-width:0;padding:16px 24px;border:1px solid var(--line);border-radius:8px}
+.card h3{margin:0 0 8px}
+.card p{margin:0}
+dl.kv{display:grid;grid-template-columns:minmax(120px,max-content) minmax(0,1fr);gap:8px 24px;margin:0 0 24px}
+dl.kv dt{font-weight:600}
+dl.kv dd{margin:0}
+figure{margin:0 0 24px;padding:16px 0;overflow-x:auto}
+figure svg{display:block;max-width:100%;height:auto;margin:0 auto}
+figcaption{margin-top:8px;font-size:14px;color:var(--ink-2);text-align:center}
+.draft{padding:12px 16px;margin:0 0 16px;border:1px dashed var(--warning);border-radius:8px;background:var(--warning-tint)}
+.filters{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;margin:0 0 24px}
+.filters input,.filters select{min-height:40px;padding:0 12px;border:1px solid var(--line-strong);border-radius:8px;background:var(--surface);color:var(--ink);font-family:inherit;font-size:16px}
+details.rule{margin:0 0 8px;border:1px solid var(--line);border-radius:8px}
+details.rule>summary{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:12px 16px;cursor:pointer}
+details.rule>div{padding:0 16px 16px}
+@media(max-width:760px){.doc{padding:32px 16px 48px}.grid{grid-template-columns:1fr}.filters{grid-template-columns:1fr}dl.kv{grid-template-columns:1fr}}
+@media print{body,html{background:#fff}.toc{display:none}.doc:has(>.toc){display:block}tr,figure{break-inside:avoid}}
+.chip{display:inline-block;padding:0 8px;border-radius:4px;font-size:14px;line-height:24px;white-space:nowrap;background:var(--surface-2);color:var(--ink-2)}
+.chip-danger,.chip-info{background:var(--action-tint);color:var(--action-press)}
+.chip-success{background:var(--success-tint);color:var(--success)}
+.chip-warning{background:var(--warning-tint);color:var(--warning)}
+.muted,.excerpt,.rule-meta{color:var(--ink-2);font-size:14px}
+.rule-title{font-weight:600}
+.toc{padding-left:16px;border-left:1px solid var(--line)}
+.toc ol{list-style:none;margin:0;padding:0;max-width:none}
+.toc li{margin:0}
+.toc a{display:block;padding:4px 0;color:var(--ink-2);font-size:14px;line-height:1.5;text-decoration:none}
+.toc a:hover{color:var(--action-press)}
+@media(max-width:1199px){.doc:has(>.toc){display:block;width:min(1120px,100%)}.toc{display:none}}
+@media(max-width:600px){
+ .table-wrap{border-top:0;overflow-x:visible}
+ .table-wrap thead{display:none}
+ .table-wrap table,.table-wrap tbody,.table-wrap tr,.table-wrap td{display:block;width:100%}
+ .table-wrap tr{padding:8px 0;border-top:1px solid var(--line-strong)}
+ .table-wrap td{padding:4px 0;border:0;text-align:left;white-space:normal;overflow-wrap:anywhere}
+ .table-wrap code.nw{white-space:normal;overflow-wrap:anywhere}
+ .table-wrap td[data-label]{display:grid;grid-template-columns:5.5em minmax(0,1fr);column-gap:12px}
+ .table-wrap td[data-label]::before{content:attr(data-label);color:var(--ink-2);font-size:14px;font-weight:400;line-height:1.75}
+}
+code.nw{white-space:nowrap;overflow-wrap:normal}
+</style>
+</head>
+<body>
+<main class="doc">
+<h1>后端开发到运营清单</h1>
+<section id="plan"><h2>1 方案与前端</h2><div class="table-wrap"><table class="dense plain"><thead><tr><th scope="col">编号</th><th scope="col">检查项</th><th scope="col">标准</th><th scope="col">验证方式</th><th scope="col">底座</th></tr></thead><tbody><tr><td class="c">PLN-01</td><td>方案报告已批准</td><td>用户批准的 HTML 报告；批准后内容未改</td><td>tech_plan.py gate NN</td><td>tech_plan.py</td></tr><tr><td class="c">PLN-02</td><td>前端地址已登记</td><td>Luz-System 会话的架构、系统设计、原型均已批准且批准后未改动；或前端工程目录存在</td><td>tech_plan.py design NN --session … --frontend …</td><td>design_intake.py</td></tr><tr><td class="c">PLN-03</td><td>模块取自标准库</td><td>基础功能用 backend/ 的标准模块，只在“定制点”里改；偏离写进方案</td><td>MODULE.md §13 与方案定制功能对照</td><td>backend/MODULES.md</td></tr><tr><td class="c">PLN-04</td><td>阻塞性待决问题已决定</td><td>计费方式、支付主体、设备品牌等影响实现的问题都有用户的决定</td><td>tech_plan.py check NN --stage approve</td><td>tech_plan.py</td></tr></tbody></table></div></section><section id="contract"><h2>2 接口契约</h2><div class="table-wrap"><table class="dense plain"><thead><tr><th scope="col">编号</th><th scope="col">检查项</th><th scope="col">标准</th><th scope="col">验证方式</th><th scope="col">底座</th></tr></thead><tbody><tr><td class="c">API-01</td><td>统一信封与错误码</td><td>返回 {code, message, data}；只用 ErrorCode；他人资源 4040</td><td>test_*_http 覆盖 4001/4010/4030/4040</td><td>luzback.errors</td></tr><tr><td class="c">API-02</td><td>写接口幂等</td><td>写接口必带 Idempotency-Key（8–128 位）；同键同体返回首次结果，同键异体 422</td><td>幂等重放测试</td><td>luzback.idempotency</td></tr><tr><td class="c">API-03</td><td>列表接口标准化</td><td>筛选、排序白名单、分页、关键词全部用 ListSpec 声明；未知参数 4001；后台页码 ≤100，顾客端游标 ≤20</td><td>列表测试含筛选、排序、越界</td><td>luzback.listing（SPEC §3.4）</td></tr><tr><td class="c">API-04</td><td>导出</td><td>与列表同一筛选；同步 ≤5000 行、上限 20 万；防公式注入；敏感字段脱敏；写审计</td><td>导出测试</td><td>luzback.export</td></tr><tr><td class="c">API-05</td><td>权限码声明</td><td>后台接口按 <code>模块:动作</code> 校验，默认拒绝；门店范围过滤</td><td>4030 / 4031 测试</td><td>admin_rbac.require_permission</td></tr><tr><td class="c">API-06</td><td>前端绑定完整</td><td>原型里每个操作都有接口，没有原型假数据</td><td>design_intake.py check 绑定表 --frontend …</td><td>design_intake.py</td></tr><tr><td class="c">API-07</td><td>OpenAPI 契约测试</td><td>按 OpenAPI 做属性测试，无 5xx、无未声明的响应</td><td>CI：Schemathesis</td><td>assets/ci/github-actions.yml</td></tr></tbody></table></div></section><section id="data"><h2>3 数据库与迁移</h2><div class="table-wrap"><table class="dense plain"><thead><tr><th scope="col">编号</th><th scope="col">检查项</th><th scope="col">标准</th><th scope="col">验证方式</th><th scope="col">底座</th></tr></thead><tbody><tr><td class="c">DB-01</td><td>字段约定</td><td>id、created_at、updated_at；金额整数分 *_cents；时间 timestamptz；状态小写蛇形；软删除 deleted_at</td><td>代码评审</td><td>luzback.db</td></tr><tr><td class="c">DB-02</td><td>并发安全</td><td>扣减、计数、状态流转用条件 UPDATE + rowcount；唯一约束兜底；禁止先查后改</td><td>并发测试（多线程文件 SQLite）</td><td>MODULE-TEMPLATE §3</td></tr><tr><td class="c">DB-03</td><td>迁移可执行</td><td>空库升级、单一 head、降级一步再升级都成功</td><td>CI：alembic upgrade / check / downgrade -1 / upgrade</td><td>backend/alembic</td></tr><tr><td class="c">DB-04</td><td>在线变更</td><td>加列可空、回填后加约束；索引 CONCURRENTLY；改名与改类型走扩展-收缩；设置 lock_timeout</td><td>RUNBOOK 发布前核对</td><td>assets/deploy/RUNBOOK.md</td></tr><tr><td class="c">DB-05</td><td>敏感字段</td><td>手机号、证件号、人脸特征加密存储，另存带密钥的检索值与脱敏值</td><td>代码评审 + 测试</td><td>luzback.crypto</td></tr></tbody></table></div></section><section id="build"><h2>4 编码</h2><div class="table-wrap"><table class="dense plain"><thead><tr><th scope="col">编号</th><th scope="col">检查项</th><th scope="col">标准</th><th scope="col">验证方式</th><th scope="col">底座</th></tr></thead><tbody><tr><td class="c">COD-01</td><td>三层分工</td><td>api 只解析与鉴权，service 写全部规则，models 只描述表</td><td>代码评审</td><td>MODULE-TEMPLATE §2</td></tr><tr><td class="c">COD-02</td><td>跨模块副作用走发件箱</td><td>与业务写同事务 enqueue_event；订阅者在 events.py 声明，幂等且不提交</td><td>python -m jobs list</td><td>25-jobs</td></tr><tr><td class="c">COD-03</td><td>外部调用</td><td>经 resilient：超时、熔断、只对幂等调用重试；每个外部平台有假服务</td><td>外部失败、超时、重复通知测试</td><td>luzback.resilience</td></tr><tr><td class="c">COD-04</td><td>定时任务</td><td>超时关单、查单、过期、补偿、对账注册为 JOBS，幂等可重跑</td><td>python -m jobs list</td><td>25-jobs</td></tr><tr><td class="c">COD-05</td><td>配置与密钥</td><td>全部来自环境变量；生产启动时拒绝开发默认值；仓库与镜像中没有密钥</td><td>Settings.assert_production_safe</td><td>luzback.config</td></tr><tr><td class="c">COD-06</td><td>审计</td><td>后台写操作与敏感查看同事务写审计（操作人、对象、前后值、IP）</td><td>审计测试</td><td>luzback.audit</td></tr></tbody></table></div></section><section id="test"><h2>5 测试</h2><div class="table-wrap"><table class="dense plain"><thead><tr><th scope="col">编号</th><th scope="col">检查项</th><th scope="col">标准</th><th scope="col">验证方式</th><th scope="col">底座</th></tr></thead><tbody><tr><td class="c">TST-01</td><td>模块测试全绿</td><td>每条规则、每条状态边、幂等、并发、HTTP、外部假服务</td><td>cd backend &amp;&amp; python -m pytest -q</td><td>MODULE-TEMPLATE §4</td></tr><tr><td class="c">TST-02</td><td>端到端流程</td><td>登录 → 试算 → 下单 → 支付通知 → 履约 → 退款通知完整走通</td><td>backend/tests/test_integration.py</td><td>08-order、09-wechat-pay</td></tr><tr><td class="c">TST-03</td><td>压测</td><td>读 P95 &lt; 300ms，写 P95 &lt; 800ms，错误率 &lt; 0.5%</td><td>k6 run assets/loadtest/k6-api.js</td><td>assets/loadtest</td></tr><tr><td class="c">TST-04</td><td>生产实测</td><td>真实小额支付与退款、真实订阅消息、设备实地联调</td><td>上线检查表签字</td><td>assets/deploy/LAUNCH-CHECKLIST.md</td></tr></tbody></table></div></section><section id="security"><h2>6 安全</h2><div class="table-wrap"><table class="dense plain"><thead><tr><th scope="col">编号</th><th scope="col">检查项</th><th scope="col">标准</th><th scope="col">验证方式</th><th scope="col">底座</th></tr></thead><tbody><tr><td class="c">SEC-01</td><td>会员认证</td><td>访问令牌 2 小时，刷新令牌轮换并检测重放；登出与禁用立即生效</td><td>identity 测试</td><td>01-identity</td></tr><tr><td class="c">SEC-02</td><td>后台认证</td><td>Argon2id；密码长度按 NIST；失败锁定；高权限账号 TOTP；空闲 15 分钟、绝对 8 小时；敏感操作再验证</td><td>admin_rbac 测试</td><td>22-admin-rbac</td></tr><tr><td class="c">SEC-03</td><td>真实客户端 IP</td><td>只信任 LUZ_TRUSTED_PROXIES 里的代理，取最右侧不可信地址</td><td>client_ip 测试</td><td>luzback.app</td></tr><tr><td class="c">SEC-04</td><td>限流</td><td>网关按 IP；应用按账号；登录 10 次/分、短信 1 次/分；支付通知不限流</td><td>限流演练</td><td>assets/deploy/nginx.conf</td></tr><tr><td class="c">SEC-05</td><td>响应头与 TLS</td><td>TLS 1.2/1.3、HSTS、nosniff、Referrer-Policy、后台 CSP</td><td>SSL Labs / curl -I</td><td>assets/deploy/nginx.conf</td></tr><tr><td class="c">SEC-06</td><td>内部端点不外露</td><td>/metrics、/readyz、/docs、/openapi.json 外网 404</td><td>外网 curl 检查</td><td>nginx.conf + luzback.app</td></tr><tr><td class="c">SEC-07</td><td>依赖与镜像漏洞</td><td>pip-audit、bandit、trivy 无高危；动作与镜像固定到不可变版本</td><td>CI security 阶段</td><td>assets/ci/github-actions.yml</td></tr></tbody></table></div></section><section id="deploy"><h2>7 网关与部署</h2><div class="table-wrap"><table class="dense plain"><thead><tr><th scope="col">编号</th><th scope="col">检查项</th><th scope="col">标准</th><th scope="col">验证方式</th><th scope="col">底座</th></tr></thead><tbody><tr><td class="c">DEP-01</td><td>容器加固</td><td>非 root、只读根文件系统、no-new-privileges、资源上限、日志轮转</td><td>docker compose config 审查</td><td>assets/deploy/docker-compose.prod.yml</td></tr><tr><td class="c">DEP-02</td><td>进程拆分</td><td>api（多副本）、worker、scheduler、migrate 分开；scheduler 用 Redis 锁</td><td>python -m jobs list；健康检查</td><td>25-jobs</td></tr><tr><td class="c">DEP-03</td><td>健康检查</td><td>/healthz 存活、/readyz 就绪（数据库与依赖）；worker 心跳文件</td><td>compose healthcheck</td><td>backend/deploy/Dockerfile</td></tr><tr><td class="c">DEP-04</td><td>权限种子与首个管理员</td><td>每次迁移后写入权限码与内置角色（幂等）；首次部署创建超级管理员并开启 TOTP</td><td>migrate 服务执行 bootstrap --seed；python -m admin_rbac.bootstrap &lt;账号&gt;</td><td>22-admin-rbac</td></tr></tbody></table></div></section><section id="release"><h2>8 发布与回滚</h2><div class="table-wrap"><table class="dense plain"><thead><tr><th scope="col">编号</th><th scope="col">检查项</th><th scope="col">标准</th><th scope="col">验证方式</th><th scope="col">底座</th></tr></thead><tbody><tr><td class="c">REL-01</td><td>流水线门禁</td><td>lint → 单元 → 集成 → 迁移检查 → 契约测试 → 安全扫描 → 构建 → 预发 → 冒烟 → 人工批准 → 生产</td><td>GitHub Actions 全绿</td><td>assets/ci/github-actions.yml</td></tr><tr><td class="c">REL-02</td><td>发布前备份</td><td>发布前自动备份并检查最近备份不超过 26 小时</td><td>release.sh deploy</td><td>assets/deploy/release.sh</td></tr><tr><td class="c">REL-03</td><td>滚动替换与观察</td><td>健康后切换；观察 15 分钟</td><td>release.sh watch</td><td>assets/deploy/release.sh</td></tr><tr><td class="c">REL-04</td><td>回滚触发</td><td>5xx &gt; 2%、P95 &gt; 基线 2 倍、支付通知验签失败 10 分钟内 &gt; 5 次、冒烟失败</td><td>release.sh rollback 演练</td><td>assets/deploy/RUNBOOK.md</td></tr></tbody></table></div></section><section id="ops"><h2>9 监控与运维</h2><div class="table-wrap"><table class="dense plain"><thead><tr><th scope="col">编号</th><th scope="col">检查项</th><th scope="col">标准</th><th scope="col">验证方式</th><th scope="col">底座</th></tr></thead><tbody><tr><td class="c">OPS-01</td><td>告警</td><td>错误预算燃烧率、5xx、P95、饱和度、发件箱积压、任务失败、支付待确认、证书 21/7 天、备份超时</td><td>告警规则加载无误</td><td>assets/monitoring/rules</td></tr><tr><td class="c">OPS-02</td><td>日志</td><td>结构化 JSON、带 trace_id、脱敏；网络日志留存不少于 6 个月</td><td>抽查日志</td><td>references/operations.md</td></tr><tr><td class="c">OPS-03</td><td>备份与恢复</td><td>每日逻辑备份 + WAL 时间点恢复；加密异地；每季度恢复演练</td><td>verify-restore.sh</td><td>assets/deploy/backup.sh</td></tr><tr><td class="c">OPS-04</td><td>对账</td><td>每日下载微信支付账单并对账，差异进入处理列表</td><td>wechat_pay.reconcile 任务结果</td><td>09-wechat-pay</td></tr></tbody></table></div></section><section id="launch"><h2>10 上线与合规</h2><div class="table-wrap"><table class="dense plain"><thead><tr><th scope="col">编号</th><th scope="col">检查项</th><th scope="col">标准</th><th scope="col">验证方式</th><th scope="col">底座</th></tr></thead><tbody><tr><td class="c">LCH-01</td><td>主体与备案</td><td>小程序主体与类目、ICP 备案、合法域名、支付商户号与小程序绑定</td><td>上线检查表</td><td>references/compliance.md</td></tr><tr><td class="c">LCH-02</td><td>虚拟商品规则</td><td>线上虚拟内容走小程序虚拟支付；到店服务、实物可用普通微信支付</td><td>goods_kind 检查</td><td>09-wechat-pay</td></tr><tr><td class="c">LCH-03</td><td>协议与同意</td><td>用户协议、隐私政策、人脸单独同意、购卡条款版本化，同意记录可查</td><td>27-legal 记录</td><td>references/legal-documents.md</td></tr><tr><td class="c">LCH-04</td><td>预付卡规则</td><td>7 日内未使用全额退本金；退费按法释〔2025〕4号计算；按门店所在地限额配置</td><td>member_card 退款试算测试</td><td>29-member-card</td></tr><tr><td class="c">LCH-05</td><td>促销规则</td><td>抽奖最高奖 ≤ 5 万元，规则发布后不改；划线价不高于前 7 日最低成交价</td><td>lottery 测试</td><td>18-lottery</td></tr><tr><td class="c">LCH-06</td><td>发货信息</td><td>交易类小程序上传发货信息（虚拟商品 logistics_type=3）</td><td>发货上传记录</td><td>09-wechat-pay</td></tr></tbody></table></div></section><section id="operate"><h2>11 运营</h2><div class="table-wrap"><table class="dense plain"><thead><tr><th scope="col">编号</th><th scope="col">检查项</th><th scope="col">标准</th><th scope="col">验证方式</th><th scope="col">底座</th></tr></thead><tbody><tr><td class="c">RUN-01</td><td>资金异常处理</td><td>退款失败、异常退款、支付后订单已关闭的单子每日清零</td><td>后台退款与对账差异列表</td><td>09-wechat-pay、10-after-sales</td></tr><tr><td class="c">RUN-02</td><td>通知送达</td><td>订阅消息额度不足与失败按错误码统计，关键场景短信兜底</td><td>通知统计</td><td>20-notification</td></tr><tr><td class="c">RUN-03</td><td>注销请求</td><td>账号注销在 15 个工作日内完成并匿名化</td><td>identity 注销任务记录</td><td>01-identity</td></tr><tr><td class="c">RUN-04</td><td>营销效果与成本</td><td>券的领取、使用、核销金额；抽奖成本与库存</td><td>优惠券与抽奖统计</td><td>16-coupon、18-lottery</td></tr></tbody></table></div></section><div class="toc"><ol><li><a href="#plan">1 方案与前端</a></li><li><a href="#contract">2 接口契约</a></li><li><a href="#data">3 数据库与迁移</a></li><li><a href="#build">4 编码</a></li><li><a href="#test">5 测试</a></li><li><a href="#security">6 安全</a></li><li><a href="#deploy">7 网关与部署</a></li><li><a href="#release">8 发布与回滚</a></li><li><a href="#ops">9 监控与运维</a></li><li><a href="#launch">10 上线与合规</a></li><li><a href="#operate">11 运营</a></li></ol></div>
+</main>
+</body>
+</html>

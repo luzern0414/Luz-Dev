@@ -146,3 +146,19 @@ def test_scheduler_lock_and_run_records(db):
     assert token and run_job(registry.get("tick"), get_session_factory(), lock) == "skipped"
     statuses = [r.status for r in db.execute(select(SchedulerRun)).scalars().all()]
     assert statuses.count("error") == 2 and statuses.count("ok") == 2
+
+
+def test_mark_processed_duplicate_keeps_other_writes():
+    from luzback.audit import AuditLog
+    from luzback.outbox import ProcessedEvent, mark_processed
+    from luzback.testing import memory_session
+
+    db = memory_session()
+    assert mark_processed(db, "c", "e-1") is True
+    db.commit()
+    db.add(AuditLog(actor_type="system", actor_id="t", action="x", resource="r", resource_id="1"))
+    db.flush()
+    assert mark_processed(db, "c", "e-1") is False  # 重复
+    db.commit()
+    assert db.query(AuditLog).count() == 1  # 之前的写入没有被回滚
+    assert db.query(ProcessedEvent).count() == 1

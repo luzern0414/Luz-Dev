@@ -231,7 +231,7 @@ deleting ──到期有阻断──► deleting（deletion_hold，下次重试�
 | 微信 / 短信 / 内容安全不可用 | 5020 | — |
 | 熔断打开 | 5030 | — |
 
-## 11 测试清单（67 项）
+## 11 测试清单（71 项）
 
 | 文件 | 覆盖 |
 |---|---|
@@ -257,7 +257,9 @@ deleting ──到期有阻断──► deleting（deletion_hold，下次重试�
 | 类型 | 内容 |
 |---|---|
 | 配置 | §9 全部环境变量 |
-| 注入（`identity.api`） | `set_mini_program(client)`（默认 `wechat_mp.get_client()`）；`set_code2session(fn)` / `set_phone_resolver(fn)`（旧式兼容）；`set_sms_sender(SmsSender)`；`set_agreement_gateway(AgreementGateway)`（默认 27-legal）；`set_staff_authorizer(fn(db, token, code) → staff_id)`（默认 22-admin-rbac） |
+| 注入（`identity.api`） | `set_mini_program(client)`（默认 `wechat_mp.get_client()`）；`set_code2session(fn)` / `set_phone_resolver(fn)`（旧式兼容）；`set_sms_sender(SmsSender)`；`set_agreement_gateway(AgreementGateway)`（默认 27-legal）。后台路由鉴权直接用 22-admin-rbac `require_permission`（member:read / member:write；member:reveal 另要求新鲜认证 fresh=True），不再有本地授权器 |
+| 对外查询 | `find_user_by_phone(db, phone) -> User \| None`：规范化（去空格 / 短横线 / +86）后按 phone_hash 等值查询，不合法 / 未绑定 / 已注销返回 None；供优惠券、储值、会员卡等后台按手机号找会员 |
+| 生产检查 | 导入时 `luzback.register_production_check("identity", production_problems)`：LUZ_FIELD_KEY 必须是 32 字节 base64、需安装 cryptography、IdentityConfig 取值范围；`Settings.assert_production_safe()` 启动时执行 |
 | 扩展钩子 | `register_deletion_checker(name, fn(db, user_id) → [Blocker])`：注销前置检查；消费 `member.deleted` 清理本模块数据 |
 | 测试替身 | `FakeSmsSender`、`FakeAgreements`、`wechat_mp.FakeMiniProgram`；`identity.testing.member_token(db, user_id=None)` / `member_tokens` 供其他模块测试签发真实可用的会员令牌（含会话）；`identity.current_user_id(token)` 保持可导入 |
 | 不包含 | 用户名 / 密码登录、找回密码；多因素认证（会员端）；会员自助查看与终止会话列表（ASVS 7.5.2，仅提供全部登出）；设备指纹与风险分级（getUserRiskRank）；旧版 encryptedData 手机号解密；跨小程序 / 公众号的 unionid 账号合并；昵称 review 的人工复核界面（仅标记 `content_review`，后台可按其筛选） |

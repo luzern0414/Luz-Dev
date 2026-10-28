@@ -71,10 +71,17 @@ def test_password_hash_verify_policy_and_rehash():
     assert not password_needs_rehash(stored)
     assert password_needs_rehash("pbkdf2_sha256$1000$abc$def")
     with pytest.raises(AppError):
-        check_password_policy("short1")
+        check_password_policy("short-pass-1")  # < 15
+    check_password_policy("onlyletterslong")  # NIST：不要求字母数字组合
+    check_password_policy("correct horse battery")  # 空格允许
+    check_password_policy("短口令也行吗呢", min_length=7)  # Unicode 计字符
+    check_password_policy("Tr0ub4dor", min_length=8)  # 与 MFA 合用：≥ 8
     with pytest.raises(AppError):
-        check_password_policy("onlyletterslong")
-    check_password_policy("letters123456")
+        check_password_policy("passwordpassword")  # 常见口令
+    with pytest.raises(AppError):
+        check_password_policy("zhangsan-secret-2026", context=("zhangsan",))
+    with pytest.raises(AppError):
+        check_password_policy("x" * 129)
 
 
 def test_totp_accepts_drift_and_rejects_garbage():
@@ -146,3 +153,28 @@ def test_cursor_is_signed_and_sort_whitelisted():
     assert parse_sort("-created_at,amount", {"created_at", "amount"}) == [("created_at", True), ("amount", False), ("id", True)]
     with pytest.raises(AppError):
         parse_sort("password", {"created_at"})
+
+
+def test_module_production_checks_run_at_startup():
+    from luzback.config import register_production_check, run_production_checks, unregister_production_check
+
+    safe = Settings(env="prod", jwt_secret="x" * 40, database_url="postgresql+psycopg://db/luz", redis_url="redis://r:6379/0",
+                    field_encryption_key="k" * 44, service_secrets=("agent:real-secret-value",))
+    register_production_check("demo_ok", lambda s: [])
+    register_production_check("demo_bad", lambda s: ["DEMO_KEY is required"])
+
+    def raising(s):
+        raise RuntimeError("demo client is fake")
+
+    register_production_check("demo_raise", raising)
+    try:
+        problems = run_production_checks(safe)
+        assert "demo_bad: DEMO_KEY is required" in problems and "demo_raise: demo client is fake" in problems
+        assert not any(p.startswith("demo_ok") for p in problems)
+        with pytest.raises(RuntimeError) as exc:
+            safe.assert_production_safe()
+        assert "demo_bad: DEMO_KEY is required" in str(exc.value) and "LUZ_JWT_SECRET" not in str(exc.value)
+        Settings(env="dev").assert_production_safe()  # 非生产不执行模块检查
+    finally:
+        for name in ("demo_ok", "demo_bad", "demo_raise"):
+            unregister_production_check(name)

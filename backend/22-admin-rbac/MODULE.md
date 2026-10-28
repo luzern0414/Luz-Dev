@@ -95,7 +95,7 @@
 1. TOTP：SHA1、6 位、30 秒、允许 ±1 步；成功时条件 UPDATE `mfa_last_step < step`，同一或更早时间步的码一律拒绝（防重放，并发下只有一个成功）。
 2. 密钥 160 bit，加密存储；绑定先生成待确认密钥，用一个有效码确认后启用，并生成 10 个恢复码（`XXXXX-XXXXX`，约 50 bit，Argon2id 存储，只返回一次）。
 3. 恢复码一次性（条件 UPDATE `used_at IS NULL`）；可重新生成（旧码全部失效）；使用后发 `staff.recovery_code_used`。
-4. 必须 MFA：角色 `mfa_required`（种子：超级管理员、财务）或持有 `ADMIN_MFA_REQUIRED_PERMISSIONS` 中任一码（默认 staff:write、role:write、order:refund、aftersales:approve、report:export、recharge:adjust），或 `ADMIN_MFA_REQUIRED_ALL=true`。未绑定的员工登录后是受限会话，只能 me / 改密 / 绑定 MFA / 登出，其他接口 4011 `mfa_enrollment_required`。
+4. 必须 MFA：角色 `mfa_required`（种子：超级管理员、财务）或持有 `ADMIN_MFA_REQUIRED_PERMISSIONS` 中任一码（默认 staff:write、role:write、after_sale:approve、after_sale:refund、payment:refund、report:export、wallet:adjust、wallet:refund、member_card:adjust、member_card:refund、member:reveal；授予的 `module:*` 覆盖其中的码也算），或 `ADMIN_MFA_REQUIRED_ALL=true`。未绑定的员工登录后是受限会话，只能 me / 改密 / 绑定 MFA / 登出，其他接口 4011 `mfa_enrollment_required`。
 5. 自行关闭 MFA：需新鲜认证 + 当前 TOTP；角色要求 MFA 时 4220。
 6. 重置他人 MFA：必须是另一名管理员（自己 4030）、必须填原因、需新鲜认证；清密钥与恢复码、撤销其全部会话、发 `staff.mfa_reset`。
 
@@ -109,8 +109,8 @@
 7. 新鲜认证：`auth_at` 在 `fresh_auth_seconds`（300）内；否则 4011 `reauth_required`；`POST /auth/reauth`（口令 + 已绑定时 TOTP / 恢复码）后轮换会话。终止自己的其他会话也要求新鲜认证。
 
 **R5 授权**
-1. 权限码 `<module>:<action>`；模块用 `declare_permissions` 登记；`require_permission` 遇到未登记码自动登记；角色只能授予已登记的码（否则 4001）。
-2. 默认拒绝：无授予即 4030；超级管理员持有全集 + `*`。权限每请求从库加载（无缓存，变更立即生效）。
+1. 权限码 `<module>:<action>`；模块用 `declare_permissions` 登记；`require_permission` 遇到未登记码自动登记；角色只能授予已登记的码或模块通配 `module:*`（该模块至少登记了一个码），否则 4001；`*` 不能授予。
+2. 默认拒绝：无授予即 4030；超级管理员持有全集 + `*`。`module:*` 按冒号前缀匹配（`wallet:*` 覆盖 `wallet:adjust` 与以后新增的 wallet 码，不覆盖 `wallet_x:read`）；授予别人 `module:*` 要求自己持有 `module:*` 或 `*`（只持有现有精确码不够）。权限每请求从库加载（无缓存，变更立即生效）。
 3. 门店范围：`all_stores=True` 为全部；否则为列表（空 = 无门店）。`apply_store_scope` 给查询加条件；`assert_in_scope` 越界 4031。
 4. 职责分离：`assert_not_self(staff, initiator_id)`（例如不能审批自己的退款）4030。
 5. 防越权：不能改自己的角色 / 门店、不能停用 / 删除 / 重置自己；只能授予自己持有的权限码与门店；只有超级管理员能授予超级管理员角色；只能管理权限与门店范围都不超过自己的员工；范围外员工 4040。
@@ -235,14 +235,14 @@ POST /auth/login ─ 锁定? ──是──> 4290 Retry-After
 | `ADMIN_TOTP_DRIFT_STEPS` | 1 | 允许漂移步数 |
 | `ADMIN_RECOVERY_CODE_COUNT` | 10 | 恢复码数量 |
 | `ADMIN_MFA_REQUIRED_ALL` | false | 所有员工强制 MFA |
-| `ADMIN_MFA_REQUIRED_PERMISSIONS` | staff:write,role:write,order:refund,aftersales:approve,report:export,recharge:adjust | 持有即强制 MFA |
+| `ADMIN_MFA_REQUIRED_PERMISSIONS` | staff:write,role:write,after_sale:approve,after_sale:refund,payment:refund,report:export,wallet:adjust,wallet:refund,member_card:adjust,member_card:refund,member:reveal | 持有（含通配覆盖）即强制 MFA |
 | `ADMIN_LOGIN_LOG_RETENTION_DAYS` | 180 | 登录日志保留 |
 | `ADMIN_EXPORT_MAX_ROWS` | 50000 | 同步导出上限（超出 4225） |
 | `LUZ_FIELD_KEY` | 框架 | 手机号 / TOTP 密钥加密 |
 
 定时任务（`jobs.py: JOBS`，`luzback.scheduler.Job` 元组，25-jobs 读取）：`admin_rbac.purge_sessions`（1 小时，删 30 天前撤销 / 过期会话）、`admin_rbac.purge_login_logs`（1 天）、`admin_rbac.purge_throttles`（1 小时）。
 
-部署：`python -m admin_rbac.bootstrap <账号> [姓名]` 同步权限码与内置角色并创建首个超级管理员（打印一次性临时口令；已有在职超管时拒绝）。
+部署：每次发布在 `alembic upgrade head` 后执行 `python -m admin_rbac.bootstrap --seed`（导入全部已启用模块登记权限码，再同步 `admin_permissions` 与缺失的内置角色，幂等）；首次部署 `python -m admin_rbac.bootstrap <账号> [姓名]` 创建首个超级管理员（打印一次性临时口令；已有在职超管时拒绝）。
 
 ## 10 错误码
 
@@ -260,13 +260,13 @@ POST /auth/login ─ 锁定? ──是──> 4290 Retry-After
 | 导出超限 | 4225 | `total` |
 | 泄露检查不可用（fail-closed） | 5020 | — |
 
-## 11 测试清单（`code/tests/`，共 110 个）
+## 11 测试清单（`code/tests/`，共 115 个）
 
 | 文件 | 覆盖 |
 |---|---|
 | `test_admin_rbac_passwords_totp.py` | Argon2id 参数与 PHC、加盐、NFC、不截断、超长、重哈希、旧格式；口令最短 8/15、最长、无组成规则、常见 / 重复 / 上下文词、泄露钩子与 fail-open/closed；RFC 6238 附录 B 全部向量（SHA1/256/512）、RFC 4226 HOTP 向量、160 bit 密钥、±1 漂移、±2 拒绝、重放、otpauth URI、恢复码格式；锁定时长递增、会话超时、新鲜判断、账号名 / 手机号校验 |
 | `test_admin_rbac_auth.py` | 登录成功与日志；三种失败不可区分；5 次锁定 / 锁定期正确口令也拒 / FakeClock 到期解锁；不存在账号同样锁定；窗口重置；递增锁定与成功清零；可配置阈值；验证码钩子；旧哈希升级；临时口令首登改密与过期；角色 / 权限码强制 MFA；MFA 绑定、登录、重放、漂移、挑战过期、MFA 失败计入锁定；恢复码一次性与重新生成；关闭 / 重置 MFA 规则；空闲 / 绝对超时；UA 绑定；登出、改密、停用、角色变更撤销会话；会话列表与上限；新鲜认证与重新认证（含二次因素）；me |
-| `test_admin_rbac_rbac.py` | 种子幂等；注册表与自动登记；默认拒绝 4030；超管通配；权限变更立即生效；门店范围过滤 / 4031；职责分离；敏感查看审计；越权授予权限 / 角色 / 门店；不能管理更高权限员工；不能对自己操作；最后一名超管 4220；bootstrap；角色规则；手机号加密 / 脱敏 / 明文审计 / 哈希查询；建号校验；停用 / 启用 / 解锁 / 软删除与账号名不复用；重置口令；强制下线；员工列表筛选与范围；导出脱敏与公式注入 |
+| `test_admin_rbac_rbac.py` | 种子幂等；模块通配 `module:*`（前缀匹配、后来登记的码、授予校验与防越权、内置角色存通配、MFA 按通配覆盖）；注册表与自动登记；默认拒绝 4030；超管通配；权限变更立即生效；门店范围过滤 / 4031；职责分离；敏感查看审计；越权授予权限 / 角色 / 门店；不能管理更高权限员工；不能对自己操作；最后一名超管 4220；bootstrap；角色规则；手机号加密 / 脱敏 / 明文审计 / 哈希查询；建号校验；停用 / 启用 / 解锁 / 软删除与账号名不复用；重置口令；强制下线；员工列表筛选与范围；导出脱敏与公式注入 |
 | `test_admin_rbac_http.py` | 信封；4010；4001；4290 Retry-After；4030；受限会话 4011；HTTP 上的 MFA 绑定与登录；新鲜认证 4011 → reauth；幂等重放、4093、缺键 4001、临时口令不进幂等记录；员工 / 角色全部接口；审计筛选（操作者、动作、资源、日期区间、关键词）、详情、导出与导出审计；登录日志与导出；本人会话；改密；定时任务 |
 | 兼容层（在 auth / http 文件中） | 旧适配器流程：`decode_token(kind=admin)` → `load_active_staff(sid)` → `assert_permission(db, staff, code)` / `grants_of`；登出与空闲超时立即生效；受限会话 4011；MFA 挑战令牌不能当会话令牌；伪造 / 篡改令牌 4010；`JOBS` / `SUBSCRIPTIONS` / 包导出 |
 | `test_admin_rbac_concurrency.py` | 文件 SQLite + 线程：并发失败只锁一次且日志不丢；恢复码只用一次；同一 TOTP 只成功一次；两名超管互相停用至少留一人 |
@@ -289,9 +289,10 @@ POST /auth/login ─ 锁定? ──是──> 4290 Retry-After
 | 类型 | 内容 |
 |---|---|
 | 配置项 | §9 全部环境变量；代码中 `admin_rbac.set_config(**overrides)` |
-| 权限码 | 业务模块 `declare_permissions("module", [(code, 描述)])`；种子目录在 `seed.py:CATALOG` |
-| 内置角色 | `seed.py:BUILTIN_ROLES`（只在首次种子时写入；之后在后台编辑） |
+| 权限码 | 业务模块 `declare_permissions("module", [(code, 描述)])`；`seed.py:CATALOG` 只登记尚无代码模块的标准码（报表、配送、桌台排队、商品、库存、积分、活动、评价、门店、知识库、员工、设置） |
+| 内置角色 | `seed.py:BUILTIN_ROLES`：super_admin（`*`）、store_manager、front_desk、finance、operator，模式为精确码或 `module:*`（原样存储，不依赖模块导入顺序），覆盖 member / order / payment / after_sale / wallet / coupon / lottery / notification / member_card 等模块；只在首次种子时写入，之后在后台编辑 |
 | 钩子 | `set_breach_checker(fn(pw)->bool)`（泄露口令库，如 Pwned Passwords k-匿名）；`set_captcha_verifier(fn(token, ip)->bool)`（人机验证）；`set_clock(fn)`（测试） |
-| 接入 | 业务模块后台路由：`staff = Depends(require_permission("order:refund"))`，敏感操作再加 `Depends(require_fresh_auth)`；不要自行解析令牌 |
+| 接入 | 业务模块后台路由：`staff: Staff = Depends(require_permission("payment:refund", fresh=True))`（或另加 `Depends(require_fresh_auth)`）；门店范围 `store_scope(staff)`；不要自行解析令牌、不要信任令牌里的权限声明 |
+| 测试 | `admin_rbac.testing.staff_headers(db, *codes, store_ids=None)` / `staff_token` / `staff_actor`：建员工与真实会话（MFA 视为已绑定、刚完成认证），其他模块的 HTTP 测试都用它 |
 | 助手 | `store_scope` / `apply_store_scope` / `assert_in_scope`、`assert_not_self`、`assert_fresh`、`log_sensitive_read`、`load_staff` |
 | 不包含 | 自助找回口令（后台由管理员重置）；短信 / 邮件 OTP；WebAuthn / 通行密钥；SSO（OIDC / 企业微信）；IP 白名单；密码历史；异步大批量导出（交 24-report）；权限缓存（每请求查库） |

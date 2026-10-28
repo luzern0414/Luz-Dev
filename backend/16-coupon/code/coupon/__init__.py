@@ -14,7 +14,7 @@ from .config import (
     RETURN_ANY_REFUND, RETURN_FULL_REFUND, RETURN_NEVER, CouponConfig, MemberProfile, get_config, reset_config,
     set_audience_checker, set_cart_lines_provider, set_config, set_member_profile_provider,
 )
-from .deps import PERMISSIONS, jwt_member_resolver, set_member_resolver, set_staff_authenticator
+from .deps import PERMISSIONS, jwt_member_resolver, set_member_resolver
 from .events import SUBSCRIPTIONS, handle_event, make_consumer
 from .jobs import JOBS, expire_coupons, process_issue_batches, register_jobs, remind_expiring
 from .models import (

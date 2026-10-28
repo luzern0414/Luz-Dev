@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 import re
 import secrets
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -136,9 +136,9 @@ def validate_template(data: dict[str, Any]) -> dict[str, Any]:
             raise bad("amount_cents must be > 0 for amount_off")
         d["max_discount_cents"] = None
     elif d["type"] == TYPE_PERCENT_OFF:
-        # pricing 引擎按整数“折”计算（rate_percent），因此 rate_bp 需为 100 的倍数（九五折 = 9500）
-        if not 100 <= d["rate_bp"] <= 9900 or d["rate_bp"] % 100:
-            raise bad("rate_bp must be a multiple of 100 between 100 and 9900 (8500 = 85% payable)")
+        # 万分比应付比例：8850 = 八八五折；优惠额由 pricing 向下取整到分
+        if not 100 <= d["rate_bp"] <= 9999:
+            raise bad("rate_bp must be between 100 and 9999 (8850 = 88.5% payable)")
         d["amount_cents"] = 0
     else:
         if not 1 <= d["exchange_qty"] <= 99:
@@ -352,24 +352,18 @@ class Evaluation:
 
 
 def _pricing_lines(lines: list[CartLine]) -> list[pricing.Line]:
-    # pricing 用 sku_id 做适用判断；这里用“行序号 + 1”作为 sku_id，保证按行精确匹配
-    return [pricing.Line(sku_id=i + 1, qty=line.qty, unit_price_cents=line.unit_price_cents,
+    # 真实 sku_id / 分类：活动按 sku_ids / categories 匹配；券已在本模块算好适用行，用 Promotion.line_indexes 按行号限定
+    return [pricing.Line(sku_id=int(line.sku_id), qty=line.qty, unit_price_cents=line.unit_price_cents,
                          category="" if line.category_id is None else str(line.category_id))
-            for i, line in enumerate(lines)]
+            for line in lines]
 
 
 def _translate_campaign(promotions: list[pricing.Promotion], lines: list[CartLine]) -> list[pricing.Promotion]:
-    out = []
+    """活动原样交给 pricing（真实 sku_id 匹配）；券种不能混进活动列表。"""
     for promo in promotions:
         if promo.kind in pricing.COUPON_KINDS:
             raise ValueError("campaign promotions must not contain coupon kinds; pass coupons separately")
-        if promo.sku_ids:
-            rows = frozenset(i + 1 for i, line in enumerate(lines) if line.sku_id in promo.sku_ids)
-            if not rows:
-                continue  # 活动不适用于本单任何行
-            promo = replace(promo, sku_ids=rows)
-        out.append(promo)
-    return out
+    return list(promotions)
 
 
 def _exchange_value(rules: dict[str, Any], lines: list[CartLine], rows: list[int]) -> int:
@@ -414,12 +408,12 @@ def evaluate(coupons: list[tuple[str, dict[str, Any]]], lines: list[CartLine],
         if base < threshold:
             rejected[key] = Rejection("below_threshold", {"shortfall_cents": threshold - base})
             continue
-        common = {"id": key, "threshold_cents": threshold, "sku_ids": frozenset(i + 1 for i in rows),
+        common = {"id": key, "threshold_cents": threshold, "line_indexes": frozenset(rows),
                   "exclusive_group": f"coupon:{key}"}
         if rules["type"] == TYPE_AMOUNT_OFF:
             promo = pricing.Promotion(kind=pricing.COUPON_AMOUNT, amount_cents=rules["amount_cents"], **common)
         elif rules["type"] == TYPE_PERCENT_OFF:
-            promo = pricing.Promotion(kind=pricing.COUPON_PERCENT, rate_percent=rules["rate_bp"] // 100,
+            promo = pricing.Promotion(kind=pricing.COUPON_PERCENT, rate_bp=rules["rate_bp"],
                                       cap_cents=rules.get("max_discount_cents"), **common)
         else:
             promo = pricing.Promotion(kind=pricing.COUPON_AMOUNT, amount_cents=_exchange_value(rules, lines, rows),

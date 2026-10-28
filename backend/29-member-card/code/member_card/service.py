@@ -20,7 +20,7 @@ from luzback import AppError, ErrorCode, enqueue_event, utcnow, write_audit
 from luzback.security import mask_phone
 from wallet import (
     CATEGORY_COUNT, CATEGORY_PERIOD, PaidEvent, RefundResultEvent, find_member, parse_paid, parse_refund_result,
-    payment_port, phone_lookup_hash, policy_for, register_outstanding_provider, store_timezone,
+    payment_port, phone_lookup_hash, policy_for, register_outstanding_provider, register_payment_hooks, store_timezone,
 )
 
 from . import config as _config
@@ -39,6 +39,7 @@ from .rules import (
 BIZ_TYPE = "member_card"
 CONSUMER = "member_card"
 REFUND_TOPIC = "member_card.refund_requested"
+REFUND_PREFIX = "member_card_refund"
 GOODS_KIND = "offline_service"
 LIVE = (S_INACTIVE, S_ACTIVE, S_FROZEN, S_LOST, S_USED_UP, S_EXPIRED, S_REFUNDING, S_DISABLED)
 
@@ -399,13 +400,34 @@ def create_order(db: Session, user_id: int, product_id: int, store_id: int | Non
                       invoice_tax_code="601", invoice_note="预付卡销售和充值 不征税")
     db.add(order)
     db.flush()
-    pay = payment_port().create_payment(db, biz_type=BIZ_TYPE, biz_id=order.id, user_id=user_id, store_id=store_id,
-                                        amount_cents=order.amount_cents, description=f"会员卡 {product.name}",
-                                        goods_kind=GOODS_KIND, expires_at=order.expires_at)
-    order.payment_id = pay.get("payment_id") or None
-    order.out_trade_no = pay.get("out_trade_no")
-    db.flush()
-    return order_dict(order, pay.get("pay_params") or {})
+    return order_dict(order)
+
+
+def payable(db: Session, user_id: int, order_id: int) -> dict:
+    """支付模块的 Payable 解析：金额只来自购卡单 / 转让手续费单。他人 4040，不可支付 4090。"""
+    order = db.get(CardOrder, order_id)
+    if order is None or order.user_id != user_id:
+        raise AppError(ErrorCode.NOT_FOUND, "order not found")
+    if order.status != O_PENDING or (aware(order.expires_at) and aware(order.expires_at) <= utcnow()):
+        raise AppError(ErrorCode.CONFLICT, "order is not payable", {"status": order.status})
+    name = json.loads(order.product_snapshot_json or "{}").get("name", "")
+    desc = "会员卡转让手续费" if order.kind == ORDER_TRANSFER_FEE else f"会员卡 {name}".strip()
+    return {"amount_cents": order.amount_cents, "description": desc[:120], "expires_at": aware(order.expires_at),
+            "store_id": order.store_id, "goods_kind": GOODS_KIND, "business_no": order.order_no}
+
+
+def start_payment(db: Session, user_id: int, order_id: int) -> dict:
+    """为已提交的购卡单 / 手续费单调起支付。支付模块自行 commit（含渠道调用），所以必须在业务事务提交后调用；
+    本函数提交支付单号回写。可重复调用（支付模块按业务单复用 / 换单）。"""
+    data = payable(db, user_id, order_id)
+    db.commit()
+    pay = payment_port().create_payment(db, biz_type=BIZ_TYPE, biz_id=order_id, user_id=user_id, store_id=data["store_id"],
+                                        amount_cents=data["amount_cents"], description=data["description"],
+                                        goods_kind=GOODS_KIND, expires_at=data["expires_at"], business_no=data["business_no"])
+    db.execute(update(CardOrder).where(CardOrder.id == order_id)
+               .values(payment_id=pay.get("payment_id") or None, out_trade_no=pay.get("out_trade_no")))
+    db.commit()
+    return order_dict(db.get(CardOrder, order_id), pay.get("pay_params") or {})
 
 
 def _start_for(db: Session, product: CardProduct, user_id: int, at: datetime) -> datetime:
@@ -511,6 +533,8 @@ def issue_gift(db: Session, user_id: int, product_id: int, ref: str, store_id: i
 def on_payment_succeeded(db: Session, event: PaidEvent) -> str:
     if event.biz_type != BIZ_TYPE:
         return "ignored"
+    if event.needs_manual:  # 支付模块已转人工 / 自动退款（关单后支付、重复支付、钩子拒绝）：不发卡
+        return "manual"
     order = db.get(CardOrder, event.biz_id)
     if order is None:
         return "unknown"
@@ -528,7 +552,7 @@ def on_payment_succeeded(db: Session, event: PaidEvent) -> str:
         return "duplicate"
     db.refresh(order)
     if order.kind == ORDER_TRANSFER_FEE:
-        return _transfer_after_fee(db, order)
+        return _transfer_after_fee(db, order, strict=event.from_hook)
     product = db.get(CardProduct, order.product_id)
     issue_card(db, product, order.user_id, store_id=order.store_id, source=SRC_PURCHASE, issue_ref=f"order:{order.id}",
                paid_cents=order.amount_cents, paid_at=event.paid_at, order_id=order.id, payment_id=order.payment_id,
@@ -565,16 +589,17 @@ def _on_refund_event(topic: str):
         result = parse_refund_result(topic, payload)
         if result is None or (result.biz_type and result.biz_type != BIZ_TYPE):
             return "ignored"
-        if not first_time(db, f"{CONSUMER}.refund", event_id):
+        if not first_time(db, f"{CONSUMER}.{topic}", event_id):
             return "duplicate"
         return on_refund_result(db, result)
     return handler
 
 
-on_refunded_event = _on_refund_event("payment.refunded")
-on_refund_failed_event = _on_refund_event("payment.refund_failed")
-EVENT_HANDLERS = {"payment.succeeded": on_payment_event, "payment.refunded": on_refunded_event,
-                  "payment.refund_failed": on_refund_failed_event}
+on_refund_succeeded_event = _on_refund_event("refund.succeeded")
+on_refund_failed_event = _on_refund_event("refund.failed")
+on_refund_abnormal_event = _on_refund_event("refund.abnormal")
+EVENT_HANDLERS = {"payment.succeeded": on_payment_event, "refund.succeeded": on_refund_succeeded_event,
+                  "refund.failed": on_refund_failed_event, "refund.abnormal": on_refund_abnormal_event}
 
 
 def handle_event(db: Session, topic: str, payload: dict, event_id: str | None = None) -> str:
@@ -886,20 +911,15 @@ def transfer(db: Session, card: MemberCard, *, to_user_id: int | None = None, to
                           goods_kind=GOODS_KIND, invoice_tax_code=None, invoice_note="转让手续费（应税服务，按实际业务开票）")
         db.add(order)
         db.flush()
-        pay = payment_port().create_payment(db, biz_type=BIZ_TYPE, biz_id=order.id, user_id=card.user_id,
-                                            store_id=card.store_id, amount_cents=fee, description="会员卡转让手续费",
-                                            goods_kind=GOODS_KIND, expires_at=order.expires_at)
-        order.payment_id = pay.get("payment_id") or None
-        order.out_trade_no = pay.get("out_trade_no")
-        db.flush()
-        return {"status": "awaiting_fee_payment", "order": order_dict(order, pay.get("pay_params") or {})}
+        # 手续费单提交后由接口层调用 start_payment 调起支付；支付成功后完成转让
+        return {"status": "awaiting_fee_payment", "order": order_dict(order)}
     collected = "offline" if fee and fee_collected_offline else ("none" if not fee else "waived")
     data = _execute_transfer(db, card, card.user_id, member.user_id, fee=fee if fee_collected_offline else 0,
                              fee_collected=collected, operator=operator, reason=reason, at=at)
     return {"status": "transferred", "transfer": data}
 
 
-def _transfer_after_fee(db: Session, order: CardOrder) -> str:
+def _transfer_after_fee(db: Session, order: CardOrder, strict: bool = False) -> str:
     card = db.get(MemberCard, order.card_id)
     try:
         if card is None or card.user_id != order.user_id:
@@ -910,12 +930,14 @@ def _transfer_after_fee(db: Session, order: CardOrder) -> str:
                           fee_order_id=order.id)
         return "transferred"
     except AppError as exc:
-        # 已收手续费但无法转让：标记人工处理并请求退回手续费
+        if strict:
+            # 支付模块同事务钩子：抛错 → 支付模块标人工并自动全额退回手续费
+            raise
+        # 事件通道（无钩子）：已收手续费但无法转让，标人工；手续费由后台在支付模块发起退款
         db.execute(update(CardOrder).where(CardOrder.id == order.id).values(needs_manual=True))
-        enqueue_event(db, REFUND_TOPIC, {"business_ref": f"MTF{order.id}", "biz_type": BIZ_TYPE, "biz_id": order.id,
-                                         "payment_id": order.payment_id, "out_trade_no": order.out_trade_no,
-                                         "amount_cents": order.amount_cents, "route": "original",
-                                         "reason": f"transfer failed: {exc.message}"}, "member_card_order", order.id)
+        enqueue_event(db, "member_card.transfer_fee_orphan", {"order_id": order.id, "card_id": order.card_id,
+                                                              "payment_id": order.payment_id, "amount_cents": order.amount_cents,
+                                                              "reason": exc.message}, "member_card_order", order.id)
         return "transfer_failed"
 
 
@@ -1032,7 +1054,8 @@ def refund_dict(r: CardRefund) -> dict:
             "rule": r.rule, "refund_cents": r.refund_cents, "interest_cents": r.interest_cents, "fee_cents": r.fee_cents,
             "route": r.route, "status": r.status, "reason": r.reason, "requested_by": r.requested_by,
             "approved_by": r.approved_by, "due_at": aware(r.due_at), "finished_at": aware(r.finished_at),
-            "fail_reason": r.fail_reason, "breakdown": json.loads(r.breakdown_json or "{}"),
+            "fail_reason": r.fail_reason, "submitted_at": aware(r.submitted_at), "channel_refund_id": r.channel_refund_id,
+            "submit_error": r.submit_error, "breakdown": json.loads(r.breakdown_json or "{}"),
             "created_at": aware(r.created_at)}
 
 
@@ -1096,6 +1119,8 @@ def request_refund(db: Session, card: MemberCard, cause: str, reason: str, actor
         quote = quote_refund(db, card, cause, at)
     before = card.status
     _cas(db, card, (MemberCard.status == before,), status=S_REFUNDING, prev_status=before)
+    if quote["refund_cents"] <= 0:
+        quote["route"] = "offline"
     refund = CardRefund(refund_no=_no("MR"), card_id=card.id, user_id=card.user_id, cause=cause, rule=quote["rule"],
                         refund_cents=quote["refund_cents"], interest_cents=quote["interest_cents"],
                         fee_cents=quote["fee_cents"], route=quote["route"], status=R_PENDING,
@@ -1124,7 +1149,7 @@ def _start_refund(db: Session, refund: CardRefund, staff_id: int | None) -> dict
     db.refresh(refund)
     card = db.get(MemberCard, refund.card_id)
     enqueue_event(db, REFUND_TOPIC, {
-        "business_ref": refund.refund_no, "biz_type": BIZ_TYPE, "biz_id": card.order_id, "card_id": card.id,
+        "business_ref": f"{REFUND_PREFIX}:{refund.refund_no}", "biz_type": BIZ_TYPE, "biz_id": card.order_id, "card_id": card.id,
         "refund_id": refund.id, "payment_id": card.payment_id, "amount_cents": refund.refund_cents,
         "interest_cents": refund.interest_cents, "route": refund.route, "reason": refund.reason,
         "user_id": refund.user_id}, "member_card_refund", refund.id)
@@ -1192,10 +1217,59 @@ def _finish(db: Session, refund: CardRefund, success: bool, reason: str | None, 
 
 
 def on_refund_result(db: Session, event: RefundResultEvent) -> str:
-    refund = db.execute(select(CardRefund).where(CardRefund.refund_no == event.business_ref)).scalar_one_or_none()
+    refund = db.execute(select(CardRefund).where(CardRefund.refund_no == event.local_ref)).scalar_one_or_none()
     if refund is None:
         return "unknown"
+    if event.abnormal:  # 原路退回失败：支付模块后台人工处理异常退款，本单保持处理中
+        db.execute(update(CardRefund).where(CardRefund.id == refund.id).values(submit_error="abnormal"))
+        enqueue_event(db, "member_card.refund_abnormal", {"refund_id": refund.id, "card_id": refund.card_id},
+                      "member_card_refund", refund.id)
+        return "abnormal"
     return _finish(db, refund, event.success, event.reason)
+
+
+def submit_refund(db: Session, refund_id: int) -> dict:
+    """把已审批的原路退款交给支付模块（create_refund 自行提交并调渠道，所以必须在业务事务提交后调用）。
+    每笔只提交一次：先条件占位并提交；上游暂时失败清除占位等任务重试；规则拒绝 → 退款失败、卡恢复原状态。"""
+    refund = db.get(CardRefund, refund_id)
+    if refund is None or refund.status != R_PROCESSING or refund.route != "original" or refund.submitted_at:
+        return refund_dict(refund) if refund else {}
+    claimed = db.execute(update(CardRefund).where(CardRefund.id == refund_id, CardRefund.status == R_PROCESSING,
+                                                  CardRefund.submitted_at.is_(None)).values(submitted_at=utcnow()))
+    db.commit()
+    if claimed.rowcount != 1:
+        db.refresh(refund)
+        return refund_dict(refund)
+    card = db.get(MemberCard, refund.card_id)
+    try:
+        result = payment_port().create_refund(db, payment_id=card.payment_id, amount_cents=refund.refund_cents,
+                                              reason=(refund.reason or "会员卡退卡")[:80],
+                                              business_ref=f"{REFUND_PREFIX}:{refund.refund_no}")
+    except AppError as exc:
+        db.rollback()
+        if exc.code in (ErrorCode.UPSTREAM_FAILED, ErrorCode.SERVICE_UNAVAILABLE):
+            db.execute(update(CardRefund).where(CardRefund.id == refund_id)
+                       .values(submitted_at=None, submit_error=exc.message[:200]))
+        else:
+            db.refresh(refund)
+            _finish(db, refund, False, f"rejected: {exc.message}"[:200])
+        db.commit()
+        db.refresh(refund)
+        return refund_dict(refund)
+    db.execute(update(CardRefund).where(CardRefund.id == refund_id)
+               .values(channel_refund_id=str(result.get("refund_id") or ""), submit_error=None))
+    db.commit()
+    db.refresh(refund)
+    return refund_dict(refund)
+
+
+def submit_pending_refunds(db: Session, limit: int = 100) -> int:
+    ids = db.execute(select(CardRefund.id).where(CardRefund.status == R_PROCESSING, CardRefund.route == "original",
+                                                 CardRefund.submitted_at.is_(None)).order_by(CardRefund.id)
+                     .limit(limit)).scalars().all()
+    for refund_id in ids:
+        submit_refund(db, refund_id)
+    return len(ids)
 
 
 def complete_offline_refund(db: Session, refund_id: int, staff_id: int, success: bool = True, note: str = "") -> dict:
@@ -1382,3 +1456,65 @@ def on_prize_won(db: Session, payload: dict, event_id: str | None = None) -> str
 
 
 EVENT_HANDLERS["lottery.prize_won"] = on_prize_won
+
+
+# ================================================================ 订单售后退款（08-order 售卡行 → 10-after-sales）
+
+ORDER_REFUND_KIND = "order_refund"
+
+
+def on_after_sale_completed(db: Session, payload: dict, event_id: str | None = None) -> str:
+    """after_sale.completed：订单里买的卡（行 fulfil_ref = member_card:{id}）已由售后原路退款 → 终止该卡。
+
+    外部退款已完成（售后在 refund.succeeded / 余额冲回后才发此事件），这里只做权益终止：
+    状态 → refunded（终态）、剩余次数清零、卡流水 kind=order_refund ref=after_sale:{售后单}:{卡}、发 member_card.terminated。
+    卡正在走本模块自己的退卡流程（refunding）时不动它，发 member_card.order_refund_conflict 交人工。
+    幂等：事件去重 + 卡流水 (ref, kind) 唯一 + 状态条件 UPDATE。不提交。
+    """
+    lines = [ln for ln in (payload.get("lines") or [])
+             if str(ln.get("fulfil_ref") or "").startswith("member_card:")]
+    if not lines:
+        return "ignored"
+    if not first_time(db, f"{CONSUMER}.after_sale_completed", event_id):
+        return "duplicate"
+    case_id = payload.get("after_sale_id")
+    outcome = "terminated"
+    for ln in lines:
+        try:
+            card_id = int(str(ln["fulfil_ref"]).split(":", 1)[1])
+        except (TypeError, ValueError):
+            continue
+        card = db.get(MemberCard, card_id)
+        if card is None:
+            continue
+        ref = f"after_sale:{case_id}:{card_id}"
+        if db.execute(select(CardLedger.id).where(CardLedger.ref == ref, CardLedger.kind == ORDER_REFUND_KIND)
+                      ).scalar_one_or_none() is not None or card.status == S_REFUNDED:
+            continue
+        if card.status == S_REFUNDING:
+            enqueue_event(db, "member_card.order_refund_conflict", {"card_id": card.id, "user_id": card.user_id,
+                                                                    "after_sale_id": case_id,
+                                                                    "order_id": payload.get("order_id")},
+                          "member_card", card.id)
+            outcome = "conflict"
+            continue
+        remaining = card.sessions_remaining
+        before = card.status
+        if db.execute(update(MemberCard).where(MemberCard.id == card.id, MemberCard.status == before)
+                      .values(status=S_REFUNDED, prev_status=None, sessions_remaining=0,
+                              version=MemberCard.version + 1)).rowcount != 1:
+            raise AppError(ErrorCode.CONFLICT, "card changed concurrently, retry")
+        _ledger(db, card, ORDER_REFUND_KIND, ref, delta_sessions=-(remaining or 0), operator="system:after_sales",
+                note=f"order {payload.get('order_id')} after-sale {payload.get('after_sale_no') or case_id}")
+        enqueue_event(db, "member_card.terminated", {
+            "card_id": card.id, "user_id": card.user_id, "reason": "order_refund", "after_sale_id": case_id,
+            "order_id": payload.get("order_id"), "order_item_id": ln.get("order_item_id"),
+            "refund_cents": int(ln.get("amount_cents") or 0), "status_before": before}, "member_card", card.id)
+    return outcome
+
+
+EVENT_HANDLERS["after_sale.completed"] = on_after_sale_completed
+
+
+# 向 09-wechat-pay 注册同事务钩子（支付成功即发卡 / 完成转让；退款终态即回写）与 Payable 解析；事件订阅为补偿通道。
+register_payment_hooks(BIZ_TYPE, on_payment_succeeded, REFUND_PREFIX, on_refund_result, payable=payable)

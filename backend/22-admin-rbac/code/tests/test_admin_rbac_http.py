@@ -192,8 +192,8 @@ def test_role_endpoints(env):
     created = client.post("/api/v1/admin/roles", headers={**h, **key("role")},
                           json={"name": "夜班", "permissions": ["order:read"]}).json()["data"]
     rid = created["id"]
-    upd = client.put(f"/api/v1/admin/roles/{rid}", headers={**h, **key("role-u")}, json={"permissions": ["order:read", "order:print"]})
-    assert upd.json()["data"]["permissions"] == ["order:print", "order:read"]
+    upd = client.put(f"/api/v1/admin/roles/{rid}", headers={**h, **key("role-u")}, json={"permissions": ["order:read", "order:remark"]})
+    assert upd.json()["data"]["permissions"] == ["order:read", "order:remark"]
     assert client.get(f"/api/v1/admin/roles/{rid}", headers=h).json()["data"]["name"] == "夜班"
     sa = client.put(f"/api/v1/admin/roles/{role_id(db, 'super_admin')}", headers={**h, **key("role-sa")}, json={"permissions": []})
     assert sa.json()["code"] == 4220

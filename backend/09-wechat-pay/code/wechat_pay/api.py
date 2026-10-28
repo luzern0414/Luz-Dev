@@ -3,13 +3,11 @@
 鉴权：
 - 顾客端：identity.api.current_user（4010）；他人支付单 4040。
 - 回调：公开，但必须通过 APIv3 验签；不做登录态校验（4012075420）。应答为渠道格式（SPEC §4 例外）。
-- 后台：Bearer 员工令牌 + 权限码（payment:read / payment:refund / payment:reconcile）；授权器可替换（set_staff_authorizer）。
+- 后台：22-admin-rbac 会话 + 权限码（payment:read / payment:refund / payment:reconcile）+ 门店范围；资金写操作要求新鲜认证。
 """
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable
-from dataclasses import dataclass
 from datetime import date
 from typing import Any, Literal
 
@@ -24,6 +22,8 @@ from luzback import (
     AppError, ErrorCode, decode_token, export_csv, get_db, get_settings, idempotency_key, ok, run_idempotent, write_audit,
 )
 from luzback.export import cents_to_yuan
+
+from admin_rbac import Staff, declare_permissions, require_permission, store_scope
 
 from . import adapters, apiv3, service
 from .models import RefundRecord
@@ -50,45 +50,10 @@ def current_user(creds: HTTPAuthorizationCredentials | None = Depends(HTTPBearer
 
 
 # ---------------------------------------------------------------- 后台鉴权
+# 22-admin-rbac：服务端会话 + 权限码（默认拒绝 4030）+ 门店范围（store_scope：None = 全部门店）。
+# 资金类写操作（发起退款、异常退款、关单、对账差异处理）另要求新鲜认证（fresh=True → 4011 reauth_required）。
 
-
-@dataclass
-class StaffContext:
-    id: int
-    store_ids: list[int] | None = None  # None = 全部门店
-
-
-StaffAuthorizer = Callable[[Session, dict, str], StaffContext]
-_bearer = HTTPBearer(auto_error=False)
-_staff_authorizer: StaffAuthorizer | None = None
-
-
-def set_staff_authorizer(fn: StaffAuthorizer | None) -> None:
-    """替换后台授权器：fn(db, 令牌声明, 权限码) -> StaffContext；无权限抛 4030。"""
-    global _staff_authorizer
-    _staff_authorizer = fn
-
-
-def _rbac_authorizer(db: Session, claims: dict, code: str) -> StaffContext:
-    """默认：委托 22-admin-rbac（停用 / 版本校验、权限码、门店范围）。"""
-    try:
-        from admin_rbac import service as rbac
-    except Exception as exc:  # noqa: BLE001
-        raise AppError(ErrorCode.FORBIDDEN, "admin authorization unavailable") from exc
-    staff = rbac.load_active_staff(db, int(claims["sub"]), claims.get("rv"))
-    rbac.assert_permission(db, staff, code)
-    return StaffContext(id=staff.id, store_ids=rbac.store_scope(staff))
-
-
-def require_staff(code: str):
-    def dependency(creds: HTTPAuthorizationCredentials | None = Depends(_bearer), db: Session = Depends(get_db)) -> StaffContext:
-        if creds is None:
-            raise AppError(ErrorCode.UNAUTHORIZED, "missing bearer token")
-        settings = get_settings()
-        claims = decode_token(creds.credentials, settings.jwt_secret, kind="admin", issuer=settings.jwt_issuer)
-        return (_staff_authorizer or _rbac_authorizer)(db, claims, code)
-
-    return dependency
+declare_permissions("payment", service.PERMISSIONS.items())
 
 
 def _fingerprint(body: BaseModel | None) -> str:
@@ -173,9 +138,9 @@ async def refund_notify(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/api/v1/admin/payments")
-def admin_payments(request: Request, staff: StaffContext = Depends(require_staff("payment:read")),
+def admin_payments(request: Request, staff: Staff = Depends(require_permission("payment:read")),
                    db: Session = Depends(get_db)):
-    return ok(service.PAYMENT_LIST.page(db, service.payments_query(staff.store_ids), request.query_params,
+    return ok(service.PAYMENT_LIST.page(db, service.payments_query(store_scope(staff)), request.query_params,
                                         serialize=service.payment_view))
 
 
@@ -189,7 +154,7 @@ def _payment_row(p) -> list[Any]:
             p.created_at, p.paid_at]
 
 
-def _csv(db: Session, staff: StaffContext, action: str, spec, stmt, params, headers, row, filename: str) -> StreamingResponse:
+def _csv(db: Session, staff: Staff, action: str, spec, stmt, params, headers, row, filename: str) -> StreamingResponse:
     stream = export_csv(db, spec, stmt, params, headers, row)
     write_audit(db, "staff", staff.id, action, "export", filename, after={"params": dict(params)})
     db.commit()
@@ -198,24 +163,24 @@ def _csv(db: Session, staff: StaffContext, action: str, spec, stmt, params, head
 
 
 @router.get("/api/v1/admin/payments/export")
-def admin_payments_export(request: Request, staff: StaffContext = Depends(require_staff("payment:read")),
+def admin_payments_export(request: Request, staff: Staff = Depends(require_permission("payment:read")),
                           db: Session = Depends(get_db)):
-    return _csv(db, staff, "payment.export", service.PAYMENT_LIST, service.payments_query(staff.store_ids),
+    return _csv(db, staff, "payment.export", service.PAYMENT_LIST, service.payments_query(store_scope(staff)),
                 request.query_params, PAYMENT_EXPORT_HEADERS, _payment_row, "payments")
 
 
 @router.get("/api/v1/admin/payments/{payment_id}")
-def admin_payment_detail(payment_id: int, staff: StaffContext = Depends(require_staff("payment:read")),
+def admin_payment_detail(payment_id: int, staff: Staff = Depends(require_permission("payment:read")),
                          db: Session = Depends(get_db)):
-    return ok(service.admin_payment_detail(db, payment_id, staff.store_ids))
+    return ok(service.admin_payment_detail(db, payment_id, store_scope(staff)))
 
 
-def _own_payment(db: Session, payment_id: int, staff: StaffContext) -> None:
-    service.admin_payment_detail(db, payment_id, staff.store_ids)  # 4040：不存在或不在门店范围
+def _own_payment(db: Session, payment_id: int, staff: Staff) -> None:
+    service.admin_payment_detail(db, payment_id, store_scope(staff))  # 4040：不存在或不在门店范围
 
 
 @router.post("/api/v1/admin/payments/{payment_id}/sync")
-def admin_payment_sync(payment_id: int, staff: StaffContext = Depends(require_staff("payment:reconcile")),
+def admin_payment_sync(payment_id: int, staff: Staff = Depends(require_permission("payment:reconcile")),
                        db: Session = Depends(get_db), key: str = Depends(idempotency_key)):
     """人工查单同步（与回调同一处理逻辑）。"""
     _own_payment(db, payment_id, staff)
@@ -230,7 +195,7 @@ def admin_payment_sync(payment_id: int, staff: StaffContext = Depends(require_st
 
 
 @router.post("/api/v1/admin/payments/{payment_id}/close")
-def admin_payment_close(payment_id: int, staff: StaffContext = Depends(require_staff("payment:reconcile")),
+def admin_payment_close(payment_id: int, staff: Staff = Depends(require_permission("payment:reconcile", fresh=True)),
                         db: Session = Depends(get_db), key: str = Depends(idempotency_key)):
     """人工关单：先查单，未支付才关单。"""
     _own_payment(db, payment_id, staff)
@@ -249,7 +214,7 @@ class RefundIn(BaseModel):
 
 
 @router.post("/api/v1/admin/payments/{payment_id}/refunds")
-def admin_create_refund(payment_id: int, body: RefundIn, staff: StaffContext = Depends(require_staff("payment:refund")),
+def admin_create_refund(payment_id: int, body: RefundIn, staff: Staff = Depends(require_permission("payment:refund", fresh=True)),
                         db: Session = Depends(get_db), key: str = Depends(idempotency_key)):
     """后台直接退款（售后流程之外的人工退款）。规则：≤ 可退、≤ 50 次、间隔 ≥ 1 分钟、365 天内。"""
     _own_payment(db, payment_id, staff)
@@ -264,9 +229,9 @@ def admin_create_refund(payment_id: int, body: RefundIn, staff: StaffContext = D
 
 
 @router.get("/api/v1/admin/refunds")
-def admin_refunds(request: Request, staff: StaffContext = Depends(require_staff("payment:read")),
+def admin_refunds(request: Request, staff: Staff = Depends(require_permission("payment:read")),
                   db: Session = Depends(get_db)):
-    return ok(service.REFUND_LIST.page(db, service.refunds_query(staff.store_ids), request.query_params,
+    return ok(service.REFUND_LIST.page(db, service.refunds_query(store_scope(staff)), request.query_params,
                                        serialize=lambda row: service.refund_view(row[0], row[1])))
 
 
@@ -281,16 +246,16 @@ def _refund_row(row) -> list[Any]:
 
 
 @router.get("/api/v1/admin/refunds/export")
-def admin_refunds_export(request: Request, staff: StaffContext = Depends(require_staff("payment:read")),
+def admin_refunds_export(request: Request, staff: Staff = Depends(require_permission("payment:read")),
                          db: Session = Depends(get_db)):
-    return _csv(db, staff, "refund.export", service.REFUND_LIST, service.refunds_query(staff.store_ids),
+    return _csv(db, staff, "refund.export", service.REFUND_LIST, service.refunds_query(store_scope(staff)),
                 request.query_params, REFUND_EXPORT_HEADERS, _refund_row, "refunds")
 
 
 @router.get("/api/v1/admin/refunds/{refund_id}")
-def admin_refund_detail(refund_id: int, staff: StaffContext = Depends(require_staff("payment:read")),
+def admin_refund_detail(refund_id: int, staff: Staff = Depends(require_permission("payment:read")),
                         db: Session = Depends(get_db)):
-    return ok(service.admin_refund_detail(db, refund_id, staff.store_ids))
+    return ok(service.admin_refund_detail(db, refund_id, store_scope(staff)))
 
 
 class AbnormalIn(BaseModel):
@@ -301,10 +266,10 @@ class AbnormalIn(BaseModel):
 
 
 @router.post("/api/v1/admin/refunds/{refund_id}/abnormal")
-def admin_abnormal_refund(refund_id: int, body: AbnormalIn, staff: StaffContext = Depends(require_staff("payment:refund")),
+def admin_abnormal_refund(refund_id: int, body: AbnormalIn, staff: Staff = Depends(require_permission("payment:refund", fresh=True)),
                           db: Session = Depends(get_db), key: str = Depends(idempotency_key)):
     """ABNORMAL 退款发起异常退款；银行卡号与姓名只用于加密提交，不落库、不进审计。"""
-    service.admin_refund_detail(db, refund_id, staff.store_ids)
+    service.admin_refund_detail(db, refund_id, store_scope(staff))
     result = run_idempotent(
         db, f"payment.refund.abnormal:{refund_id}", key,
         lambda: service.apply_abnormal_refund(db, refund_id, refund_type=body.type, bank_type=body.bank_type,
@@ -314,9 +279,9 @@ def admin_abnormal_refund(refund_id: int, body: AbnormalIn, staff: StaffContext 
 
 
 @router.post("/api/v1/admin/refunds/{refund_id}/sync")
-def admin_refund_sync(refund_id: int, staff: StaffContext = Depends(require_staff("payment:refund")),
+def admin_refund_sync(refund_id: int, staff: Staff = Depends(require_permission("payment:refund")),
                       db: Session = Depends(get_db), key: str = Depends(idempotency_key)):
-    service.admin_refund_detail(db, refund_id, staff.store_ids)
+    service.admin_refund_detail(db, refund_id, store_scope(staff))
 
     def work():
         refund = db.get(RefundRecord, refund_id)
@@ -334,7 +299,7 @@ def admin_refund_sync(refund_id: int, staff: StaffContext = Depends(require_staf
 
 
 @router.get("/api/v1/admin/reconciliation/batches")
-def admin_recon_batches(request: Request, staff: StaffContext = Depends(require_staff("payment:read")),
+def admin_recon_batches(request: Request, staff: Staff = Depends(require_permission("payment:read")),
                         db: Session = Depends(get_db)):
     from sqlalchemy import select
 
@@ -344,7 +309,7 @@ def admin_recon_batches(request: Request, staff: StaffContext = Depends(require_
 
 
 @router.get("/api/v1/admin/reconciliation/diffs")
-def admin_recon_diffs(request: Request, staff: StaffContext = Depends(require_staff("payment:read")),
+def admin_recon_diffs(request: Request, staff: Staff = Depends(require_permission("payment:read")),
                       db: Session = Depends(get_db)):
     from sqlalchemy import select
 
@@ -364,7 +329,7 @@ def _diff_row(d) -> list[Any]:
 
 
 @router.get("/api/v1/admin/reconciliation/diffs/export")
-def admin_recon_diffs_export(request: Request, staff: StaffContext = Depends(require_staff("payment:reconcile")),
+def admin_recon_diffs_export(request: Request, staff: Staff = Depends(require_permission("payment:reconcile")),
                              db: Session = Depends(get_db)):
     from sqlalchemy import select
 
@@ -380,7 +345,7 @@ class ReconcileIn(BaseModel):
 
 
 @router.post("/api/v1/admin/reconciliation/run")
-def admin_recon_run(body: ReconcileIn, staff: StaffContext = Depends(require_staff("payment:reconcile")),
+def admin_recon_run(body: ReconcileIn, staff: Staff = Depends(require_permission("payment:reconcile")),
                     db: Session = Depends(get_db), key: str = Depends(idempotency_key)):
     def work():
         result = service.reconcile_bill(db, body.bill_date, force=body.force)
@@ -397,7 +362,7 @@ class ResolveIn(BaseModel):
 
 
 @router.post("/api/v1/admin/reconciliation/diffs/{diff_id}/resolve")
-def admin_recon_resolve(diff_id: int, body: ResolveIn, staff: StaffContext = Depends(require_staff("payment:reconcile")),
+def admin_recon_resolve(diff_id: int, body: ResolveIn, staff: Staff = Depends(require_permission("payment:reconcile", fresh=True)),
                         db: Session = Depends(get_db), key: str = Depends(idempotency_key)):
     return ok(run_idempotent(db, f"payment.reconcile.resolve:{diff_id}", key,
                              lambda: service.resolve_diff(db, diff_id, staff.id, body.note),
@@ -405,7 +370,7 @@ def admin_recon_resolve(diff_id: int, body: ResolveIn, staff: StaffContext = Dep
 
 
 @router.get("/api/v1/admin/payment-shipping")
-def admin_shipping(request: Request, staff: StaffContext = Depends(require_staff("payment:read")),
+def admin_shipping(request: Request, staff: Staff = Depends(require_permission("payment:read")),
                    db: Session = Depends(get_db)):
     from sqlalchemy import select
 
@@ -415,7 +380,7 @@ def admin_shipping(request: Request, staff: StaffContext = Depends(require_staff
 
 
 @router.post("/api/v1/admin/payment-shipping/{upload_id}/retry")
-def admin_shipping_retry(upload_id: int, staff: StaffContext = Depends(require_staff("payment:reconcile")),
+def admin_shipping_retry(upload_id: int, staff: Staff = Depends(require_permission("payment:reconcile")),
                          db: Session = Depends(get_db), key: str = Depends(idempotency_key)):
     return ok(run_idempotent(db, f"payment.shipping.retry:{upload_id}", key,
                              lambda: service.retry_shipping_upload(db, upload_id, staff.id),

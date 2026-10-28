@@ -481,19 +481,32 @@ def test_notify_staff_validation(env):
 
 
 def test_event_bindings(env):
-    payload = {"user_id": 1, "out_trade_no": "P1", "order_id": 5, "order_no": "NO5", "amount_cents": 990,
-               "goods_name": "鱼", "paid_at": "2026-10-28T02:00:00+00:00", "event_id": "e-1"}
+    # 09 的真实字段：business_no / business_id 映射为模板的 order_no / order_id；只有订单支付发“支付成功”
+    payload = {"payment_id": 9, "business_type": "order", "business_id": 5, "business_no": "NO5", "user_id": 1,
+               "store_id": None, "amount_cents": 990, "out_trade_no": "P1", "transaction_id": "T1",
+               "paid_at": "2026-10-28T02:00:00+00:00", "needs_manual": False, "source": "notify", "event_id": "e-1"}
     assert consumers.handle_event(env.db, "payment.succeeded", payload) == 1
     assert consumers.handle_event(env.db, "payment.succeeded", {**payload, "event_id": "e-2"}) == 0  # 同订单重复事件
+    assert consumers.handle_event(env.db, "payment.succeeded",
+                                  {**payload, "business_type": "wallet_recharge", "out_trade_no": "P2"}) == 0
     req = env.db.execute(select(NotificationRequest)).scalar_one()
     assert (req.scene, req.dedupe_key) == ("order.paid", "pay:P1")
     kit.grant(env, 1, "TPL_PAID")
     run(env)
-    assert env.sub.calls[0]["data"]["time4"] == {"value": "2026年10月28日 10:00"}
+    call = env.sub.calls[0]
+    assert call["data"]["time4"] == {"value": "2026年10月28日 10:00"}
+    assert call["data"]["character_string1"] == {"value": "NO5"} and call["page"] == "pages/order/detail?id=5"
     assert consumers.handle_event(env.db, "unknown.topic", {"user_id": 1}) == 0
-    assert consumers.handle_event(env.db, "refund.succeeded", {"out_refund_no": "R1"}) == 0  # 缺收件人
-    assert consumers.handle_event(env.db, "device.offline", {"staff_ids": [9], "device_id": 3, "offline_at": "x",
-                                                             "device_name": "闸机"}, "e-3") == 1
+    assert consumers.handle_event(env.db, "refund.succeeded", {"out_refund_no": "R1"}) == 0  # 09 退款事件不再绑定
+    refund = {"order_id": 5, "order_no": "NO5", "user_id": 1, "store_id": None, "status": "paid", "total_cents": 990,
+              "amount_cents": 300, "refunded_cents": 300, "full": False, "ref": "after_sales:7"}
+    assert consumers.handle_event(env.db, "order.refunded", refund, "e-4") == 1
+    assert consumers.handle_event(env.db, "order.refunded", refund, "e-5") == 0  # 同一结算重投
+    card = {"card_id": 3, "user_id": 1, "days_left": 3, "tier": 3, "ends_at": "2026-10-31T16:00:00+00:00"}
+    assert consumers.handle_event(env.db, "member_card.expiring", card, "e-6") == 1
+    req = env.db.execute(select(NotificationRequest).where(NotificationRequest.scene == "card.expiring")).scalar_one()
+    assert req.dedupe_key == "card:3:3" and '"expire_date": {"__d__": "2026-11-01"}' in req.data_json  # 上海时区日期
+    assert "device.offline" not in consumers.EVENT_BINDINGS and "booking.reminder" not in consumers.EVENT_BINDINGS
 
 
 def test_event_binding_override(env):
@@ -790,7 +803,8 @@ def test_not_configured_channel_fails_permanently(env):
 def test_events_subscriptions_contract(env):
     from notification import events
 
-    assert {"notification.requested", "payment.succeeded", "lottery.prize_won", "device.offline"} <= set(events.SUBSCRIPTIONS)
+    assert {"notification.requested", "payment.succeeded", "order.refunded", "member_card.expiring",
+            "lottery.prize_won"} <= set(events.SUBSCRIPTIONS)
     handler = events.SUBSCRIPTIONS["lottery.prize_won"]
     payload = {"draw_id": 31, "activity_id": 2, "member_id": 1, "prize_kind": "physical", "prize_name": "保温杯",
                "delivery_key": "lottery:31"}

@@ -35,6 +35,14 @@ def _run(db: Session, scope: str, key: str, actor: str, body, fn):
                              require_key=True))
 
 
+def _submit(db: Session, response: dict) -> dict:
+    """退款进入处理中后（事务已提交）把原路退款交给支付模块。"""
+    data = response.get("data") or {}
+    if data.get("status") == "processing" and data.get("route") == "original" and data.get("id"):
+        response["data"] = jsonable_encoder(service.submit_refund(db, int(data["id"])))
+    return response
+
+
 def _secret() -> str:
     return get_settings().jwt_secret
 
@@ -287,8 +295,17 @@ def app_product(product_id: int = Path(ge=1), user_id: int = Depends(current_use
 @app_router.post("/orders")
 def app_order(body: OrderIn, key: str = Depends(idempotency_key), user_id: int = Depends(current_user),
               db: Session = Depends(get_db)):
-    return _run(db, "member_card.order.create", key, f"user:{user_id}", body,
-                lambda: service.create_order(db, user_id, body.product_id, body.store_id))
+    created = run_idempotent(db, "member_card.order.create", key,
+                             lambda: jsonable_encoder(service.create_order(db, user_id, body.product_id, body.store_id)),
+                             actor=f"user:{user_id}", fingerprint=_fp(body), require_key=True)
+    # 购卡单已提交；调起支付在独立步骤（支付模块自行提交）。重放时支付模块复用同一支付单
+    return ok(jsonable_encoder(service.start_payment(db, user_id, created["id"])))
+
+
+@app_router.post("/orders/{order_id}/pay")
+def app_pay(order_id: int = Path(ge=1), user_id: int = Depends(current_user), db: Session = Depends(get_db)):
+    """继续支付（购卡单或转让手续费单）。"""
+    return ok(jsonable_encoder(service.start_payment(db, user_id, order_id)))
 
 
 @app_router.get("/cards")
@@ -337,9 +354,9 @@ def app_refund_quote(card_id: int = Path(ge=1), user_id: int = Depends(current_u
 @app_router.post("/cards/{card_id}/refund-request")
 def app_refund_request(body: RefundRequestIn, card_id: int = Path(ge=1), key: str = Depends(idempotency_key),
                        user_id: int = Depends(current_user), db: Session = Depends(get_db)):
-    return _run(db, f"member_card.refund.request:{card_id}", key, f"user:{user_id}", body,
-                lambda: service.request_refund(db, service.get_card(db, card_id, user_id), "customer", body.reason,
-                                               f"user:{user_id}", user_id=user_id))
+    return _submit(db, _run(db, f"member_card.refund.request:{card_id}", key, f"user:{user_id}", body,
+                            lambda: service.request_refund(db, service.get_card(db, card_id, user_id), "customer",
+                                                           body.reason, f"user:{user_id}", user_id=user_id)))
 
 
 @app_router.post("/cards/{card_id}/transfer")
@@ -347,9 +364,13 @@ def app_transfer(body: TransferIn, card_id: int = Path(ge=1), key: str = Depends
                  user_id: int = Depends(current_user), db: Session = Depends(get_db)):
     if not service.cfg().app_transfer_enabled:
         raise AppError(ErrorCode.FORBIDDEN, "请到门店办理转让")
-    return _run(db, f"member_card.transfer:{card_id}", key, f"user:{user_id}", body,
-                lambda: service.transfer(db, service.get_card(db, card_id, user_id), to_user_id=body.to_member_id,
-                                         to_phone=body.to_phone, operator=f"user:{user_id}", reason=body.reason))
+    response = _run(db, f"member_card.transfer:{card_id}", key, f"user:{user_id}", body,
+                    lambda: service.transfer(db, service.get_card(db, card_id, user_id), to_user_id=body.to_member_id,
+                                             to_phone=body.to_phone, operator=f"user:{user_id}", reason=body.reason))
+    data = response["data"]
+    if data.get("status") == "awaiting_fee_payment":  # 手续费单已提交，再调起支付
+        data["order"] = jsonable_encoder(service.start_payment(db, user_id, data["order"]["id"]))
+    return response
 
 
 @app_router.post("/cards/{card_id}/report-lost")
@@ -459,21 +480,21 @@ def admin_refunds(request: Request, staff: StaffContext = Depends(require_permis
 
 @admin_router.post("/refunds/{refund_id}/approve")
 def admin_approve(refund_id: int = Path(ge=1), key: str = Depends(idempotency_key),
-                  staff: StaffContext = Depends(require_permission("member_card:refund")), db: Session = Depends(get_db)):
-    return _run(db, f"member_card.refund.approve:{refund_id}", key, f"staff:{staff.id}", None,
-                lambda: service.approve_refund(db, refund_id, staff.id))
+                  staff: StaffContext = Depends(require_permission("member_card:refund", fresh=True)), db: Session = Depends(get_db)):
+    return _submit(db, _run(db, f"member_card.refund.approve:{refund_id}", key, f"staff:{staff.id}", None,
+                            lambda: service.approve_refund(db, refund_id, staff.id)))
 
 
 @admin_router.post("/refunds/{refund_id}/reject")
 def admin_reject(body: ReasonIn, refund_id: int = Path(ge=1), key: str = Depends(idempotency_key),
-                 staff: StaffContext = Depends(require_permission("member_card:refund")), db: Session = Depends(get_db)):
+                 staff: StaffContext = Depends(require_permission("member_card:refund", fresh=True)), db: Session = Depends(get_db)):
     return _run(db, f"member_card.refund.reject:{refund_id}", key, f"staff:{staff.id}", body,
                 lambda: service.reject_refund(db, refund_id, staff.id, body.reason))
 
 
 @admin_router.post("/refunds/{refund_id}/offline-complete")
 def admin_offline_complete(body: OfflineCompleteIn, refund_id: int = Path(ge=1), key: str = Depends(idempotency_key),
-                           staff: StaffContext = Depends(require_permission("member_card:refund")),
+                           staff: StaffContext = Depends(require_permission("member_card:refund", fresh=True)),
                            db: Session = Depends(get_db)):
     return _run(db, f"member_card.refund.offline:{refund_id}", key, f"staff:{staff.id}", body,
                 lambda: service.complete_offline_refund(db, refund_id, staff.id, body.success, body.note))
@@ -481,7 +502,7 @@ def admin_offline_complete(body: OfflineCompleteIn, refund_id: int = Path(ge=1),
 
 @admin_router.post("/issue")
 def admin_issue(body: IssueIn, key: str = Depends(idempotency_key),
-                staff: StaffContext = Depends(require_permission("member_card:issue")), db: Session = Depends(get_db)):
+                staff: StaffContext = Depends(require_permission("member_card:issue", fresh=True)), db: Session = Depends(get_db)):
     if body.store_id:
         assert_store_scope(staff, body.store_id)
     return _run(db, "member_card.issue", key, f"staff:{staff.id}", body,
@@ -502,7 +523,7 @@ def admin_consume_by_no(body: ConsumeByNoIn, key: str = Depends(idempotency_key)
 
 @admin_router.post("/usages/reverse")
 def admin_reverse_use(body: ReverseIn, key: str = Depends(idempotency_key),
-                      staff: StaffContext = Depends(require_permission("member_card:consume")),
+                      staff: StaffContext = Depends(require_permission("member_card:consume", fresh=True)),
                       db: Session = Depends(get_db)):
     def work():
         data = service.reverse_use(db, body.ref, body.reason, f"staff:{staff.id}")
@@ -548,7 +569,7 @@ def admin_consume(body: ConsumeIn, card_id: int = Path(ge=1), key: str = Depends
 
 @admin_router.post("/{card_id}/adjust")
 def admin_adjust(body: AdjustIn, card_id: int = Path(ge=1), key: str = Depends(idempotency_key),
-                 staff: StaffContext = Depends(require_permission("member_card:adjust")), db: Session = Depends(get_db)):
+                 staff: StaffContext = Depends(require_permission("member_card:adjust", fresh=True)), db: Session = Depends(get_db)):
     return _card_action(db, staff, card_id, "adjust", key, body,
                         lambda card: service.adjust(db, staff.id, card, body.delta_sessions, body.delta_days, body.reason,
                                                     f"adjust:{staff.id}:{key}"))
@@ -627,8 +648,8 @@ def admin_refund_quote(card_id: int = Path(ge=1), cause: Literal["customer", "me
 
 @admin_router.post("/{card_id}/refunds")
 def admin_create_refund(body: AdminRefundIn, card_id: int = Path(ge=1), key: str = Depends(idempotency_key),
-                        staff: StaffContext = Depends(require_permission("member_card:refund")),
+                        staff: StaffContext = Depends(require_permission("member_card:refund", fresh=True)),
                         db: Session = Depends(get_db)):
-    return _card_action(db, staff, card_id, "refund", key, body,
-                        lambda card: service.request_refund(db, card, body.cause, body.reason, f"staff:{staff.id}",
-                                                            staff_id=staff.id))
+    return _submit(db, _card_action(db, staff, card_id, "refund", key, body,
+                                    lambda card: service.request_refund(db, card, body.cause, body.reason,
+                                                                        f"staff:{staff.id}", staff_id=staff.id)))

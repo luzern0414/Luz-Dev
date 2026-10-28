@@ -7,6 +7,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from luzback import enqueue_event, utcnow
+from luzback.scheduler import Job
 
 from . import rules
 from .config import get_config
@@ -88,17 +89,15 @@ def purge_expired(db: Session, now: datetime | None = None) -> str:
     return f"purged={len(acts)}"
 
 
-# (名称, 间隔秒, 函数)：由 25-jobs 注册到 JobRegistry
+# 25-jobs 约定：JOBS 是 luzback.scheduler.Job 元组
 JOBS = (
-    ("lottery.advance_activities", 60, advance_activities),
-    ("lottery.retry_deliveries", 60, retry_deliveries),
-    ("lottery.expire_unclaimed", 600, expire_unclaimed),
-    ("lottery.purge_expired", 86400, purge_expired),
+    Job("lottery.advance_activities", interval_seconds=60, fn=advance_activities),
+    Job("lottery.retry_deliveries", interval_seconds=60, fn=retry_deliveries),
+    Job("lottery.expire_unclaimed", interval_seconds=600, fn=expire_unclaimed, lock_ttl=300),
+    Job("lottery.purge_expired", interval_seconds=86400, fn=purge_expired, lock_ttl=600),
 )
 
 
 def register_jobs(registry) -> None:
-    from luzback.scheduler import Job
-
-    for name, interval, fn in JOBS:
-        registry.add(Job(name, interval_seconds=interval, fn=fn))
+    for job in JOBS:
+        registry.add(Job(job.name, interval_seconds=job.interval_seconds, fn=job.fn, lock_ttl=job.lock_ttl))

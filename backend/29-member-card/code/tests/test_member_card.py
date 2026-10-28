@@ -51,7 +51,7 @@ def buy(db, product_id, user_id=1, store_id=5, at=T0, event_id=None):
     order = svc.create_order(db, user_id, product_id, store_id, at=at)
     db.commit()
     out = svc.handle_event(db, "payment.succeeded", {"biz_type": "member_card", "biz_id": order["id"],
-                                                     "amount_cents": order["amount_cents"], "payment_id": f"pay{order['id']}",
+                                                     "amount_cents": order["amount_cents"], "payment_id": f"9{order['id']}",
                                                      "paid_at": at.isoformat()}, event_id or f"e{order['id']}")
     assert out == "issued"
     return db.execute(select(MemberCard).where(MemberCard.order_id == order["id"])).scalar_one()
@@ -110,9 +110,14 @@ def test_product_update_audited_and_offsale(db):
 
 def test_purchase_issues_card_on_payment_event_once(db, doubles):
     pid = product(db, gift_days=5)
-    card = buy(db, pid)
+    pending = svc.create_order(db, 9, pid, 5)
+    db.commit()
+    assert not doubles.calls  # 先提交购卡单，再单独调起支付（支付模块自行提交）
+    paying = svc.start_payment(db, 9, pending["id"])
     call = doubles.calls[0]
-    assert call["biz_type"] == "member_card" and call["goods_kind"] == "offline_service"
+    assert call["biz_type"] == "member_card" and call["goods_kind"] == "offline_service" and paying["pay_params"]
+    assert call["business_no"] == pending["order_no"] and svc.payable(db, 9, pending["id"])["amount_cents"] == 30000
+    card = buy(db, pid)
     assert card.status == "active" and card.total_units == 35 and card.paid_cents == 30000
     # 上海 10-01 算第 1 天，35 天 → 11-05 00:00 上海 = 11-04 16:00 UTC
     assert svc.aware(card.ends_at) == datetime(2026, 11, 4, 16, 0, tzinfo=timezone.utc)
@@ -146,9 +151,16 @@ def test_purchase_rules(db, doubles):
     assert reason_of(lambda: svc.create_order(db, 2, single, 7, at=T0))[1] == "prepaid_stopped"
     mconfig.CONFIG.stop_prepaid = False
     doubles.fail = True
+    order = svc.create_order(db, 2, single, 7)
+    db.commit()
     with pytest.raises(AppError) as exc:
-        svc.create_order(db, 2, single, 7, at=T0)
+        svc.start_payment(db, 2, order["id"])
     assert exc.value.code == ErrorCode.UPSTREAM_FAILED
+    doubles.fail = False
+    assert svc.start_payment(db, 2, order["id"])["status"] == "pending"  # 业务单仍可继续支付
+    with pytest.raises(AppError) as exc:
+        svc.start_payment(db, 3, order["id"])
+    assert exc.value.code == ErrorCode.NOT_FOUND
 
 
 def test_member_total_and_renewal_caps(db):
@@ -402,7 +414,21 @@ def test_transfer_fee_paid_but_card_changed_requests_fee_refund(db):
     db.commit()
     assert svc.handle_event(db, "payment.succeeded", {"biz_type": "member_card", "biz_id": order["id"],
                                                       "amount_cents": 2000}) == "transfer_failed"
-    assert db.get(CardOrder, order["id"]).needs_manual and events(db, "member_card.refund_requested")[0]["amount_cents"] == 2000
+    assert db.get(CardOrder, order["id"]).needs_manual and events(db, "member_card.transfer_fee_orphan")[0]["amount_cents"] == 2000
+
+
+def test_transfer_fee_hook_path_raises_so_payment_auto_refunds(db):
+    card = buy(db, product(db, transfer_fee_cents=2000))
+    order = svc.transfer(db, card, to_user_id=2, operator="user:1", at=T0)["order"]
+    svc.freeze(db, card, 7, "", "u", at=T0)
+    db.commit()
+    with pytest.raises(AppError):
+        svc.on_payment_succeeded(db, wallet.PaidEvent(biz_type="member_card", biz_id=order["id"], payment_id="1",
+                                                      out_trade_no=None, amount_cents=2000, user_id=1, paid_at=T0,
+                                                      from_hook=True))
+    db.rollback()
+    manual = {"business_type": "member_card", "business_id": order["id"], "amount_cents": 2000, "needs_manual": True}
+    assert svc.handle_event(db, "payment.succeeded", manual, "m1") == "manual"
 
 
 # ---------------------------------------------------------------- 挂失补办、停用
@@ -493,8 +519,14 @@ def test_refund_flow_success(db):
     db.commit()
     req = events(db, "member_card.refund_requested")[0]
     assert req["amount_cents"] == 85000 and req["route"] == "original" and req["payment_id"] == card.payment_id
-    assert svc.handle_event(db, "payment.refunded", {"business_ref": req["business_ref"], "biz_type": "member_card"}, "rf1") == "refunded"
-    assert svc.handle_event(db, "payment.refunded", {"business_ref": req["business_ref"]}, "rf2") == "duplicate"
+    port = wallet.payment_port()
+    svc.submit_refund(db, refund["id"])
+    svc.submit_refund(db, refund["id"])
+    assert len(port.refunds) == 1 and port.refunds[0]["business_ref"] == req["business_ref"]         and req["business_ref"].startswith("member_card_refund:") and port.refunds[0]["amount_cents"] == 85000
+    payload = {"business_ref": req["business_ref"], "business_type": "member_card"}
+    assert svc.handle_event(db, "refund.abnormal", payload, "rf0") == "abnormal"
+    assert svc.handle_event(db, "refund.succeeded", payload, "rf1") == "refunded"
+    assert svc.handle_event(db, "refund.succeeded", payload, "rf2") == "duplicate"
     db.refresh(card)
     assert card.status == "refunded" and card.sessions_remaining == 0
     assert events(db, "member_card.refunded")[0]["invoice_action"] == "red_reverse"
@@ -511,7 +543,7 @@ def test_refund_reject_and_failure_restore(db):
     db.commit()
     assert refund["status"] == "processing"
     ref = events(db, "member_card.refund_requested")[-1]["business_ref"]
-    assert svc.handle_event(db, "payment.refund_failed", {"business_ref": ref, "reason": "ABNORMAL"}) == "failed"
+    assert svc.handle_event(db, "refund.failed", {"business_ref": ref, "reason": "NOT_ENOUGH"}) == "failed"
     db.refresh(card)
     assert card.status == "active"
     with pytest.raises(AppError):
@@ -597,7 +629,7 @@ def test_overdue_refund_flag_and_jobs_registered(db):
     assert svc.flag_overdue_refunds(db, T0 + 7 * DAY) == 1
     assert svc.flag_overdue_refunds(db, T0 + 8 * DAY) == 0
     from member_card import jobs
-    assert isinstance(jobs.JOBS, tuple) and len(jobs.JOBS) == 6
+    assert isinstance(jobs.JOBS, tuple) and len(jobs.JOBS) == 7
     for job in jobs.JOBS:
         assert job.name.startswith("member_card.") and isinstance(job.fn(db), str)
 
@@ -607,7 +639,8 @@ def test_overdue_refund_flag_and_jobs_registered(db):
 
 def test_subscriptions_do_not_commit_and_dedupe(db):
     from member_card.events import SUBSCRIPTIONS
-    assert set(SUBSCRIPTIONS) == {"payment.succeeded", "payment.refunded", "payment.refund_failed", "lottery.prize_won"}
+    assert set(SUBSCRIPTIONS) == {"payment.succeeded", "refund.succeeded", "refund.failed", "refund.abnormal",
+                                  "lottery.prize_won", "after_sale.completed"}
     pid = product(db)
     order = svc.create_order(db, 1, pid, 5, at=T0)
     db.commit()
@@ -654,3 +687,64 @@ def test_lottery_prize_acks_via_lottery_when_available(db, monkeypatch):
     assert calls == [(db, 21, True, str(card.id), None)]
     assert svc.on_prize_won(db, dict(prize, ref_id=card.id + 999, delivery_key="draw:22:1", draw_id=22), "lq2") == "no_card"
     assert calls[-1][2] is False
+
+
+def test_refund_submission_rejected_restores_card(db, doubles):
+    card = buy(db, product(db))
+    refund = svc.request_refund(db, card, "merchant", "闭店", "staff:7", staff_id=7, at=T0 + DAY)
+    db.commit()
+    doubles.refund_fail = True
+    assert svc.submit_refund(db, refund["id"])["submit_error"]
+    doubles.refund_fail = False
+    doubles.refund_reject = True
+    assert svc.submit_pending_refunds(db) == 1
+    db.refresh(card)
+    assert card.status == "active" and svc.get_refund(db, refund["id"]).status == "failed"
+
+
+# ---------------------------------------------------------------- 订单售卡行售后退款 → 终止卡
+
+
+def _completed(card_ids, case_id=31, kind="member_card"):
+    return {"after_sale_id": case_id, "after_sale_no": f"AS{case_id}", "order_id": 501, "user_id": 1, "store_id": 5,
+            "type": "refund_only", "status": "completed", "amount_cents": 20000, "route": "wechat",
+            "order_full_refund": True,
+            "lines": [{"order_item_id": 900 + i, "kind": kind, "qty": 1, "amount_cents": 20000, "restock": False,
+                       "fulfil_ref": f"member_card:{cid}"} for i, cid in enumerate(card_ids)]
+            + [{"order_item_id": 999, "kind": "goods", "qty": 1, "amount_cents": 100, "restock": True, "fulfil_ref": None}]}
+
+
+def test_after_sale_completed_terminates_card_once(db):
+    from member_card.events import SUBSCRIPTIONS
+
+    card = buy(db, count_product(db))
+    use(db, card, "u1")
+    handler = SUBSCRIPTIONS["after_sale.completed"]
+    assert handler(db, _completed([card.id]), "as-ev-1") == "terminated"
+    db.commit()
+    db.refresh(card)
+    assert card.status == "refunded" and card.sessions_remaining == 0
+    ledger = db.execute(select(CardLedger).where(CardLedger.kind == "order_refund")).scalar_one()
+    assert ledger.ref == f"after_sale:31:{card.id}" and ledger.delta_sessions == -11
+    assert handler(db, _completed([card.id]), "as-ev-1") == "duplicate"  # 同一事件重投
+    assert handler(db, _completed([card.id]), "as-ev-2") == "terminated"  # 新事件 id、同业务：不重复终止
+    db.commit()
+    assert len(events(db, "member_card.terminated")) == 1
+    term = events(db, "member_card.terminated")[0]
+    assert term["card_id"] == card.id and term["reason"] == "order_refund" and term["refund_cents"] == 20000
+    with pytest.raises(AppError):
+        svc.consume(db, store_id=5, ref="u2", card_id=card.id, at=T0)
+    assert handler(db, {"after_sale_id": 2, "lines": [{"kind": "goods", "fulfil_ref": None}]}, "as-ev-3") == "ignored"
+
+
+def test_after_sale_completed_skips_card_in_own_refund_flow(db):
+    card = buy(db, product(db))
+    svc.request_refund(db, card, "customer", "不想要了", "user:1", user_id=1, at=T0 + DAY)
+    db.commit()
+    db.refresh(card)
+    assert card.status == "refunding"
+    assert svc.on_after_sale_completed(db, _completed([card.id], case_id=32), "as-ev-9") == "conflict"
+    db.commit()
+    db.refresh(card)
+    assert card.status == "refunding"
+    assert events(db, "member_card.order_refund_conflict")[0]["card_id"] == card.id

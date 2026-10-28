@@ -5,12 +5,18 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
-from admin_rbac import auth, config, service
+from admin_rbac import auth, config, declare_permissions, service
 from admin_rbac.access import load_staff
 from admin_rbac.models import AdminRole, AdminStoreScope, AdminUser, AdminUserRole
 from admin_rbac.passwords import hash_secret
 from admin_rbac.totp import decode_secret, totp_at
 from luzback.testing import FakeClock, memory_session
+
+# 模拟“业务模块已装配”：内置角色引用的精确码 + 订单模块的码（独立运行本目录测试时注册表里没有它们）。
+declare_permissions("order", [("order:read", "订单查看"), ("order:export", "订单导出"), ("order:remark", "订单备注"),
+                              ("order:close", "关闭订单"), ("order:fulfil", "履约")])
+for _code, _n, _d, _patterns, _m in service.BUILTIN_ROLES:
+    declare_permissions("builtin", [(p, "") for p in _patterns if p != "*" and not p.endswith(":*")])
 
 START = datetime(2026, 10, 28, 2, 0, 0, tzinfo=timezone.utc).timestamp()
 PASSWORD = "Correct-Horse-Battery-9"

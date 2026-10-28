@@ -40,9 +40,11 @@ class Promotion:
     threshold_cents: int = 0
     amount_cents: int = 0
     rate_percent: int = 100
+    rate_bp: int | None = None                 # 万分比折扣率（8850 = 八八五折），优先于 rate_percent
     cap_cents: int | None = None
     sku_ids: frozenset[int] = frozenset()      # 为空表示不限商品
     categories: frozenset[str] = frozenset()   # 为空表示不限分类
+    line_indexes: frozenset[int] = frozenset() # 按行号限定（0 起），为空表示不按行号限定；用于券已算好适用行时
     exclusive_group: str = ""                  # 同组只取一个（取优惠最大者）
     priority: int = 100                        # 越小越先计算
 
@@ -51,8 +53,16 @@ class Promotion:
             raise ValueError(f"unknown promotion kind {self.kind}")
         if self.amount_cents < 0 or self.threshold_cents < 0 or not 0 < self.rate_percent <= 100:
             raise ValueError(f"invalid promotion values for {self.id}")
+        if self.rate_bp is not None and not 0 < self.rate_bp <= 10000:
+            raise ValueError(f"invalid rate_bp for {self.id}")
 
-    def applies_to(self, line: Line) -> bool:
+    @property
+    def effective_rate_bp(self) -> int:
+        return self.rate_bp if self.rate_bp is not None else self.rate_percent * 100
+
+    def applies_to(self, line: Line, index: int | None = None) -> bool:
+        if self.line_indexes and (index is None or index not in self.line_indexes):
+            return False
         return (not self.sku_ids or line.sku_id in self.sku_ids) and (not self.categories or line.category in self.categories)
 
 
@@ -98,7 +108,7 @@ def _discount_for(promotion: Promotion, base: int) -> int:
     if promotion.kind in {FULL_REDUCTION, COUPON_AMOUNT}:
         value = promotion.amount_cents
     else:
-        value = base - base * promotion.rate_percent // 100  # 折扣向下取整到分，商户少让利不多让利
+        value = base * (10000 - promotion.effective_rate_bp) // 10000  # 优惠额向下取整到分：商户不多让利
     if promotion.cap_cents is not None:
         value = min(value, promotion.cap_cents)
     return min(value, base)
@@ -123,7 +133,7 @@ def quote(lines: list[Line], promotions: list[Promotion], shipping_cents: int = 
             if not promotion.exclusive_group:
                 free.append(promotion)
                 continue
-            scoped = [i for i, line in enumerate(lines) if promotion.applies_to(line)]
+            scoped = [i for i, line in enumerate(lines) if promotion.applies_to(line, i)]
             value = _discount_for(promotion, sum(remaining(i) for i in scoped))
             best = chosen.get(promotion.exclusive_group)
             if best is None or value > best[0]:
@@ -134,7 +144,7 @@ def quote(lines: list[Line], promotions: list[Promotion], shipping_cents: int = 
                 result.rejected.append({"promotion_id": promotion.id, "reason": "互斥组内优惠较小"})
         ordered = sorted(free + [item[1] for item in chosen.values()], key=lambda p: (p.priority, p.id))
         for promotion in ordered:
-            scoped = [i for i, line in enumerate(lines) if promotion.applies_to(line)]
+            scoped = [i for i, line in enumerate(lines) if promotion.applies_to(line, i)]
             base = sum(remaining(i) for i in scoped)
             value = _discount_for(promotion, base)
             if value == 0:

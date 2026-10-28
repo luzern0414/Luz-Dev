@@ -9,7 +9,7 @@
 | 0 准备 | CI 全绿（lint、测试、迁移检查、契约、安全扫描、镜像扫描）；预发已部署同一 digest 并通过 k6 smoke | 发布单写明版本、digest、迁移 revision、是否含 contract 迁移 |
 | 1 预检 | `release.sh` 自动：镜像按 digest、磁盘余量 ≥ 20%、最近每日备份 < 26h（否则先备份） | 任一不满足即停止 |
 | 2 发布前备份 | 自动：`backup.sh dump pre-release-<时间>` | 文件已加密并外传 |
-| 3 迁移 | 自动：`docker compose --profile release run --rm migrate` | 失败即停止，此时旧版本未被替换 |
+| 3 迁移 | 自动：`docker compose --profile release run --rm migrate`（`alembic upgrade head` 后执行 `python -m admin_rbac.bootstrap --seed` 写入权限码与内置角色） | 失败即停止，此时旧版本未被替换 |
 | 4 api 滚动替换 | 自动：扩到 2 倍 → 新容器 `/readyz` 健康 → 等 15s 让 nginx 解析 → 旧容器 SIGTERM（30s）→ 删除 | 新容器不健康则删除新容器，旧版本继续服务 |
 | 5 worker / scheduler | 自动：停旧起新（stop_grace_period 60s） | 心跳健康 |
 | 6 冒烟 | 自动：外部 URL、各副本 `/readyz`、可选 `SMOKE_CMD`（k6 smoke / 下单→支付→回调沙箱） | 全部通过 |

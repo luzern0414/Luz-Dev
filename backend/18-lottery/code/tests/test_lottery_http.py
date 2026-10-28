@@ -10,39 +10,37 @@ import lottery
 from lottery import deps, hooks
 from lottery.api import routers
 from lottery.hooks import FixedRandom
-from lottery.service import StaffActor
+from admin_rbac.testing import staff_headers
 from lottery_testkit import HIT, NOW, key, prizes, setup_hooks
-from luzback import AppError, ErrorCode, create_token, decode_token, get_settings
+from luzback import AppError, ErrorCode, create_token, decode_token, get_settings, utcnow
+from luzback.db import get_session_factory
 from luzback.testing import make_test_app
 
 ALL = ["lottery:read", "lottery:write", "lottery:publish", "lottery:grant", "lottery:fulfil", "lottery:export"]
 
 
-def _resolver(request, db, token, code):
-    s = get_settings()
-    claims = decode_token(token, s.jwt_secret, kind="admin", issuer=s.jwt_issuer)
-    if code not in claims.get("perms", []):
-        raise AppError(ErrorCode.FORBIDDEN, "permission denied", data={"required": [code]})
-    return StaffActor(id=int(claims["sub"]), store_scope=claims.get("stores"))
-
-
 def _member_override(creds=Depends(HTTPBearer(auto_error=False))) -> int:
-    """identity 正在演进（aud / sid 校验），测试用框架令牌直接解析会员 id；生产走 identity.current_user_id。"""
+    """会员端用框架令牌直接解析会员 id（会员 id 固定好写断言）；生产走 identity（见 test_member_session_revoked）。"""
     if creds is None:
         raise AppError(ErrorCode.UNAUTHORIZED, "missing bearer token")
     s = get_settings()
     return int(decode_token(creds.credentials, s.jwt_secret, kind="access", issuer=s.jwt_issuer)["sub"])
 
 
+_DB: dict = {}
+_tokens: dict = {}
+
+
 @pytest.fixture()
 def client():
     setup_hooks()
-    deps.set_staff_resolver(_resolver)
-    app = make_test_app(routers, lottery)
+    app = make_test_app(routers, lottery, "admin_rbac.models", "identity.models")
     app.dependency_overrides[deps.current_member] = _member_override
+    _DB["db"] = get_session_factory()()
+    _tokens.clear()
     with TestClient(app) as c:
         yield c
-    deps.set_staff_resolver(None)
+    _DB.pop("db").close()
     setup_hooks()
 
 
@@ -52,12 +50,12 @@ def member(uid: int) -> dict:
 
 
 def staff(perms=ALL, sid: int = 1, stores=None) -> dict:
-    s = get_settings()
-    extra = {"perms": list(perms)}
-    if stores is not None:
-        extra["stores"] = stores
-    token = create_token(str(sid), s.jwt_secret, 3600, kind="admin", extra=extra, issuer=s.jwt_issuer)
-    return {"Authorization": f"Bearer {token}"}
+    """真实 admin_rbac 会话令牌（同一组权限 / 门店复用同一员工）。"""
+    k = (tuple(perms), sid, tuple(stores) if stores is not None else None)
+    db = _DB["db"]
+    if k not in _tokens:
+        _tokens[k] = staff_headers(db, *perms, store_ids=stores)
+    return _tokens[k]
 
 
 def idem(headers: dict) -> dict:
@@ -199,7 +197,26 @@ def test_store_scope_over_http(client):
     assert client.get(f"/api/v1/admin/lottery/activities/{aid}", headers=staff(stores=[5])).json()["code"] == 4031
 
 
-def test_default_staff_resolver_fails_closed(client):
-    deps.set_staff_resolver(None)
-    r = client.get("/api/v1/admin/lottery/activities", headers=staff(perms=["lottery:read"]))
-    assert r.json()["code"] in (4010, 4030)
+def test_forged_admin_claims_rejected(client):
+    """令牌里自带 perms 声明不算数：没有服务端会话一律 4010（失败即关闭）。"""
+    s = get_settings()
+    forged = create_token("1", s.jwt_secret, 3600, kind="admin", extra={"perms": ALL, "sid": 999, "rv": 999},
+                          issuer=s.jwt_issuer)
+    r = client.get("/api/v1/admin/lottery/activities", headers={"Authorization": f"Bearer {forged}"})
+    assert r.json()["code"] == 4010
+
+
+def test_wildcard_role_and_member_session_revoked(client):
+    db = _DB["db"]
+    assert client.get("/api/v1/admin/lottery/activities", headers=staff_headers(db, "lottery:*")).json()["code"] == 0
+    # 顾客端默认依赖走 identity：会话被吊销后立即 4010
+    from identity import service as ids
+    from identity.testing import member_tokens
+
+    client.app.dependency_overrides.pop(deps.current_member)
+    pair = member_tokens(db)
+    h = {"Authorization": f"Bearer {pair['access_token']}"}
+    assert client.get("/api/v1/app/lottery/records", headers=h).json()["code"] == 0
+    ids.revoke_sessions(db, pair["user_id"], "test", utcnow())
+    db.commit()
+    assert client.get("/api/v1/app/lottery/records", headers=h).json()["code"] == 4010

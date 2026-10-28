@@ -424,6 +424,60 @@ class RenderingSafetyTests(unittest.TestCase):
         self.assertIn("snapshot", source)
         self.assertEqual(tokens["action"], "#4A5BD6")
 
+    def test_generated_plan_page_has_themed_tab_icon(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            run(base, "new", "图标检查", "--mode", "analysis")
+            html = (base / "01-图标检查" / "01-图标检查.html").read_text(encoding="utf-8")
+        self.assertEqual(html.count('<link rel="icon" href="data:image/svg+xml,'), 1)
+        head = html.split("</head>", 1)[0]
+        self.assertIn('rel="icon"', head)
+        tokens, _ = tech_plan.load_tokens()
+        self.assertIn(tokens["action"].replace("#", "%23"), head)
+        self.assertIn(tokens["action-tint"].replace("#", "%23"), head)
+
+
+class FaviconTests(unittest.TestCase):
+    """Every Luz Dev page kind gets its own flat line icon on a rounded tint square."""
+
+    def test_icon_follows_the_tab_icon_rule(self) -> None:
+        import re
+        from urllib.parse import unquote
+
+        from luz_shell import FAVICON_DRAWINGS, favicon_link
+
+        drawings = set()
+        for kind in ("plan", "standards", "knowledge", "catalog"):
+            link = favicon_link(kind, "#4A5BD6", "#E6E9FA")
+            self.assertTrue(link.startswith('<link rel="icon" href="data:image/svg+xml,'))
+            self.assertNotIn('"', link[len('<link rel="icon" href="'):-2])
+            self.assertNotIn("#", link)
+            svg = unquote(link.split("data:image/svg+xml,", 1)[1][:-2])
+            self.assertIn("viewBox='0 0 32 32'", svg)
+            self.assertIn("rx='8' fill='#E6E9FA'", svg)
+            self.assertIn("stroke='#4A5BD6' stroke-width='2.5'", svg)
+            self.assertNotIn("<text", svg)
+            self.assertLessEqual(len(re.findall(r"<path ", svg)), 3)
+            drawings.add(FAVICON_DRAWINGS[kind])
+        self.assertEqual(len(drawings), 4, "不同页面类型不共用图标")
+        with self.assertRaises(ValueError):
+            favicon_link("plan", "blue", "#E6E9FA")
+
+    def test_reference_pages_render_tab_icon(self) -> None:
+        import knowledge as kb  # noqa: PLC0415
+        from build_function_catalog import render_catalog  # noqa: PLC0415
+
+        data = json.loads((ROOT / "references" / "standards.json").read_text(encoding="utf-8"))
+        template = (ROOT / "assets" / "reference" / "standards.template.html").read_text(encoding="utf-8")
+        self.assertIn('rel="icon"', build_standards.render(data, template).split("</head>", 1)[0])
+        with tempfile.TemporaryDirectory() as temporary:
+            page = kb.render(kb.Knowledge(Path(temporary) / "knowledge"))
+        self.assertIn('rel="icon"', page.split("</head>", 1)[0])
+        catalog = (ROOT / "assets" / "reference" / "function-catalog.template.html").read_text(encoding="utf-8")
+        page = render_catalog(catalog, {"modules": []})
+        self.assertIn('rel="icon"', page.split("</head>", 1)[0])
+        self.assertNotIn("{{FAVICON}}", page)
+
 
 class StandardsTests(unittest.TestCase):
     def setUp(self) -> None:

@@ -642,8 +642,12 @@ def subscribe_request_plan(db: Session, scenes: list[str]) -> dict[str, Any]:
     return {"template_ids": ids, "long_term": bool(kinds and kinds.pop())}
 
 
-def handle_push_event(db: Session, message: Mapping[str, Any], now: datetime | None = None) -> dict[str, int]:
-    """处理已验签解密的订阅消息推送（popup / change / sent）。每项单独提交，dedupe_key 去重。"""
+def handle_push_event(db: Session, message: Mapping[str, Any], now: datetime | None = None,
+                      commit: bool = True) -> dict[str, int]:
+    """处理已验签解密的订阅消息推送（popup / change / sent），dedupe_key 去重。
+
+    commit=True：每项单独提交（直接调用）；commit=False：每项一个保存点、不提交（wechat_mp.dispatch 的处理函数约定，
+    由 dispatch 与自己的推送去重记录一起提交）。"""
     now = now or clock_now()
     items = rules.parse_subscribe_event(dict(message))
     counts = {"applied": 0, "duplicate": 0, "ignored": 0}
@@ -661,6 +665,7 @@ def handle_push_event(db: Session, message: Mapping[str, Any], now: datetime | N
             continue
         counted = False
         tpl = configured.get(item.template_id)
+        savepoint = None if commit else db.begin_nested()
         try:
             if item.event in ("popup", "change") and member_id is not None and tpl is not None:
                 if item.status in rules.ACCEPT_STATUSES and item.event == "popup" and count_accept:
@@ -675,12 +680,24 @@ def handle_push_event(db: Session, message: Mapping[str, Any], now: datetime | N
                                               template_id=item.template_id, status=item.status,
                                               msg_id=item.msg_id or None, error_code=item.error_code,
                                               counted=counted, created_at=now))
-            db.commit()
+            if commit:
+                db.commit()
+            else:
+                db.flush()
+                savepoint.commit()
             counts["applied" if (member_id is not None or item.event == "sent") else "ignored"] += 1
         except (IntegrityError, AppError):
-            db.rollback()
+            if commit:
+                db.rollback()
+            else:
+                savepoint.rollback()
             counts["duplicate"] += 1
     return counts
+
+
+def handle_push_message(db: Session, message: Mapping[str, Any]) -> dict[str, int]:
+    """wechat_mp.register_push_handler 用的处理函数：fn(db, message)，不提交。"""
+    return handle_push_event(db, message, commit=False)
 
 
 def _reserve_quota(db: Session, member_id: int, template_id: str) -> str:

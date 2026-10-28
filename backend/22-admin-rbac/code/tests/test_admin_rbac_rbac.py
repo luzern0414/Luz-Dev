@@ -92,13 +92,13 @@ def test_super_admin_holds_everything(db):
 
 def test_role_permissions_take_effect_immediately(db):
     boss = make_user(db, "boss")
-    rid = custom_role(db, "临时", ["order:read", "order:print"], boss.id)
+    rid = custom_role(db, "临时", ["order:read", "order:remark"], boss.id)
     clerk = make_user(db, "clerk", roles=(rid,))
     token = token_of(db, "clerk")
-    assert staff_of(db, token).has("order:print")
+    assert staff_of(db, token).has("order:remark")
     service.update_role(db, actor(db, boss.id), rid, permissions=["order:read"])
     db.commit()
-    assert not staff_of(db, token).has("order:print")
+    assert not staff_of(db, token).has("order:remark")
 
 
 def test_store_scope_helpers(db):
@@ -139,8 +139,8 @@ def test_cannot_grant_permissions_you_do_not_hold(db):
     hr = custom_role(db, "人事", ["staff:read", "staff:write", "order:read", "role:write"], boss.id)
     hr_user = make_user(db, "hr", roles=(hr,))
     me = actor(db, hr_user.id)
-    e = err(lambda: service.create_role(db, me, "越权", ["order:read", "order:refund"]))
-    assert e.code == ErrorCode.FORBIDDEN and e.data["extra"] == ["order:refund"]
+    e = err(lambda: service.create_role(db, me, "越权", ["order:read", "order:close"]))
+    assert e.code == ErrorCode.FORBIDDEN and e.data["extra"] == ["order:close"]
     db.rollback()
     assert service.create_role(db, me, "子集", ["order:read"])["permissions"] == ["order:read"]
     db.commit()
@@ -337,9 +337,7 @@ def test_list_staff_filters_and_scope(db):
     assert err(lambda: service.list_staff(db, me, {"bogus": "1"})).code == ErrorCode.BAD_REQUEST
     assert err(lambda: service.list_staff(db, me, {"status": "weird"})).code == ErrorCode.BAD_REQUEST
     # 只管门店 1 的人事：看不到门店 2 / 跨店 / 全门店员工
-    hr = custom_role(db, "人事", ["staff:read", "staff:write", "order:read", "order:accept", "order:prepare", "order:ready",
-                                "order:complete", "order:note", "order:print", "queue:read", "queue:call", "queue:seat",
-                                "table:read", "table:write", "product:read", "review:read"], boss.id)
+    hr = custom_role(db, "人事", ["staff:read", "staff:write", *service.BUILTIN_ROLES[2][3]], boss.id)
     hr_user = make_user(db, "hr", roles=(hr,), all_stores=False, store_ids=(1,))
     scoped = actor(db, hr_user.id)
     assert {i["username"] for i in service.list_staff(db, scoped, {})["items"]} == {"clerk.a", "hr"}
@@ -369,3 +367,66 @@ def test_load_staff_rejects_inactive(db):
     db.commit()
     assert err(lambda: load_staff(db, clerk.id)).code == ErrorCode.UNAUTHORIZED
     assert err(lambda: auth.authenticate(db, None)).code == ErrorCode.UNAUTHORIZED
+
+
+# ---------- 模块通配授予 module:* ----------
+
+def test_module_wildcard_grant_prefix_match(db):
+    from admin_rbac.permissions import grants
+
+    assert grants({"wallet:*"}, "wallet:adjust") and grants({"wallet:*"}, "wallet:future_code")
+    assert not grants({"wallet:*"}, "wallet_x:read")  # 前缀到冒号为止，不是字符串前缀
+    assert not grants({"wallet:*"}, "member_card:read") and not grants({"order:read"}, "order:close")
+    assert grants({"*"}, "anything:else") and grants({"*"}, "wallet:*")
+    assert not grants({"wallet:adjust", "wallet:read"}, "wallet:*")  # 持有全部现有码 ≠ 持有通配
+    assert grants({"wallet:*"}, "wallet:*")
+
+
+def test_wildcard_role_covers_codes_declared_later(db):
+    boss = make_user(db, "boss")
+    declare_permissions("demo3", [("demo3:read", "演示")])
+    rid = custom_role(db, "演示通配", ["demo3:*"], boss.id)
+    clerk = make_user(db, "clerk", roles=(rid,))
+    staff = actor(db, clerk.id)
+    assert staff.has("demo3:read")
+    declare_permissions("demo3", [("demo3:approve", "后来新增")])
+    assert staff.has("demo3:approve") and not staff.has("demo4:read")
+    assert_permission(staff, "demo3:read", "demo3:approve")
+
+
+def test_wildcard_grant_validation_and_escalation(db):
+    boss = make_user(db, "boss")
+    me = actor(db, boss.id)
+    e = err(lambda: service.create_role(db, me, "未知模块", ["nosuchmodule:*"]))
+    assert e.code == ErrorCode.BAD_REQUEST
+    assert err(lambda: service.create_role(db, me, "全部", ["*"])).code == ErrorCode.BAD_REQUEST
+    declare_permissions("demo5", [("demo5:read", "读"), ("demo5:write", "写")])
+    exact = custom_role(db, "精确", ["demo5:read", "demo5:write", "role:write"], boss.id)
+    holder = actor(db, make_user(db, "holder", roles=(exact,)).id)
+    # 只持有现有精确码的人不能授予通配（通配会覆盖以后新增的码）
+    e = err(lambda: service.create_role(db, holder, "越权通配", ["demo5:*"]))
+    assert e.code == ErrorCode.FORBIDDEN and e.data["extra"] == ["demo5:*"]
+    wild = custom_role(db, "通配", ["demo5:*", "role:write"], boss.id)
+    wholder = actor(db, make_user(db, "wholder", roles=(wild,)).id)
+    assert service.create_role(db, wholder, "子集", ["demo5:read"])["permissions"] == ["demo5:read"]
+    assert service.create_role(db, wholder, "同级通配", ["demo5:*"])["permissions"] == ["demo5:*"]
+
+
+def test_builtin_roles_store_wildcards_and_mfa_matches_wildcard(db):
+    from admin_rbac.models import AdminRolePermission
+
+    fin = role_id(db, "finance")
+    codes = set(db.execute(select(AdminRolePermission.code).where(AdminRolePermission.role_id == fin)).scalars())
+    assert {"payment:*", "wallet:*", "after_sale:*"} <= codes
+    manager = actor(db, make_user(db, "manager", roles=("store_manager",)).id)
+    assert manager.has("after_sale:approve") and manager.mfa_required  # after_sale:* 覆盖 MFA 清单里的 after_sale:approve
+    clerk = actor(db, make_user(db, "clerk", roles=("front_desk",)).id)
+    assert clerk.has("wallet:consume") and not clerk.has("wallet:adjust") and not clerk.mfa_required
+
+
+def test_builtin_roles_reference_every_module_prefix():
+    from admin_rbac.seed import BUILTIN_ROLES
+
+    prefixes = {p.split(":", 1)[0] for _c, _n, _d, patterns, _m in BUILTIN_ROLES for p in patterns if p != "*"}
+    for module in ("member", "order", "payment", "after_sale", "wallet", "coupon", "lottery", "notification", "member_card"):
+        assert module in prefixes, module

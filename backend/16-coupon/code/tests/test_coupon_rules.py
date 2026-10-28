@@ -23,7 +23,7 @@ def rules_of(**kw):
 
 
 @pytest.mark.parametrize("overrides", [
-    dict(type="percent_off", rate_bp=8550),                                  # 不是 100 的倍数
+    dict(type="percent_off", rate_bp=99),                                    # 低于一折
     dict(type="percent_off", rate_bp=10000),                                 # 不打折
     dict(type="exchange", scope_type="all"),                                 # 兑换券必须指定范围
     dict(type="amount_off", amount_cents=0),
@@ -96,8 +96,8 @@ def test_percent_coupon_with_cap_and_floor_rounding():
     assert ev.discounts["c"]["amount_cents"] == 1500
     small = [CartLine(sku_id=1, product_id=1, qty=1, unit_price_cents=999)]
     ev = R.evaluate([("c", rules_of(type="percent_off", rate_bp=9000, threshold_cents=0))], small)
-    # pricing 按“应付 = 金额 × 折扣 // 100”向下取整，优惠额因此向上取整（999 × 九折：应付 899，优惠 100）
-    assert ev.discounts["c"]["amount_cents"] == 100
+    # pricing 的优惠额向下取整到分（999 × 九折：优惠 99.9 → 99，应付 900），商户不多让利
+    assert ev.discounts["c"]["amount_cents"] == 99
 
 
 def test_exchange_coupon_frees_cheapest_units_of_scope():
@@ -194,3 +194,20 @@ def test_code_generation_and_normalization():
     code = R.generate_code(12)
     assert len(code) == 12 and set(code) <= set(R.CODE_ALPHABET)
     assert R.normalize_code(" abcd-efgh 2345 ") == "ABCDEFGH2345"
+
+
+def test_coupon_rows_by_line_index_and_campaign_by_real_sku():
+    """券按行号（Promotion.line_indexes）限定适用行；活动按真实 sku_id 匹配（不再把 sku_id 换成行号）。
+    同一 sku 出现两行（不同规格 / 加料）时，券只落在范围内的那一行。"""
+    lines = [CartLine(sku_id=7, product_id=1, qty=1, unit_price_cents=4000, category_id=3),
+             CartLine(sku_id=7, product_id=1, qty=1, unit_price_cents=6000, category_id=4),
+             CartLine(sku_id=1, product_id=9, qty=1, unit_price_cents=3000, category_id=3)]
+    ev = R.evaluate([("c", rules_of(threshold_cents=0, scope_type="categories", scope_ids=[4]))], lines)
+    assert ev.discounts["c"]["lines"] == [{"index": 1, "amount_cents": 2000}]
+    campaign = [pricing.Promotion("sku7九折", pricing.PERCENT, rate_bp=9000, sku_ids=frozenset({7}))]
+    ev = R.evaluate([("c", rules_of(threshold_cents=0, scope_type="categories", scope_ids=[3]))], lines, campaign)
+    campaign_lines = {d["index"]: d["amount_cents"] for d in ev.quote.discounts[0]["lines"]}
+    assert campaign_lines == {0: 400, 1: 600}
+    assert ev.quote.discounts[0]["promotion_id"] == "sku7九折" and ev.quote.discounts[0]["amount_cents"] == 1000
+    # 券范围 = 分类 3：第 0 行（活动后 3600）与第 2 行（3000），sku 1 不受活动影响
+    assert [s["index"] for s in ev.discounts["c"]["lines"]] == [0, 2]

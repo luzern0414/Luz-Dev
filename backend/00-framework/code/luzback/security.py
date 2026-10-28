@@ -133,9 +133,32 @@ def password_needs_rehash(stored: str) -> bool:
         return True
 
 
-def check_password_policy(password: str, min_length: int = 10) -> None:
-    if len(password) < min_length or not any(c.isalpha() for c in password) or not any(c.isdigit() for c in password):
-        raise AppError(ErrorCode.BAD_REQUEST, f"password must be >= {min_length} chars with letters and digits")
+COMMON_PASSWORDS = frozenset({
+    "password", "password1", "password123", "passw0rd", "12345678", "123456789", "1234567890", "qwertyuiop",
+    "11111111", "88888888", "iloveyou", "abc12345", "a1234567", "qwerty123", "1q2w3e4r", "admin123", "woaini1314",
+    "000000000000000", "123456789012345", "passwordpassword",
+})
+
+
+def check_password_policy(password: str, min_length: int = 15, max_length: int = 128, *, blocklist: tuple[str, ...] = (),
+                          context: tuple[str | None, ...] = ()) -> None:
+    """通用口令策略（NIST SP 800-63B-4 §3.1.1.2）：只看长度与黑名单，不要求字母 / 数字 / 符号组合，不定期强制改密。
+
+    - min_length：仅口令单因素 ≥ 15（默认）；与 MFA 合用时调用方传 8。
+    - max_length：至少允许 64 位（默认 128）；任何可打印字符与空格、Unicode 均可。
+    - 拒绝常见 / 泄露口令（COMMON_PASSWORDS + blocklist）与包含账号上下文（用户名、手机号）的口令。
+    后台员工口令用 admin_rbac.passwords.check_policy（同规则，另有泄露库钩子）；本函数给其他需要口令的场景用。
+    """
+    if not isinstance(password, str) or len(password) < min_length:
+        raise AppError(ErrorCode.BAD_REQUEST, f"password must be at least {min_length} characters")
+    if len(password) > max_length:
+        raise AppError(ErrorCode.BAD_REQUEST, f"password must be at most {max_length} characters")
+    lowered = password.lower()
+    if lowered in COMMON_PASSWORDS or lowered in {b.lower() for b in blocklist} or len(set(password)) == 1:
+        raise AppError(ErrorCode.BAD_REQUEST, "password is too common, choose another one")
+    for item in context:
+        if item and len(item) >= 4 and item.lower() in lowered:
+            raise AppError(ErrorCode.BAD_REQUEST, "password must not contain your account name or phone")
 
 
 # ---------- TOTP ----------

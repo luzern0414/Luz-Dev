@@ -918,6 +918,21 @@ def apply_refund_fact(db: Session, refund: RefundRecord, data: Mapping[str, Any]
     return "processed"
 
 
+REFUND_ACTIVE_STATUSES = (REFUND_PENDING, REFUND_PROCESSING, REFUND_SUCCEEDED, REFUND_ABNORMAL)
+
+
+def find_active_refund(db: Session, business_ref: str) -> RefundRecord | None:
+    """同一业务退款引用（如 `after_sales:{id}`）下仍有效的退款（pending / processing / succeeded / abnormal），最新的一笔。
+
+    业务模块崩溃重提前先查这里：有就采纳，不再新建，避免重复退款。failed / closed 不算（可以重新发起）。
+    """
+    if not business_ref:
+        return None
+    return db.execute(select(RefundRecord).where(RefundRecord.business_ref == business_ref,
+                                                 RefundRecord.status.in_(REFUND_ACTIVE_STATUSES))
+                      .order_by(RefundRecord.id.desc()).limit(1)).scalar_one_or_none()
+
+
 def get_refund_status(db: Session, refund_id: int) -> RefundInfo:
     r = db.get(RefundRecord, refund_id)
     if r is None:

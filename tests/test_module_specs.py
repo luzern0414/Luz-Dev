@@ -55,11 +55,13 @@ class LibraryTests(unittest.TestCase):
 
 
 class PlanTests(unittest.TestCase):
+    """Standard modules are referenced, not copied; only custom modules get a detailed chapter."""
+
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
         self.out = Path(self.temp.name)
         self.assertEqual(run(self.out, "new", "门店小程序", "--mode", "implementation", "--project-type", "backend",
-                             "--modules", "login,order,payment,refund"), 0)
+                             "--modules", "login,order,payment,refund,face,iot"), 0)
         self.html, self.data = tech_plan.find_plan("01", self.out)
 
     def tearDown(self) -> None:
@@ -68,40 +70,70 @@ class PlanTests(unittest.TestCase):
     def plan(self) -> dict:
         return json.loads(self.data.read_text(encoding="utf-8"))
 
-    def test_new_plan_copies_specs_and_renders_numbered_modules(self) -> None:
+    def test_new_plan_references_standard_modules_and_details_custom_ones(self) -> None:
         plan = self.plan()
-        self.assertEqual([s["id"] for s in plan["moduleSpecs"]], ["login", "order", "payment", "refund"])
+        self.assertEqual([m["id"] for m in plan["standardModules"]], ["login", "payment", "order", "refund"])
+        self.assertEqual(sorted(s["id"] for s in plan["moduleSpecs"]), ["face", "iot"])
         page = self.html.read_text(encoding="utf-8")
-        self.assertIn('<section id="module-payment"><h2>', page)
+        self.assertIn("采用的标准模块", page)
+        self.assertIn("微信支付与对账", page)
+        self.assertNotIn('<section id="module-payment">', page)  # 标准模块不再展开成章节
+        self.assertIn('<section id="module-face"><h2>', page)
         self.assertRegex(page, r"<h3>\d+\.1 功能说明</h3>")
-        self.assertIn("数据表总览", page)
-        self.assertIn("/api/v1/app/orders/preview", page)
+        self.assertIn("统一约定", page)
+        self.assertNotIn("数据表总览", page)
+        self.assertNotIn("方法与路径", page)
         self.assertEqual(page.count("<h1>"), 1)
 
-    def test_spec_commands_and_hash(self) -> None:
+    def test_standard_command_sets_values_and_deviations(self) -> None:
         before = tech_plan.content_hash(self.plan())
-        self.assertEqual(run(self.out, "spec", "01", "--remove", "refund"), 0)
-        self.assertNotIn("refund", [s["id"] for s in self.plan()["moduleSpecs"]])
+        self.assertEqual(run(self.out, "standard", "01", "--module", "order", "--set", "ORDER_PAY_TIMEOUT_MINUTES=10",
+                             "--deviation", "不支持余额支付"), 0)
+        item = next(m for m in self.plan()["standardModules"] if m["id"] == "order")
+        self.assertEqual(item["params"], {"ORDER_PAY_TIMEOUT_MINUTES": "10"})
         self.assertNotEqual(before, tech_plan.content_hash(self.plan()))
+        page = self.html.read_text(encoding="utf-8")
+        self.assertIn("待支付超时：10", page)
+        self.assertIn("不支持余额支付", page)
+        self.assertEqual(run(self.out, "standard", "01", "--module", "nope"), 2)
+        self.assertEqual(run(self.out, "standard", "01", "--module", "refund", "--remove"), 0)
+        self.assertNotIn("refund", [m["id"] for m in self.plan()["standardModules"]])
+
+    def test_spec_commands_keep_custom_modules_only(self) -> None:
+        self.assertEqual(run(self.out, "spec", "01", "--remove", "iot"), 0)
         self.assertEqual(run(self.out, "spec", "01", "--sync"), 0)
-        self.assertIn("refund", [s["id"] for s in self.plan()["moduleSpecs"]])
-        adapted = next(s for s in self.plan()["moduleSpecs"] if s["id"] == "order")
-        adapted["summary"] = "门店小程序的订单。"
-        path = self.out / "order.json"
+        ids = sorted(s["id"] for s in self.plan()["moduleSpecs"])
+        self.assertEqual(ids, ["face", "iot"])  # sync never brings back specs replaced by standard modules
+        adapted = next(s for s in self.plan()["moduleSpecs"] if s["id"] == "face")
+        adapted["summary"] = "门店人脸入场。"
+        path = self.out / "face.json"
         path.write_text(json.dumps(adapted, ensure_ascii=False), encoding="utf-8")
         self.assertEqual(run(self.out, "spec", "01", "--file", str(path)), 0)
-        specs = self.plan()["moduleSpecs"]
-        self.assertEqual(next(s for s in specs if s["id"] == "order")["summary"], "门店小程序的订单。")
-        self.assertEqual([s["id"] for s in specs], ["login", "order", "payment", "refund"])
+        self.assertEqual(next(s for s in self.plan()["moduleSpecs"] if s["id"] == "face")["summary"], "门店人脸入场。")
 
-    def test_backend_plan_without_specs_fails_review(self) -> None:
+    def test_standard_sync_replaces_copied_specs_of_older_plans(self) -> None:
+        plan = self.plan()
+        plan["standardModules"] = []
+        plan["moduleSpecs"] = ms.specs_for(plan["modules"])  # 旧方案：全部复制
+        self.data.write_text(json.dumps(plan, ensure_ascii=False), encoding="utf-8")
+        self.assertEqual(run(self.out, "standard", "01", "--sync"), 0)
+        plan = self.plan()
+        self.assertEqual(sorted(s["id"] for s in plan["moduleSpecs"]), ["face", "iot"])
+        self.assertEqual(len(plan["standardModules"]), 4)
+
+    def test_backend_plan_without_modules_fails_review(self) -> None:
         plan = self.plan()
         plan["moduleSpecs"] = []
+        plan["standardModules"] = []
         errors, _ = tech_plan.check_plan(plan, "review")
-        self.assertTrue(any("模块详细设计" in e for e in errors))
+        self.assertTrue(any("标准模块" in e for e in errors))
 
     def test_tables_of_missing_modules_are_warnings(self) -> None:
-        _, warnings = tech_plan.check_plan(self.plan(), "review")
+        plan = self.plan()
+        order = copy.deepcopy(next(s for s in ms.load_library() if s["id"] == "order"))
+        order["writes"].append({"when": "余额支付", "table": "wallet_ledger", "content": "扣减流水"})
+        plan["moduleSpecs"] = [order]
+        _, warnings = tech_plan.check_plan(plan, "review")
         self.assertTrue(any("wallet_ledger" in w for w in warnings))
 
 

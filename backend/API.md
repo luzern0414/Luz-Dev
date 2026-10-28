@@ -2,6 +2,8 @@
 
 本文件是全部对外接口的总目录，来源于各模块 `MODULE.md`。接口变更时先改模块文档，再同步本表。状态列：**已实现** 表示有代码与测试；**设计** 表示仅有文档。
 
+> 标准模块（`SPEC.md` §2）的接口、权限码与鉴权以各自 `MODULE.md` §6 为准（本表下方旧行未逐条同步时以 MODULE.md 为准）；挂载与路径冲突由 `tests/test_app_wiring.py` 校验。后台接口一律 `admin_rbac.require_permission`（`SECURITY.md` §1–2）。
+
 ## 1 通用约定
 
 ### 1.1 基础路径与版本
@@ -145,7 +147,7 @@
 |---|---|---|---|---|---|
 | POST | `/api/v1/app/orders/{id}/pay` | access（归属） | 必须 | 已实现 | 创建支付单，返回支付参数 |
 | GET | `/api/v1/app/payments/{out_trade_no}` | access（归属） | — | 已实现 | 查询支付结果 |
-| POST | `/api/v1/payments/notify/wechat` | 渠道签名 | 按单号幂等 | 已实现（HMAC 联调） | 支付回调 |
+| POST | `/api/v1/webhooks/wechat/pay` · `/api/v1/webhooks/wechat/refund`（旧路径 `/api/v1/payments/notify/wechat` 兼容） | APIv3 验签 | 按单号幂等 | 已实现 | 支付 / 退款回调 |
 | POST | `/api/v1/admin/orders/{id}/refund` | admin `order:refund` | 必须 | 设计 | 发起退款 |
 
 ### 3.8 会员与积分（membership）
@@ -219,8 +221,8 @@
 | 方法 | 路径 | 鉴权 | 状态 | 说明 |
 |---|---|---|---|---|
 | POST | `/api/v1/app/subscribe-consents` | access | 设计 | 订阅消息授权上报 |
-| GET | `/api/v1/admin/notifications` | admin `notify:read` | 设计 | 失败列表 |
-| POST | `/api/v1/admin/notifications/{id}/resend` | admin `notify:resend` | 设计 | 人工重发 |
+| GET | `/api/v1/admin/notifications` | admin `notification:read` | 设计 | 失败列表 |
+| POST | `/api/v1/admin/notifications/{id}/resend` | admin `notification:resend` | 设计 | 人工重发 |
 
 ### 3.15 管理后台账号（admin-rbac，设计）
 
@@ -323,8 +325,8 @@
 | GET | `/api/v1/admin/orders` · `/{id}` · `/api/v1/admin/orders/board`（工作台看板） | `order:read` | no | 设计 / 待建 |
 | POST | `/api/v1/app/orders/{id}/add-items`（堂食加菜） · `/checkout`（堂食结账） | access | low / high | 待建 |
 | POST | `/api/v1/app/after-sales`（申请） · `GET /api/v1/app/after-sales` · `/{id}` · `POST /{id}/close` | access | high / read / read / low | 待建 |
-| GET / POST | `/api/v1/admin/after-sales` · `/{id}` · `/{id}/approve` · `/reject` · `/reship` · `/retry-refund` | `aftersales:*` | no | 待建 |
-| POST | `/api/v1/app/subscribe-consents` · `GET / PUT /api/v1/admin/notifications/templates` · `GET /api/v1/admin/notifications?status=failed` · `POST /{id}/resend` · `GET /stats` | access / `notify:*` | no | 设计 |
+| GET / POST | `/api/v1/admin/after-sales` · `/{id}` · `/{id}/approve` · `/reject` · `/reship` · `/retry-refund` | `after_sale:*`（审批 / 重试需新鲜认证） | no | 已实现（见 10-after-sales/MODULE.md §6） |
+| POST | `/api/v1/app/subscribe-consents` · `GET / PUT /api/v1/admin/notifications/templates` · `GET /api/v1/admin/notifications?status=failed` · `POST /{id}/resend` · `GET /stats` | access / `notification:*` | no | 已实现（见 20-notification/MODULE.md §6） |
 
 ### A.6 P6 会员与营销
 
