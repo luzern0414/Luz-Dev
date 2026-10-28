@@ -1,0 +1,271 @@
+{
+  "id": "notification",
+  "order": 80,
+  "name": "消息通知",
+  "modules": [
+    "notification"
+  ],
+  "summary": "业务事件通过发件箱触发通知：小程序订阅消息、短信与站内消息；记录订阅授权次数，失败重试并可追踪。",
+  "features": [
+    {
+      "name": "订阅授权",
+      "description": "记录会员对每个订阅消息模板的授权次数，一次性订阅每发送一次减一。"
+    },
+    {
+      "name": "事件通知",
+      "description": "支付成功、会员卡即将到期、预约提醒、退款到账、安全告警等事件发送通知。"
+    },
+    {
+      "name": "站内消息",
+      "description": "所有通知同时写站内消息，未授权订阅时仍可在消息页查看。"
+    },
+    {
+      "name": "重试与去重",
+      "description": "同一事件同一模板只发一次；失败按退避重试 3 次。"
+    }
+  ],
+  "flows": [
+    {
+      "name": "订阅授权",
+      "steps": [
+        "前端在支付成功页等时机调用 wx.requestSubscribeMessage。",
+        "把每个模板的结果（accept、reject）提交到 `POST /api/v1/app/notifications/subscriptions`，accept 的模板 remaining 加一。"
+      ]
+    },
+    {
+      "name": "发送通知",
+      "steps": [
+        "业务事务内写 outbox_events（如 payment.succeeded）。",
+        "任务进程消费事件，按事件类型选择模板，写 notifications（dedupe_key=事件编号+模板）。",
+        "remaining 大于 0 时条件扣减并调用订阅消息发送接口；否则只保留站内消息。",
+        "失败按 1、5、30 分钟重试；用户拒收等不可重试错误把 remaining 置零。"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "page": "支付成功页、预约成功页",
+      "field": "template_keys",
+      "label": "订阅提醒",
+      "type": "微信授权弹窗",
+      "required": false,
+      "rule": "每次最多 3 个模板。"
+    }
+  ],
+  "apis": [
+    {
+      "method": "POST",
+      "path": "/api/v1/app/notifications/subscriptions",
+      "caller": "小程序",
+      "purpose": "记录订阅结果",
+      "request": "results{template_key: accept|reject}",
+      "response": "各模板 remaining",
+      "errors": "—"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/app/notifications",
+      "caller": "小程序",
+      "purpose": "站内消息列表",
+      "request": "cursor，limit",
+      "response": "消息列表，未读数",
+      "errors": "—"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/app/notifications/{id}/read",
+      "caller": "小程序",
+      "purpose": "标记已读",
+      "request": "无",
+      "response": "空",
+      "errors": "NOT_FOUND"
+    },
+    {
+      "method": "TASK",
+      "path": "notify.dispatch",
+      "caller": "任务进程",
+      "purpose": "消费事件发送通知",
+      "request": "outbox_events",
+      "response": "notifications 状态",
+      "errors": "—"
+    }
+  ],
+  "results": [
+    {
+      "case": "收到通知",
+      "page": "消息页或通知卡片跳转的业务页",
+      "display": "点击订阅消息进入订单详情、我的卡、预约详情等对应页面。"
+    }
+  ],
+  "writes": [
+    {
+      "when": "订阅授权",
+      "table": "notification_subscriptions",
+      "content": "member_id、template_key、remaining。"
+    },
+    {
+      "when": "事件触发",
+      "table": "notifications",
+      "content": "模板、渠道、内容参数、dedupe_key、状态与尝试次数。"
+    }
+  ],
+  "tables": [
+    {
+      "name": "notification_subscriptions",
+      "label": "订阅授权",
+      "purpose": "订阅消息剩余可发送次数",
+      "fields": [
+        {
+          "name": "member_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "会员"
+        },
+        {
+          "name": "template_key",
+          "type": "VARCHAR(64)",
+          "required": true,
+          "default": "—",
+          "comment": "模板键，如 payment_succeeded"
+        },
+        {
+          "name": "remaining",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "剩余次数"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(member_id, template_key)",
+        "CHECK(remaining >= 0)"
+      ]
+    },
+    {
+      "name": "notifications",
+      "label": "通知",
+      "purpose": "通知发送与站内消息",
+      "fields": [
+        {
+          "name": "member_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "会员"
+        },
+        {
+          "name": "template_key",
+          "type": "VARCHAR(64)",
+          "required": true,
+          "default": "—",
+          "comment": "模板键"
+        },
+        {
+          "name": "channel",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "wechat_subscribe、sms、inbox"
+        },
+        {
+          "name": "title",
+          "type": "VARCHAR(60)",
+          "required": true,
+          "default": "—",
+          "comment": "站内消息标题"
+        },
+        {
+          "name": "payload",
+          "type": "JSONB",
+          "required": true,
+          "default": "—",
+          "comment": "模板参数与跳转页面"
+        },
+        {
+          "name": "dedupe_key",
+          "type": "VARCHAR(128)",
+          "required": true,
+          "default": "—",
+          "comment": "事件编号 + 模板，防重复"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "pending",
+          "comment": "pending、sent、failed、skipped"
+        },
+        {
+          "name": "attempts",
+          "type": "SMALLINT",
+          "required": true,
+          "default": "0",
+          "comment": "尝试次数"
+        },
+        {
+          "name": "read_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "已读时间"
+        },
+        {
+          "name": "sent_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "发送成功时间"
+        },
+        {
+          "name": "error",
+          "type": "VARCHAR(200)",
+          "required": false,
+          "default": "—",
+          "comment": "最后一次错误"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(dedupe_key, channel)",
+        "INDEX(member_id, created_at DESC)"
+      ]
+    }
+  ],
+  "states": [
+    {
+      "entity": "通知",
+      "from": "pending",
+      "event": "发送成功",
+      "to": "sent",
+      "condition": "—"
+    },
+    {
+      "entity": "通知",
+      "from": "pending",
+      "event": "无授权次数",
+      "to": "skipped",
+      "condition": "站内消息仍可见"
+    },
+    {
+      "entity": "通知",
+      "from": "pending",
+      "event": "重试 3 次失败",
+      "to": "failed",
+      "condition": "进入告警统计"
+    }
+  ],
+  "exceptions": [
+    {
+      "case": "用户拒收或模板失效",
+      "handling": "remaining 置零，不再重试。"
+    },
+    {
+      "case": "同一事件被消费两次",
+      "handling": "dedupe_key 唯一约束，第二次直接跳过。"
+    },
+    {
+      "case": "夜间提醒",
+      "handling": "非紧急通知在 22:00–8:00 之间延后到早上发送；安全告警不延后。"
+    }
+  ]
+}

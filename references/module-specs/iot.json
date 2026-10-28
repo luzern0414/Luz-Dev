@@ -1,0 +1,559 @@
+{
+  "id": "iot",
+  "order": 79,
+  "name": "设备与安全告警",
+  "modules": [
+    "iot"
+  ],
+  "summary": "门禁、闸机、电控、储物柜等设备经 MQTT（TLS）接入；心跳判定在线，指令签名下发并要求回执；离线、求助、门未关、长时间在场等形成告警由值班处置。",
+  "features": [
+    {
+      "name": "设备登记",
+      "description": "后台录入设备序列号、类型、门店、厂商适配器，签发设备凭证。"
+    },
+    {
+      "name": "在线状态",
+      "description": "设备每 60 秒心跳；连续 3 次缺失标记离线并告警。"
+    },
+    {
+      "name": "指令下发",
+      "description": "开门、锁门、断电等指令带编号、过期时间与签名；设备执行后回执。"
+    },
+    {
+      "name": "远程开门",
+      "description": "值班人员核实身份后远程开门，二次确认并审计。"
+    },
+    {
+      "name": "安全告警",
+      "description": "求助按钮、门长时间未关闭、超时在场、设备离线、计数异常，按等级通知值班并记录处置。"
+    }
+  ],
+  "flows": [
+    {
+      "name": "设备上线",
+      "steps": [
+        "设备使用设备证书连接 MQTT，只能发布和订阅自己的主题 device/{device_no}/#。",
+        "设备发布心跳（固件版本、门磁状态、本地时间），服务端更新 last_heartbeat_at 与在线状态。"
+      ]
+    },
+    {
+      "name": "下发指令",
+      "steps": [
+        "业务写 device_commands（queued），设备网关签名后发布到 device/{device_no}/command。",
+        "设备校验签名与过期时间，执行后发布回执到 device/{device_no}/ack，状态改为 succeeded 或 failed。",
+        "超过 5 秒未回执标记 timeout，入场类指令触发回滚。"
+      ]
+    },
+    {
+      "name": "求助告警",
+      "steps": [
+        "会员在小程序点击求助或按场内求助按钮，调用 `POST /api/v1/app/sos` 或设备上报事件。",
+        "创建 critical 告警，立即电话与消息通知值班，告警在值班台置顶直到处置。",
+        "值班确认（acknowledged），处置完成填写结果（resolved）。"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "page": "设备登记页（后台）",
+      "field": "device_no",
+      "label": "设备序列号",
+      "type": "文本",
+      "required": true,
+      "rule": "唯一。"
+    },
+    {
+      "page": "设备登记页（后台）",
+      "field": "type",
+      "label": "设备类型",
+      "type": "单选",
+      "required": true,
+      "rule": "door、gate、power、locker、sensor、sos_button。"
+    },
+    {
+      "page": "设备登记页（后台）",
+      "field": "adapter",
+      "label": "厂商适配器",
+      "type": "单选",
+      "required": true,
+      "rule": "按选定品牌的协议适配。"
+    },
+    {
+      "page": "远程开门弹窗（值班台）",
+      "field": "reason",
+      "label": "开门原因",
+      "type": "单选 + 文本",
+      "required": true,
+      "rule": "会员忘带手机、设备故障、紧急情况等。"
+    },
+    {
+      "page": "告警处置页（值班台）",
+      "field": "resolution",
+      "label": "处置结果",
+      "type": "文本",
+      "required": true,
+      "rule": "不少于 10 个字。"
+    }
+  ],
+  "apis": [
+    {
+      "method": "MQTT",
+      "path": "device/{device_no}/heartbeat",
+      "caller": "设备",
+      "purpose": "心跳",
+      "request": "固件版本、门磁状态、本地时间",
+      "response": "无",
+      "errors": "—"
+    },
+    {
+      "method": "MQTT",
+      "path": "device/{device_no}/event",
+      "caller": "设备",
+      "purpose": "设备事件",
+      "request": "event_id、类型（门未关、求助、计数异常）、时间",
+      "response": "无",
+      "errors": "—"
+    },
+    {
+      "method": "MQTT",
+      "path": "device/{device_no}/command",
+      "caller": "后端",
+      "purpose": "下发指令",
+      "request": "command_id、action、expires_at、signature",
+      "response": "设备执行",
+      "errors": "—"
+    },
+    {
+      "method": "MQTT",
+      "path": "device/{device_no}/ack",
+      "caller": "设备",
+      "purpose": "指令回执",
+      "request": "command_id、result、error",
+      "response": "无",
+      "errors": "—"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/devices",
+      "caller": "后台",
+      "purpose": "登记设备",
+      "request": "device_no，type，store_id，adapter",
+      "response": "device_id，凭证下载（仅一次）",
+      "errors": "DEVICE_EXISTS"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/devices",
+      "caller": "后台",
+      "purpose": "设备列表",
+      "request": "store_id，online",
+      "response": "设备与在线状态",
+      "errors": "FORBIDDEN"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/devices/{id}/open",
+      "caller": "值班台",
+      "purpose": "远程开门",
+      "request": "Idempotency-Key，reason，member_id（可选）",
+      "response": "command_id，status",
+      "errors": "DEVICE_OFFLINE，FORBIDDEN"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/app/sos",
+      "caller": "小程序",
+      "purpose": "会员求助",
+      "request": "store_id，type（受伤、被困、其他）",
+      "response": "alert_id，status",
+      "errors": "NOT_IN_STORE"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/alerts",
+      "caller": "值班台",
+      "purpose": "告警列表",
+      "request": "store_id，status，level",
+      "response": "告警列表",
+      "errors": "FORBIDDEN"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/alerts/{id}/ack",
+      "caller": "值班台",
+      "purpose": "确认告警",
+      "request": "无",
+      "response": "status=acknowledged",
+      "errors": "STATE_CONFLICT"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/alerts/{id}/resolve",
+      "caller": "值班台",
+      "purpose": "处置完成",
+      "request": "resolution",
+      "response": "status=resolved",
+      "errors": "STATE_CONFLICT"
+    }
+  ],
+  "results": [
+    {
+      "case": "会员求助",
+      "page": "求助页",
+      "display": "显示「已通知值班人员」与值班电话，可一键拨打。"
+    },
+    {
+      "case": "远程开门成功",
+      "page": "值班台",
+      "display": "显示指令回执成功与时间。"
+    },
+    {
+      "case": "设备离线",
+      "page": "值班台告警列表",
+      "display": "显示门店、设备、离线时长，处置后关闭。"
+    }
+  ],
+  "writes": [
+    {
+      "when": "心跳",
+      "table": "devices",
+      "content": "last_heartbeat_at、online、门磁状态。"
+    },
+    {
+      "when": "下发与回执",
+      "table": "device_commands",
+      "content": "指令状态、回执时间、错误。"
+    },
+    {
+      "when": "告警产生与处置",
+      "table": "alerts",
+      "content": "类型、等级、对象、状态、处置人、处置结果。"
+    },
+    {
+      "when": "远程开门与告警处置",
+      "table": "audit_logs",
+      "content": "操作人、原因。"
+    }
+  ],
+  "tables": [
+    {
+      "name": "devices",
+      "label": "设备",
+      "purpose": "门店内的门禁与场内设备",
+      "fields": [
+        {
+          "name": "device_no",
+          "type": "VARCHAR(64)",
+          "required": true,
+          "default": "—",
+          "comment": "设备序列号，唯一"
+        },
+        {
+          "name": "store_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "门店"
+        },
+        {
+          "name": "type",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "door、gate、power、locker、sensor、sos_button"
+        },
+        {
+          "name": "adapter",
+          "type": "VARCHAR(32)",
+          "required": true,
+          "default": "—",
+          "comment": "厂商适配器"
+        },
+        {
+          "name": "cert_fingerprint",
+          "type": "CHAR(64)",
+          "required": true,
+          "default": "—",
+          "comment": "设备证书指纹"
+        },
+        {
+          "name": "firmware",
+          "type": "VARCHAR(32)",
+          "required": false,
+          "default": "—",
+          "comment": "固件版本"
+        },
+        {
+          "name": "online",
+          "type": "BOOLEAN",
+          "required": true,
+          "default": "false",
+          "comment": "在线状态"
+        },
+        {
+          "name": "last_heartbeat_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "最近心跳"
+        },
+        {
+          "name": "state",
+          "type": "JSONB",
+          "required": false,
+          "default": "—",
+          "comment": "最近上报的状态（门磁等）"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "active",
+          "comment": "active、disabled、revoked"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(device_no)",
+        "INDEX(store_id, type)"
+      ]
+    },
+    {
+      "name": "device_commands",
+      "label": "设备指令",
+      "purpose": "下发给设备的指令与回执",
+      "fields": [
+        {
+          "name": "command_id",
+          "type": "UUID",
+          "required": true,
+          "default": "—",
+          "comment": "指令编号"
+        },
+        {
+          "name": "device_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "设备"
+        },
+        {
+          "name": "action",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "open、lock、power_on、power_off、unlock_locker"
+        },
+        {
+          "name": "source",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "access、remote、schedule"
+        },
+        {
+          "name": "ref_id",
+          "type": "VARCHAR(64)",
+          "required": false,
+          "default": "—",
+          "comment": "关联的入场事件或审批单"
+        },
+        {
+          "name": "expires_at",
+          "type": "TIMESTAMPTZ",
+          "required": true,
+          "default": "—",
+          "comment": "过期时间"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "queued",
+          "comment": "queued、sent、succeeded、failed、timeout"
+        },
+        {
+          "name": "acked_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "回执时间"
+        },
+        {
+          "name": "error",
+          "type": "VARCHAR(200)",
+          "required": false,
+          "default": "—",
+          "comment": "失败原因"
+        },
+        {
+          "name": "operator_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "远程操作人"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(command_id)",
+        "INDEX(device_id, created_at DESC)"
+      ]
+    },
+    {
+      "name": "alerts",
+      "label": "告警",
+      "purpose": "安全与设备告警",
+      "fields": [
+        {
+          "name": "store_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "门店"
+        },
+        {
+          "name": "type",
+          "type": "VARCHAR(32)",
+          "required": true,
+          "default": "—",
+          "comment": "sos、door_open_too_long、overstay、device_offline、count_mismatch"
+        },
+        {
+          "name": "level",
+          "type": "VARCHAR(8)",
+          "required": true,
+          "default": "—",
+          "comment": "critical、warning、info"
+        },
+        {
+          "name": "subject_type",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "member、device、store"
+        },
+        {
+          "name": "subject_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "对象编号"
+        },
+        {
+          "name": "detail",
+          "type": "JSONB",
+          "required": false,
+          "default": "—",
+          "comment": "告警内容"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "open",
+          "comment": "open、acknowledged、resolved"
+        },
+        {
+          "name": "acknowledged_by",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "确认人"
+        },
+        {
+          "name": "acknowledged_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "确认时间"
+        },
+        {
+          "name": "resolved_by",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "处置人"
+        },
+        {
+          "name": "resolution",
+          "type": "VARCHAR(500)",
+          "required": false,
+          "default": "—",
+          "comment": "处置结果"
+        },
+        {
+          "name": "resolved_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "处置时间"
+        }
+      ],
+      "indexes": [
+        "INDEX(store_id, status, level)",
+        "UNIQUE(type, subject_type, subject_id) WHERE status <> 'resolved'"
+      ]
+    }
+  ],
+  "states": [
+    {
+      "entity": "设备指令",
+      "from": "queued",
+      "event": "发布到设备",
+      "to": "sent",
+      "condition": "—"
+    },
+    {
+      "entity": "设备指令",
+      "from": "sent",
+      "event": "回执成功",
+      "to": "succeeded",
+      "condition": "—"
+    },
+    {
+      "entity": "设备指令",
+      "from": "sent",
+      "event": "回执失败",
+      "to": "failed",
+      "condition": "—"
+    },
+    {
+      "entity": "设备指令",
+      "from": "sent",
+      "event": "5 秒未回执",
+      "to": "timeout",
+      "condition": "—"
+    },
+    {
+      "entity": "告警",
+      "from": "open",
+      "event": "值班确认",
+      "to": "acknowledged",
+      "condition": "—"
+    },
+    {
+      "entity": "告警",
+      "from": "acknowledged",
+      "event": "填写处置结果",
+      "to": "resolved",
+      "condition": "—"
+    }
+  ],
+  "exceptions": [
+    {
+      "case": "重复或过期指令",
+      "handling": "设备记录最近执行的 command_id，重复不执行；过期指令拒绝。"
+    },
+    {
+      "case": "同一问题持续触发",
+      "handling": "同一对象同一类型未处置的告警只保留一条，更新次数与最近时间。"
+    },
+    {
+      "case": "critical 告警 3 分钟无人确认",
+      "handling": "升级通知门店负责人。"
+    },
+    {
+      "case": "设备凭证泄露",
+      "handling": "后台吊销证书，MQTT 服务端拒绝该设备连接。"
+    }
+  ]
+}

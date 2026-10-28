@@ -1,0 +1,4 @@
+interface:
+  display_name: "Luz Dev"
+  short_description: "Research, plan, get approval, then build Luz apps, backends, admin, and agents"
+  default_prompt: "Create the technical plan, research real sources with Luz-Crawl, apply the Luz security and feature standards, get the user's approval, then build a contract-first implementation with tests, release evidence, and explicit design deviations."

@@ -1,0 +1,482 @@
+{
+  "id": "coupon",
+  "order": 60,
+  "name": "优惠券",
+  "modules": [
+    "coupon",
+    "campaign"
+  ],
+  "summary": "券模板定义面额、门槛、适用范围与有效期；会员领取或系统发放；下单锁定、支付确认核销、订单关闭解锁、退款按规则退回。",
+  "features": [
+    {
+      "name": "券模板",
+      "description": "满减券、折扣券、体验券；门槛、封顶、适用卡种与门店、有效期（固定日期或领取后若干天）、总量与每人限领。"
+    },
+    {
+      "name": "领取与发放",
+      "description": "领券中心领取、活动或抽奖发放、后台定向发放。"
+    },
+    {
+      "name": "下单用券",
+      "description": "试算时列出可用券与不可用原因，默认最优；提交时锁定。"
+    },
+    {
+      "name": "核销与退回",
+      "description": "支付成功核销；订单关闭解锁；退款时未过期的券退回可用。"
+    },
+    {
+      "name": "过期处理",
+      "description": "每日任务把到期未用的券改为已过期，并在到期前 3 天提醒。"
+    }
+  ],
+  "flows": [
+    {
+      "name": "领取",
+      "steps": [
+        "会员在领券中心点击领取，调用 `POST /api/v1/app/coupon-templates/{id}/claim`。",
+        "事务内：条件更新模板 issued_quantity = issued_quantity + 1 WHERE issued_quantity < total_quantity。",
+        "统计该会员已领数量，超过每人限领则回滚并返回 CLAIM_LIMIT_REACHED。",
+        "创建 coupons（available，按模板计算 valid_from 与 valid_to）。"
+      ]
+    },
+    {
+      "name": "下单锁定与核销",
+      "steps": [
+        "提交订单时条件更新 coupons：available→locked，locked_order_id=订单，且在有效期内。",
+        "支付成功：locked→used，used_order_id、used_at。",
+        "订单关闭：locked→available（若已过期则→expired）。"
+      ]
+    },
+    {
+      "name": "退款退回",
+      "steps": [
+        "退款审核通过时，若订单使用了券且券未过期：used→available；已过期：保持 used，不补发。"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "page": "券模板编辑页（后台）",
+      "field": "type",
+      "label": "券类型",
+      "type": "单选",
+      "required": true,
+      "rule": "cash（满减）、discount（折扣）、trial（体验）。"
+    },
+    {
+      "page": "券模板编辑页（后台）",
+      "field": "value_cents",
+      "label": "面额",
+      "type": "金额",
+      "required": false,
+      "rule": "满减券必填，不超过门槛金额。"
+    },
+    {
+      "page": "券模板编辑页（后台）",
+      "field": "discount_rate",
+      "label": "折扣",
+      "type": "数字",
+      "required": false,
+      "rule": "折扣券必填，如 85 表示 8.5 折。"
+    },
+    {
+      "page": "券模板编辑页（后台）",
+      "field": "threshold_cents",
+      "label": "使用门槛",
+      "type": "金额",
+      "required": true,
+      "rule": "0 表示无门槛。"
+    },
+    {
+      "page": "券模板编辑页（后台）",
+      "field": "applicable",
+      "label": "适用范围",
+      "type": "多选",
+      "required": true,
+      "rule": "卡种、储值方案、门店。"
+    },
+    {
+      "page": "券模板编辑页（后台）",
+      "field": "validity",
+      "label": "有效期",
+      "type": "日期区间或天数",
+      "required": true,
+      "rule": "固定区间或领取后 N 天。"
+    },
+    {
+      "page": "券模板编辑页（后台）",
+      "field": "total_quantity",
+      "label": "发放总量",
+      "type": "数字",
+      "required": true,
+      "rule": "大于 0。"
+    },
+    {
+      "page": "券模板编辑页（后台）",
+      "field": "per_member_limit",
+      "label": "每人限领",
+      "type": "数字",
+      "required": true,
+      "rule": "1–10。"
+    }
+  ],
+  "apis": [
+    {
+      "method": "GET",
+      "path": "/api/v1/app/coupon-templates/claimable",
+      "caller": "小程序",
+      "purpose": "可领取的券",
+      "request": "store_id",
+      "response": "模板列表与当前会员是否已领",
+      "errors": "—"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/app/coupon-templates/{id}/claim",
+      "caller": "小程序",
+      "purpose": "领取",
+      "request": "Idempotency-Key",
+      "response": "coupon_id，valid_to",
+      "errors": "SOLD_OUT，CLAIM_LIMIT_REACHED，NOT_STARTED"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/app/me/coupons",
+      "caller": "小程序",
+      "purpose": "我的优惠券",
+      "request": "status（available、used、expired），cursor",
+      "response": "券列表：名称、面额、门槛、有效期、适用范围",
+      "errors": "—"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/coupon-templates",
+      "caller": "后台",
+      "purpose": "创建券模板",
+      "request": "模板字段",
+      "response": "template_id",
+      "errors": "VALIDATION_FAILED"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/coupon-templates/{id}/grant",
+      "caller": "后台",
+      "purpose": "定向发放",
+      "request": "member_ids[]，reason",
+      "response": "成功与失败数量",
+      "errors": "SOLD_OUT"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/coupons/{id}/void",
+      "caller": "后台",
+      "purpose": "作废",
+      "request": "reason",
+      "response": "status=void",
+      "errors": "STATE_CONFLICT（已使用）"
+    }
+  ],
+  "results": [
+    {
+      "case": "领取成功",
+      "page": "领券中心",
+      "display": "按钮变为「已领取 · 去使用」，点击进入适用卡种列表。"
+    },
+    {
+      "case": "已领完",
+      "page": "领券中心",
+      "display": "按钮置灰显示「已领完」。"
+    },
+    {
+      "case": "查看我的券",
+      "page": "我的优惠券页",
+      "display": "按可用、已使用、已过期分组，可用券显示到期日与「去使用」。"
+    }
+  ],
+  "writes": [
+    {
+      "when": "领取或发放",
+      "table": "coupon_templates、coupons",
+      "content": "issued_quantity 加一；新券。"
+    },
+    {
+      "when": "下单、支付、关单、退款",
+      "table": "coupons",
+      "content": "status、locked_order_id、used_order_id、used_at。"
+    },
+    {
+      "when": "后台发放与作废",
+      "table": "audit_logs",
+      "content": "操作人与原因。"
+    }
+  ],
+  "tables": [
+    {
+      "name": "coupon_templates",
+      "label": "券模板",
+      "purpose": "优惠券定义与发放总量",
+      "fields": [
+        {
+          "name": "name",
+          "type": "VARCHAR(40)",
+          "required": true,
+          "default": "—",
+          "comment": "券名称"
+        },
+        {
+          "name": "type",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "cash、discount、trial"
+        },
+        {
+          "name": "value_cents",
+          "type": "INTEGER",
+          "required": false,
+          "default": "—",
+          "comment": "满减面额"
+        },
+        {
+          "name": "discount_rate",
+          "type": "SMALLINT",
+          "required": false,
+          "default": "—",
+          "comment": "折扣，85 表示 8.5 折"
+        },
+        {
+          "name": "max_discount_cents",
+          "type": "INTEGER",
+          "required": false,
+          "default": "—",
+          "comment": "折扣封顶"
+        },
+        {
+          "name": "threshold_cents",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "使用门槛"
+        },
+        {
+          "name": "applicable",
+          "type": "JSONB",
+          "required": true,
+          "default": "—",
+          "comment": "适用卡种、储值方案与门店"
+        },
+        {
+          "name": "validity_type",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "fixed、relative"
+        },
+        {
+          "name": "valid_from",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "固定有效期开始"
+        },
+        {
+          "name": "valid_to",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "固定有效期结束"
+        },
+        {
+          "name": "valid_days",
+          "type": "INTEGER",
+          "required": false,
+          "default": "—",
+          "comment": "领取后有效天数"
+        },
+        {
+          "name": "total_quantity",
+          "type": "INTEGER",
+          "required": true,
+          "default": "—",
+          "comment": "发放总量"
+        },
+        {
+          "name": "issued_quantity",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "已发放数量"
+        },
+        {
+          "name": "per_member_limit",
+          "type": "SMALLINT",
+          "required": true,
+          "default": "1",
+          "comment": "每人限领"
+        },
+        {
+          "name": "claim_start_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "开始领取时间"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "draft",
+          "comment": "draft、active、stopped"
+        }
+      ],
+      "indexes": [
+        "CHECK(issued_quantity <= total_quantity)",
+        "INDEX(status, claim_start_at)"
+      ]
+    },
+    {
+      "name": "coupons",
+      "label": "会员优惠券",
+      "purpose": "会员持有的券",
+      "fields": [
+        {
+          "name": "template_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "券模板"
+        },
+        {
+          "name": "member_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "会员"
+        },
+        {
+          "name": "code",
+          "type": "VARCHAR(20)",
+          "required": true,
+          "default": "—",
+          "comment": "券码，唯一"
+        },
+        {
+          "name": "source",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "claim、grant、lottery、invite"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "available",
+          "comment": "available、locked、used、expired、void"
+        },
+        {
+          "name": "valid_from",
+          "type": "TIMESTAMPTZ",
+          "required": true,
+          "default": "—",
+          "comment": "生效时间"
+        },
+        {
+          "name": "valid_to",
+          "type": "TIMESTAMPTZ",
+          "required": true,
+          "default": "—",
+          "comment": "到期时间"
+        },
+        {
+          "name": "locked_order_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "锁定的订单"
+        },
+        {
+          "name": "used_order_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "使用的订单"
+        },
+        {
+          "name": "used_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "使用时间"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(code)",
+        "INDEX(member_id, status, valid_to)",
+        "INDEX(template_id, member_id)"
+      ]
+    }
+  ],
+  "states": [
+    {
+      "entity": "优惠券",
+      "from": "available",
+      "event": "提交订单",
+      "to": "locked",
+      "condition": "在有效期内且满足门槛"
+    },
+    {
+      "entity": "优惠券",
+      "from": "locked",
+      "event": "支付成功",
+      "to": "used",
+      "condition": "—"
+    },
+    {
+      "entity": "优惠券",
+      "from": "locked",
+      "event": "订单关闭",
+      "to": "available",
+      "condition": "已过期则变为 expired"
+    },
+    {
+      "entity": "优惠券",
+      "from": "used",
+      "event": "退款通过",
+      "to": "available",
+      "condition": "券未过期"
+    },
+    {
+      "entity": "优惠券",
+      "from": "available",
+      "event": "到期",
+      "to": "expired",
+      "condition": "—"
+    },
+    {
+      "entity": "优惠券",
+      "from": "available",
+      "event": "后台作废",
+      "to": "void",
+      "condition": "—"
+    }
+  ],
+  "exceptions": [
+    {
+      "case": "超发",
+      "handling": "模板条件更新 + CHECK 约束。"
+    },
+    {
+      "case": "同一会员并发领取超过限领",
+      "handling": "事务内对模板行加锁后计数，或以（模板、会员、序号）唯一约束兜底。"
+    },
+    {
+      "case": "同一张券被两个订单同时使用",
+      "handling": "available→locked 条件更新，只有一个成功，另一个返回 COUPON_UNAVAILABLE。"
+    },
+    {
+      "case": "优惠金额大于商品金额",
+      "handling": "优惠最多减到 1 分，避免 0 元单绕过支付。"
+    }
+  ]
+}

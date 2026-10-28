@@ -1,0 +1,374 @@
+{
+  "id": "catalog",
+  "order": 35,
+  "name": "商品与库存",
+  "modules": [
+    "catalog",
+    "inventory",
+    "cart"
+  ],
+  "summary": "实物或服务商品的 SPU/SKU、价格与库存；下单预占、支付确认、取消释放，库存变化写流水，防止超卖。",
+  "features": [
+    {
+      "name": "商品与规格",
+      "description": "商品基础信息、规格组合（SKU）、价格、上下架。"
+    },
+    {
+      "name": "库存预占",
+      "description": "下单时预占库存，支付成功确认扣减，订单关闭释放。"
+    },
+    {
+      "name": "库存流水",
+      "description": "入库、预占、确认、释放、盘点调整都写流水，可对账。"
+    },
+    {
+      "name": "低库存提醒",
+      "description": "可用库存低于阈值时通知门店。"
+    }
+  ],
+  "flows": [
+    {
+      "name": "预占库存",
+      "steps": [
+        "下单事务内对每个 SKU 执行条件更新：available = available - n, reserved = reserved + n WHERE available >= n。",
+        "任一 SKU 更新 0 行则整单回滚，返回 STOCK_INSUFFICIENT 与缺货的 SKU。",
+        "写 stock_reservations（订单、SKU、数量、status=held）。"
+      ]
+    },
+    {
+      "name": "确认与释放",
+      "steps": [
+        "支付成功：reserved 减 n，预占记录 status=confirmed，写流水。",
+        "订单关闭：reserved 减 n、available 加 n，预占记录 status=released；对同一预占只执行一次。"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "page": "商品编辑页（后台）",
+      "field": "name",
+      "label": "商品名称",
+      "type": "文本",
+      "required": true,
+      "rule": "2–60 个字符。"
+    },
+    {
+      "page": "商品编辑页（后台）",
+      "field": "skus",
+      "label": "规格与价格",
+      "type": "规格表格",
+      "required": true,
+      "rule": "每个 SKU 价格大于 0，编码唯一。"
+    },
+    {
+      "page": "库存调整页（后台）",
+      "field": "change",
+      "label": "调整数量",
+      "type": "数字",
+      "required": true,
+      "rule": "正数入库，负数出库，不能使可用库存为负。"
+    },
+    {
+      "page": "库存调整页（后台）",
+      "field": "reason",
+      "label": "调整原因",
+      "type": "单选 + 文本",
+      "required": true,
+      "rule": "盘点、报损、入库。"
+    }
+  ],
+  "apis": [
+    {
+      "method": "GET",
+      "path": "/api/v1/app/products",
+      "caller": "小程序",
+      "purpose": "商品列表",
+      "request": "store_id，category_id，cursor",
+      "response": "商品列表：name，cover，min_price_cents，sold_out",
+      "errors": "—"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/app/products/{id}",
+      "caller": "小程序",
+      "purpose": "商品详情",
+      "request": "store_id",
+      "response": "商品信息、SKU 列表（价格、可售数量档位）",
+      "errors": "NOT_FOUND，OFF_SALE"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/products",
+      "caller": "后台",
+      "purpose": "创建商品",
+      "request": "商品与 SKU",
+      "response": "product_id",
+      "errors": "VALIDATION_FAILED"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/skus/{id}/stock-adjust",
+      "caller": "后台",
+      "purpose": "调整库存",
+      "request": "change，reason",
+      "response": "available，reserved",
+      "errors": "STOCK_NEGATIVE"
+    }
+  ],
+  "results": [
+    {
+      "case": "库存不足",
+      "page": "订单确认页",
+      "display": "标出缺货规格，其他商品保留，可修改数量后重新提交。"
+    }
+  ],
+  "writes": [
+    {
+      "when": "下单",
+      "table": "stock_reservations、product_skus、stock_ledger",
+      "content": "预占记录、可用与预占数量、流水。"
+    },
+    {
+      "when": "支付成功或订单关闭",
+      "table": "stock_reservations、product_skus、stock_ledger",
+      "content": "确认或释放。"
+    }
+  ],
+  "tables": [
+    {
+      "name": "products",
+      "label": "商品",
+      "purpose": "商品主信息",
+      "fields": [
+        {
+          "name": "name",
+          "type": "VARCHAR(60)",
+          "required": true,
+          "default": "—",
+          "comment": "名称"
+        },
+        {
+          "name": "category_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "分类"
+        },
+        {
+          "name": "cover_file_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "封面图"
+        },
+        {
+          "name": "description",
+          "type": "TEXT",
+          "required": false,
+          "default": "—",
+          "comment": "详情"
+        },
+        {
+          "name": "sale_status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "off_sale",
+          "comment": "on_sale、off_sale"
+        },
+        {
+          "name": "sort",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "排序"
+        }
+      ],
+      "indexes": [
+        "INDEX(category_id, sale_status, sort)"
+      ]
+    },
+    {
+      "name": "product_skus",
+      "label": "SKU",
+      "purpose": "规格、价格与库存",
+      "fields": [
+        {
+          "name": "product_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "商品"
+        },
+        {
+          "name": "sku_code",
+          "type": "VARCHAR(32)",
+          "required": true,
+          "default": "—",
+          "comment": "规格编码"
+        },
+        {
+          "name": "spec",
+          "type": "JSONB",
+          "required": true,
+          "default": "—",
+          "comment": "规格值"
+        },
+        {
+          "name": "price_cents",
+          "type": "INTEGER",
+          "required": true,
+          "default": "—",
+          "comment": "售价（分）"
+        },
+        {
+          "name": "available",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "可用库存"
+        },
+        {
+          "name": "reserved",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "预占库存"
+        },
+        {
+          "name": "low_stock_threshold",
+          "type": "INTEGER",
+          "required": false,
+          "default": "—",
+          "comment": "低库存阈值"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(sku_code)",
+        "CHECK(available >= 0 AND reserved >= 0)"
+      ]
+    },
+    {
+      "name": "stock_reservations",
+      "label": "库存预占",
+      "purpose": "订单对库存的预占",
+      "fields": [
+        {
+          "name": "order_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "订单"
+        },
+        {
+          "name": "sku_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "SKU"
+        },
+        {
+          "name": "quantity",
+          "type": "INTEGER",
+          "required": true,
+          "default": "—",
+          "comment": "数量"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "held",
+          "comment": "held、confirmed、released"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(order_id, sku_id)"
+      ]
+    },
+    {
+      "name": "stock_ledger",
+      "label": "库存流水",
+      "purpose": "库存变化，只追加",
+      "fields": [
+        {
+          "name": "sku_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "SKU"
+        },
+        {
+          "name": "change_available",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "可用变化"
+        },
+        {
+          "name": "change_reserved",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "预占变化"
+        },
+        {
+          "name": "reason",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "reserve、confirm、release、adjust、inbound"
+        },
+        {
+          "name": "ref_type",
+          "type": "VARCHAR(32)",
+          "required": true,
+          "default": "—",
+          "comment": "关联单据类型"
+        },
+        {
+          "name": "ref_id",
+          "type": "VARCHAR(64)",
+          "required": true,
+          "default": "—",
+          "comment": "关联单据编号"
+        },
+        {
+          "name": "operator_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "操作人"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(ref_type, ref_id, sku_id, reason)"
+      ]
+    }
+  ],
+  "states": [
+    {
+      "entity": "库存预占",
+      "from": "held",
+      "event": "支付成功",
+      "to": "confirmed",
+      "condition": "—"
+    },
+    {
+      "entity": "库存预占",
+      "from": "held",
+      "event": "订单关闭",
+      "to": "released",
+      "condition": "—"
+    }
+  ],
+  "exceptions": [
+    {
+      "case": "热点商品并发下单",
+      "handling": "条件更新保证不超卖；抢购场景先在 Redis 预扣并限流，再落库。"
+    },
+    {
+      "case": "释放重复执行",
+      "handling": "预占记录状态条件更新，只有 held 能变为 released。"
+    }
+  ]
+}

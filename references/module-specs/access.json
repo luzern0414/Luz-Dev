@@ -1,0 +1,396 @@
+{
+  "id": "access",
+  "order": 78,
+  "name": "入场与在场",
+  "modules": [
+    "access-control"
+  ],
+  "summary": "会员凭短时动态码或刷脸入场；入场判定在一个事务内完成资格、时段、容量、在场唯一与扣次；离场核验结束在场，超时未离场由任务处理。",
+  "features": [
+    {
+      "name": "动态入场码",
+      "description": "服务端签发 30 秒有效的签名码，小程序每 25 秒刷新，截图转发无效。"
+    },
+    {
+      "name": "入场判定",
+      "description": "凭证有效、会员正常、有可用卡、在可用时段、未超每日上限、门店未满、本人不在场。"
+    },
+    {
+      "name": "在场管理",
+      "description": "记录在场开始与结束，门店实时人数随之加减。"
+    },
+    {
+      "name": "离场",
+      "description": "出门核验结束在场；按时长计费的卡在离场时结算。"
+    },
+    {
+      "name": "超时未离场",
+      "description": "超过配置时长未离场标记异常离场并告警值班。"
+    },
+    {
+      "name": "进出记录",
+      "description": "每次核验写事件，含拒绝原因，供申诉与统计。"
+    }
+  ],
+  "flows": [
+    {
+      "name": "签发动态码",
+      "steps": [
+        "会员打开入场码页，调用 `POST /api/v1/app/access/pass`，携带 store_id。",
+        "服务端预检资格（只读），不通过直接返回原因，便于会员提前知道。",
+        "签发码内容：member_id、store_id、nonce、过期时间，使用服务端密钥签名；前端渲染为二维码。"
+      ]
+    },
+    {
+      "name": "入场核验",
+      "steps": [
+        "设备扫码或刷脸后调用 `POST /api/v1/device/access/verify`（设备凭证鉴权），携带 event_id、凭证、方向 in。",
+        "校验签名与有效期；nonce 用 Redis SET NX 标记已用（有效期 60 秒），重复使用拒绝。",
+        "事务：选择可用会员卡并校验时段与每日上限 → 插入 presences（同一会员只能有一条 in_store）→ 条件更新门店 current_occupancy + 1 WHERE current_occupancy < capacity → 次卡扣次。",
+        "写 access_events（passed 或 rejected 与原因），返回开门指令；设备执行后回执，失败或超时则回滚在场、人数与次数。"
+      ]
+    },
+    {
+      "name": "离场",
+      "steps": [
+        "出门设备核验调用 verify，方向 out；presences→left，current_occupancy - 1，写事件。",
+        "门店为免核验出门时，以出门传感器事件或下一次入场为离场依据。"
+      ]
+    },
+    {
+      "name": "超时未离场",
+      "steps": [
+        "任务每 5 分钟查找在场超过配置时长（默认 4 小时）的记录，通知值班并发送提醒给会员。",
+        "超过营业规则上限（默认 6 小时）仍未离场，标记 abnormal、人数减一，会员下次入场时提示确认。"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "page": "入场码页",
+      "field": "store_id",
+      "label": "当前门店",
+      "type": "自动带入",
+      "required": true,
+      "rule": "取最近选择的门店，可切换。"
+    }
+  ],
+  "apis": [
+    {
+      "method": "POST",
+      "path": "/api/v1/app/access/pass",
+      "caller": "小程序",
+      "purpose": "签发动态入场码",
+      "request": "store_id",
+      "response": "code，expires_in（30），refresh_after（25）",
+      "errors": "NO_VALID_CARD，OUT_OF_TIME_WINDOW，DAILY_LIMIT_REACHED，ALREADY_IN_STORE，STORE_CLOSED，PHONE_REQUIRED"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/app/presence",
+      "caller": "小程序",
+      "purpose": "我的在场状态",
+      "request": "无",
+      "response": "in_store，store，entered_at，minutes",
+      "errors": "—"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/device/access/verify",
+      "caller": "设备",
+      "purpose": "核验进出",
+      "request": "event_id，device_id，direction（in、out），credential_type（qr、face），credential，occurred_at",
+      "response": "result（pass、reject），reason_code，command{command_id，action=open，expires_at，signature}",
+      "errors": "DEVICE_UNAUTHORIZED"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/device/access/events",
+      "caller": "设备",
+      "purpose": "离线事件补传",
+      "request": "events[]（event_id 等字段同上）",
+      "response": "accepted，duplicates",
+      "errors": "DEVICE_UNAUTHORIZED"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/presences",
+      "caller": "后台",
+      "purpose": "在场名单",
+      "request": "store_id",
+      "response": "在场会员（脱敏）与时长",
+      "errors": "FORBIDDEN"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/presences/{id}/close",
+      "caller": "后台",
+      "purpose": "手动结束在场",
+      "request": "reason",
+      "response": "status=left",
+      "errors": "STATE_CONFLICT"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/access-events",
+      "caller": "后台",
+      "purpose": "进出记录",
+      "request": "store_id，member_id，result，from，to，cursor",
+      "response": "事件列表",
+      "errors": "FORBIDDEN"
+    }
+  ],
+  "results": [
+    {
+      "case": "入场码页",
+      "page": "入场码页",
+      "display": "大尺寸二维码、倒计时刷新、当前门店与人数档位、可用卡名称与剩余次数。"
+    },
+    {
+      "case": "资格不满足",
+      "page": "入场码页",
+      "display": "不显示二维码，显示原因与对应按钮：无有效卡 →「去购卡」；不在可用时段 → 可用时段说明；已在场 →「上次未离场，联系客服」。"
+    },
+    {
+      "case": "核验成功",
+      "page": "设备端开门；小程序在场卡片",
+      "display": "小程序首页显示「已在场 · 已入场 X 分钟」。"
+    },
+    {
+      "case": "门店已满",
+      "page": "设备端提示",
+      "display": "设备屏显示「当前人数已满，请稍后」，小程序入场码页同步提示。"
+    }
+  ],
+  "writes": [
+    {
+      "when": "入场通过",
+      "table": "presences、stores、access_events",
+      "content": "在场记录；门店人数加一；进出事件。"
+    },
+    {
+      "when": "入场通过（次卡）",
+      "table": "member_cards、card_usage_ledger",
+      "content": "剩余次数减一；扣次流水。"
+    },
+    {
+      "when": "开门失败回滚",
+      "table": "presences、stores、member_cards、card_usage_ledger",
+      "content": "删除在场或标记失败、人数减一、次数加回（rollback 流水）。"
+    },
+    {
+      "when": "离场",
+      "table": "presences、stores、access_events",
+      "content": "离场时间与时长；人数减一；事件。"
+    },
+    {
+      "when": "核验拒绝",
+      "table": "access_events",
+      "content": "拒绝原因。"
+    }
+  ],
+  "tables": [
+    {
+      "name": "presences",
+      "label": "在场记录",
+      "purpose": "会员在门店内的时段",
+      "fields": [
+        {
+          "name": "member_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "会员"
+        },
+        {
+          "name": "store_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "门店"
+        },
+        {
+          "name": "member_card_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "入场使用的会员卡"
+        },
+        {
+          "name": "entry_event_id",
+          "type": "UUID",
+          "required": true,
+          "default": "—",
+          "comment": "入场事件"
+        },
+        {
+          "name": "exit_event_id",
+          "type": "UUID",
+          "required": false,
+          "default": "—",
+          "comment": "离场事件"
+        },
+        {
+          "name": "entered_at",
+          "type": "TIMESTAMPTZ",
+          "required": true,
+          "default": "—",
+          "comment": "入场时间"
+        },
+        {
+          "name": "exited_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "离场时间"
+        },
+        {
+          "name": "stay_minutes",
+          "type": "INTEGER",
+          "required": false,
+          "default": "—",
+          "comment": "停留分钟数"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "in_store",
+          "comment": "in_store、left、abnormal、rolled_back"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(member_id) WHERE status = 'in_store'",
+        "INDEX(store_id, status)",
+        "INDEX(member_id, entered_at DESC)"
+      ]
+    },
+    {
+      "name": "access_events",
+      "label": "进出事件",
+      "purpose": "每次核验的结果，只追加",
+      "fields": [
+        {
+          "name": "event_id",
+          "type": "UUID",
+          "required": true,
+          "default": "—",
+          "comment": "设备生成的事件编号"
+        },
+        {
+          "name": "store_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "门店"
+        },
+        {
+          "name": "device_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "设备"
+        },
+        {
+          "name": "member_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "会员；凭证无效时为空"
+        },
+        {
+          "name": "direction",
+          "type": "VARCHAR(8)",
+          "required": true,
+          "default": "—",
+          "comment": "in、out"
+        },
+        {
+          "name": "credential_type",
+          "type": "VARCHAR(8)",
+          "required": true,
+          "default": "—",
+          "comment": "qr、face、remote"
+        },
+        {
+          "name": "result",
+          "type": "VARCHAR(8)",
+          "required": true,
+          "default": "—",
+          "comment": "pass、reject"
+        },
+        {
+          "name": "reason_code",
+          "type": "VARCHAR(32)",
+          "required": false,
+          "default": "—",
+          "comment": "拒绝原因"
+        },
+        {
+          "name": "occurred_at",
+          "type": "TIMESTAMPTZ",
+          "required": true,
+          "default": "—",
+          "comment": "设备端发生时间"
+        },
+        {
+          "name": "offline",
+          "type": "BOOLEAN",
+          "required": true,
+          "default": "false",
+          "comment": "是否离线补传"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(event_id)",
+        "INDEX(store_id, occurred_at)",
+        "INDEX(member_id, occurred_at DESC)"
+      ]
+    }
+  ],
+  "states": [
+    {
+      "entity": "在场",
+      "from": "in_store",
+      "event": "离场核验",
+      "to": "left",
+      "condition": "门店人数减一"
+    },
+    {
+      "entity": "在场",
+      "from": "in_store",
+      "event": "开门失败或回执超时",
+      "to": "rolled_back",
+      "condition": "回退人数与次数"
+    },
+    {
+      "entity": "在场",
+      "from": "in_store",
+      "event": "超过上限时长",
+      "to": "abnormal",
+      "condition": "人数减一并告警"
+    }
+  ],
+  "exceptions": [
+    {
+      "case": "截图或转发入场码",
+      "handling": "码 30 秒过期且 nonce 只能用一次。"
+    },
+    {
+      "case": "同一会员同时在两个门口核验",
+      "handling": "presences 部分唯一索引，只有一个成功。"
+    },
+    {
+      "case": "设备断网",
+      "handling": "设备使用最近同步的会员白名单与离线验签公钥放行，事件本地缓存，联网后补传；补传按 event_id 去重。"
+    },
+    {
+      "case": "尾随进入",
+      "handling": "闸机单人通行与红外计数；计数与核验次数不一致时告警值班。"
+    },
+    {
+      "case": "上次未刷卡离场",
+      "handling": "入场时发现 in_store 记录：超过 30 分钟视为已离场自动结束后放行，并记录原因；否则拒绝并提示联系客服。"
+    }
+  ]
+}

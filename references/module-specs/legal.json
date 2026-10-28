@@ -1,0 +1,372 @@
+{
+  "id": "legal",
+  "order": 15,
+  "name": "协议与授权同意",
+  "modules": [
+    "legal",
+    "privacy"
+  ],
+  "summary": "管理用户协议、隐私政策与专项授权的各个版本，记录每位会员在什么场景同意了哪一版，支持重新同意与撤回。",
+  "features": [
+    {
+      "name": "协议版本",
+      "description": "用户协议、隐私政策、人脸信息处理规则、预付卡条款、退款规则分别维护版本；发布后不可修改，只能发布新版本。"
+    },
+    {
+      "name": "登录时同意",
+      "description": "登录页勾选用户协议与隐私政策，记录版本与文本摘要。"
+    },
+    {
+      "name": "专项单独同意",
+      "description": "录入人脸、首次储值、购买预付性质会员卡时单独弹出对应条款并单独记录。"
+    },
+    {
+      "name": "重新同意",
+      "description": "发布实质变更的新版本时标记需重新同意，会员下次写操作前弹窗确认。"
+    },
+    {
+      "name": "撤回同意",
+      "description": "会员可撤回人脸等专项授权，撤回后立即停止相应处理并删除相关数据。"
+    }
+  ],
+  "flows": [
+    {
+      "name": "发布协议",
+      "steps": [
+        "后台创建草稿，填写正文与变更摘要。",
+        "发布时服务端计算文本摘要，状态改为 published，同类旧版本改为 retired。",
+        "勾选「需要重新同意」时，已同意旧版的会员在下一次写操作返回 CONSENT_REQUIRED。"
+      ]
+    },
+    {
+      "name": "专项同意",
+      "steps": [
+        "前端在进入人脸录入、储值、购卡确认前调用 `GET /api/v1/app/agreements/{kind}` 展示条款。",
+        "会员勾选同意后调用 `POST /api/v1/app/me/consents`，服务端校验版本为当前发布版本后写入同意记录。",
+        "相关业务接口在服务端再次校验存在有效同意记录，缺失时返回 CONSENT_REQUIRED。"
+      ]
+    },
+    {
+      "name": "撤回同意",
+      "steps": [
+        "会员在隐私设置页撤回某项授权。",
+        "写入一条 withdrawn 记录，并发布 consent.withdrawn 事件；人脸模块收到后删除人脸数据，入场改用动态码。"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "page": "登录页",
+      "field": "agreed_versions",
+      "label": "用户协议与隐私政策",
+      "type": "勾选框",
+      "required": true,
+      "rule": "两份协议一起勾选。"
+    },
+    {
+      "page": "人脸录入前",
+      "field": "face_consent",
+      "label": "人脸信息处理规则",
+      "type": "单独勾选框",
+      "required": true,
+      "rule": "不得默认勾选，不得与其他协议合并。"
+    },
+    {
+      "page": "首次储值或购卡",
+      "field": "prepaid_consent",
+      "label": "预付卡条款与退款规则",
+      "type": "勾选框",
+      "required": true,
+      "rule": "条款中写明退款方式与计算规则。"
+    },
+    {
+      "page": "协议编辑页（后台）",
+      "field": "content",
+      "label": "协议正文",
+      "type": "富文本",
+      "required": true,
+      "rule": "发布前预览；发布后只读。"
+    },
+    {
+      "page": "协议编辑页（后台）",
+      "field": "need_reconsent",
+      "label": "需要重新同意",
+      "type": "开关",
+      "required": true,
+      "rule": "实质变更（处理目的、方式、范围变化）必须打开。"
+    }
+  ],
+  "apis": [
+    {
+      "method": "GET",
+      "path": "/api/v1/app/agreements/{kind}",
+      "caller": "小程序",
+      "purpose": "读取当前协议",
+      "request": "kind（user_terms、privacy、face、prepaid、refund_rules）",
+      "response": "version，title，content，summary_of_changes，published_at",
+      "errors": "NOT_FOUND"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/app/me/consents",
+      "caller": "小程序",
+      "purpose": "我的授权",
+      "request": "无",
+      "response": "每类协议的最新动作、版本与时间",
+      "errors": "—"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/app/me/consents",
+      "caller": "小程序",
+      "purpose": "记录同意",
+      "request": "kind，version，scene",
+      "response": "consent_id，consented_at",
+      "errors": "VERSION_OUTDATED"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/app/me/consents/{kind}/withdraw",
+      "caller": "小程序",
+      "purpose": "撤回授权",
+      "request": "无",
+      "response": "kind，withdrawn_at，effects[]（如人脸数据已删除）",
+      "errors": "CANNOT_WITHDRAW（用户协议与隐私政策撤回需走注销）"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/agreements",
+      "caller": "后台",
+      "purpose": "创建协议草稿",
+      "request": "kind，version，title，content，summary_of_changes，need_reconsent",
+      "response": "agreement_id",
+      "errors": "VERSION_EXISTS"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/agreements/{id}/publish",
+      "caller": "后台",
+      "purpose": "发布协议",
+      "request": "无",
+      "response": "status=published，digest",
+      "errors": "FORBIDDEN"
+    }
+  ],
+  "results": [
+    {
+      "case": "同意专项条款",
+      "page": "回到原业务页",
+      "display": "继续人脸录入、储值或购卡流程。"
+    },
+    {
+      "case": "撤回人脸授权",
+      "page": "隐私设置页",
+      "display": "显示「人脸入场已关闭，人脸数据已删除」，入场方式切换为动态码。"
+    },
+    {
+      "case": "需要重新同意",
+      "page": "协议更新弹窗",
+      "display": "显示变更摘要；同意后继续原操作。"
+    }
+  ],
+  "writes": [
+    {
+      "when": "同意或撤回",
+      "table": "user_consents",
+      "content": "member_id、kind、version、digest、action、scene、IP、时间；只追加。"
+    },
+    {
+      "when": "发布协议",
+      "table": "agreement_versions",
+      "content": "status=published、digest、published_at；旧版本 status=retired。"
+    },
+    {
+      "when": "发布协议",
+      "table": "audit_logs",
+      "content": "发布人、协议类别与版本。"
+    }
+  ],
+  "tables": [
+    {
+      "name": "agreement_versions",
+      "label": "协议版本",
+      "purpose": "协议正文与发布状态",
+      "fields": [
+        {
+          "name": "kind",
+          "type": "VARCHAR(32)",
+          "required": true,
+          "default": "—",
+          "comment": "user_terms、privacy、face、prepaid、refund_rules"
+        },
+        {
+          "name": "version",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "版本，如 2026.10"
+        },
+        {
+          "name": "title",
+          "type": "VARCHAR(100)",
+          "required": true,
+          "default": "—",
+          "comment": "标题"
+        },
+        {
+          "name": "content",
+          "type": "TEXT",
+          "required": true,
+          "default": "—",
+          "comment": "正文"
+        },
+        {
+          "name": "summary_of_changes",
+          "type": "VARCHAR(500)",
+          "required": false,
+          "default": "—",
+          "comment": "变更摘要"
+        },
+        {
+          "name": "digest",
+          "type": "CHAR(64)",
+          "required": false,
+          "default": "—",
+          "comment": "发布时计算的正文摘要"
+        },
+        {
+          "name": "need_reconsent",
+          "type": "BOOLEAN",
+          "required": true,
+          "default": "false",
+          "comment": "是否要求已同意的会员重新同意"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "draft",
+          "comment": "draft、published、retired"
+        },
+        {
+          "name": "published_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "生效时刻"
+        },
+        {
+          "name": "published_by",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "发布人"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(kind, version)",
+        "UNIQUE(kind) WHERE status = 'published'"
+      ]
+    },
+    {
+      "name": "user_consents",
+      "label": "授权记录",
+      "purpose": "同意与撤回的证据，只追加",
+      "fields": [
+        {
+          "name": "member_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "会员"
+        },
+        {
+          "name": "kind",
+          "type": "VARCHAR(32)",
+          "required": true,
+          "default": "—",
+          "comment": "协议类别"
+        },
+        {
+          "name": "version",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "同意的版本"
+        },
+        {
+          "name": "digest",
+          "type": "CHAR(64)",
+          "required": true,
+          "default": "—",
+          "comment": "同意时的正文摘要"
+        },
+        {
+          "name": "action",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "granted、withdrawn"
+        },
+        {
+          "name": "scene",
+          "type": "VARCHAR(32)",
+          "required": true,
+          "default": "—",
+          "comment": "login、face_enroll、recharge、purchase、settings"
+        },
+        {
+          "name": "ip",
+          "type": "VARCHAR(45)",
+          "required": false,
+          "default": "—",
+          "comment": "请求 IP"
+        },
+        {
+          "name": "user_agent",
+          "type": "VARCHAR(256)",
+          "required": false,
+          "default": "—",
+          "comment": "客户端标识"
+        }
+      ],
+      "indexes": [
+        "INDEX(member_id, kind, created_at DESC)"
+      ]
+    }
+  ],
+  "states": [
+    {
+      "entity": "协议",
+      "from": "draft",
+      "event": "发布",
+      "to": "published",
+      "condition": "同类只有一个 published"
+    },
+    {
+      "entity": "协议",
+      "from": "published",
+      "event": "发布同类新版本",
+      "to": "retired",
+      "condition": "—"
+    }
+  ],
+  "exceptions": [
+    {
+      "case": "提交的版本不是当前发布版本",
+      "handling": "返回 VERSION_OUTDATED，前端重新拉取协议后再同意。"
+    },
+    {
+      "case": "已发布协议需要修改",
+      "handling": "不允许修改，创建新版本并发布。"
+    },
+    {
+      "case": "撤回用户协议或隐私政策",
+      "handling": "引导到账号注销流程，不单独撤回。"
+    },
+    {
+      "case": "未成年人",
+      "handling": "协议中写明未满 14 周岁须监护人同意；人脸等敏感信息对未满 14 周岁会员不开放。"
+    }
+  ]
+}

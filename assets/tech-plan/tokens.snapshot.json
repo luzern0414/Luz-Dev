@@ -1,0 +1,33 @@
+{
+  "version": "Luz-Design themes.json 2026-10-23.v3 · ai-agent · Admin v2",
+  "note": "Fallback only. tech_plan.py reads $LUZ_DESIGN_ROOT/design/shared/themes/themes.json first and overrides matching tokens; derived Admin v2 tokens (surface-2, surface-3, line-strong, focus, shadows, radii) stay here.",
+  "tokens": {
+    "canvas": "#F4F5FA",
+    "surface": "#FFFFFF",
+    "surface-2": "#F0F2F7",
+    "surface-3": "#E7EAF3",
+    "ink": "#2B2326",
+    "ink-2": "#6E6064",
+    "ink-3": "#6F6266",
+    "line": "#EEEEEE",
+    "line-strong": "#D7DBE8",
+    "action": "#4A5BD6",
+    "action-press": "#3A48B0",
+    "action-tint": "#E6E9FA",
+    "accent": "#D98C3F",
+    "accent-tint": "#F9EBDD",
+    "success": "#18794E",
+    "success-tint": "#E4F3EC",
+    "warning": "#A15C00",
+    "warning-tint": "#FBF0DE",
+    "danger": "#C93644",
+    "danger-tint": "#FBE7E9",
+    "info": "#2F5F8A",
+    "info-tint": "#E6EEF5",
+    "focus": "rgba(74,91,214,.34)",
+    "radius-control": "8px",
+    "radius-card": "12px",
+    "shadow-1": "0 1px 6px rgba(43,35,38,.06)",
+    "shadow-2": "0 8px 24px rgba(43,35,38,.09)"
+  }
+}

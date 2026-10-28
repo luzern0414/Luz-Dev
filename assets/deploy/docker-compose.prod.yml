@@ -1,0 +1,77 @@
+# Luz 项目生产部署模板（references/operations.md §2）。复制到项目 infra/deploy/ 后按项目修改。
+# 秘密不写在这里：通过 env_file 指向服务器上的受限文件（权限 600），或使用云密钥服务注入。
+name: luz-app
+
+services:
+  api:
+    image: ${REGISTRY}/luz-api:${APP_VERSION:?set APP_VERSION}
+    env_file: /etc/luz/api.env
+    command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks: [internal]
+
+  worker:
+    # 发件箱投递与定时任务（关单、查单、退款查询、对账、过期）；只运行一个实例或使用租约锁
+    image: ${REGISTRY}/luz-api:${APP_VERSION}
+    env_file: /etc/luz/api.env
+    command: ["python", "-m", "worker"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: unless-stopped
+    networks: [internal]
+
+  migrate:
+    # 发布时先执行：docker compose run --rm migrate
+    image: ${REGISTRY}/luz-api:${APP_VERSION}
+    env_file: /etc/luz/api.env
+    command: ["alembic", "upgrade", "head"]
+    profiles: ["release"]
+    networks: [internal]
+
+  postgres:
+    image: postgres:16
+    env_file: /etc/luz/postgres.env
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 10s
+      retries: 5
+    restart: unless-stopped
+    networks: [internal]   # 不映射端口，不暴露公网（OPS-002）
+
+  redis:
+    image: redis:7
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD}"]
+    volumes: ["redisdata:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      retries: 5
+    restart: unless-stopped
+    networks: [internal]
+
+  nginx:
+    image: nginx:1.27
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/luz/certs:/etc/nginx/certs:ro
+      - ./admin-dist:/usr/share/nginx/admin:ro
+    depends_on: [api]
+    restart: unless-stopped
+    networks: [internal]
+
+volumes:
+  pgdata:
+  redisdata:
+
+networks:
+  internal:

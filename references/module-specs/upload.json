@@ -1,0 +1,244 @@
+{
+  "id": "upload",
+  "order": 85,
+  "name": "文件上传",
+  "modules": [
+    "upload"
+  ],
+  "summary": "头像、反馈图片、合同等文件通过临时凭证直传对象存储，服务端校验类型与大小并做内容安全检测，按用途控制访问。",
+  "features": [
+    {
+      "name": "直传凭证",
+      "description": "按用途签发短时上传凭证，限定类型、大小与存储路径。"
+    },
+    {
+      "name": "完成确认",
+      "description": "上传后服务端核对对象大小与类型，再进入内容安全检测。"
+    },
+    {
+      "name": "访问控制",
+      "description": "私有文件只通过短时签名地址访问；公开文件（如门店图片）走 CDN。"
+    },
+    {
+      "name": "清理",
+      "description": "超过 24 小时未确认的上传与已删除文件由任务清理。"
+    }
+  ],
+  "flows": [
+    {
+      "name": "上传文件",
+      "steps": [
+        "前端调用 `POST /api/v1/app/files/upload-ticket`，声明用途、类型与大小。",
+        "服务端校验用途允许的类型与大小上限，创建 files 记录（pending），返回直传地址与表单字段。",
+        "前端直传对象存储后调用 `POST /api/v1/app/files/{id}/complete`。",
+        "服务端读取对象元数据核对大小与类型，提交内容安全检测；通过后 status=active，可被业务引用。"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "page": "任意上传入口",
+      "field": "purpose",
+      "label": "用途",
+      "type": "自动",
+      "required": true,
+      "rule": "avatar、feedback、contract、store_photo。"
+    },
+    {
+      "page": "任意上传入口",
+      "field": "mime",
+      "label": "文件类型",
+      "type": "自动",
+      "required": true,
+      "rule": "图片只允许 JPEG、PNG、WEBP；合同允许 PDF。"
+    },
+    {
+      "page": "任意上传入口",
+      "field": "size",
+      "label": "文件大小",
+      "type": "自动",
+      "required": true,
+      "rule": "图片不超过 5 MB，PDF 不超过 20 MB。"
+    }
+  ],
+  "apis": [
+    {
+      "method": "POST",
+      "path": "/api/v1/app/files/upload-ticket",
+      "caller": "小程序",
+      "purpose": "申请上传凭证",
+      "request": "purpose，mime，size",
+      "response": "file_id，upload_url，form_fields，expires_in",
+      "errors": "FILE_TYPE_NOT_ALLOWED，FILE_TOO_LARGE"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/app/files/{id}/complete",
+      "caller": "小程序",
+      "purpose": "确认上传",
+      "request": "无",
+      "response": "status（active 或 reviewing），url",
+      "errors": "FILE_MISMATCH，FILE_REJECTED"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/files/upload-ticket",
+      "caller": "后台",
+      "purpose": "后台上传凭证",
+      "request": "purpose，mime，size",
+      "response": "同小程序",
+      "errors": "FILE_TYPE_NOT_ALLOWED"
+    }
+  ],
+  "results": [
+    {
+      "case": "上传成功",
+      "page": "原页面",
+      "display": "显示缩略图；头像等需检测的文件在检测通过后生效。"
+    },
+    {
+      "case": "内容不合规",
+      "page": "原页面",
+      "display": "提示「图片未通过审核，请更换」，不展示该文件。"
+    }
+  ],
+  "writes": [
+    {
+      "when": "申请凭证",
+      "table": "files",
+      "content": "purpose、mime、size、storage_key、status=pending、uploaded_by。"
+    },
+    {
+      "when": "确认上传",
+      "table": "files",
+      "content": "status、digest、risk_result。"
+    }
+  ],
+  "tables": [
+    {
+      "name": "files",
+      "label": "文件",
+      "purpose": "上传文件元数据",
+      "fields": [
+        {
+          "name": "purpose",
+          "type": "VARCHAR(32)",
+          "required": true,
+          "default": "—",
+          "comment": "用途"
+        },
+        {
+          "name": "storage_key",
+          "type": "VARCHAR(256)",
+          "required": true,
+          "default": "—",
+          "comment": "对象存储路径"
+        },
+        {
+          "name": "mime",
+          "type": "VARCHAR(64)",
+          "required": true,
+          "default": "—",
+          "comment": "文件类型"
+        },
+        {
+          "name": "size_bytes",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "文件大小"
+        },
+        {
+          "name": "digest",
+          "type": "CHAR(64)",
+          "required": false,
+          "default": "—",
+          "comment": "内容摘要，用于去重"
+        },
+        {
+          "name": "visibility",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "private",
+          "comment": "private、public"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "pending",
+          "comment": "pending、reviewing、active、rejected、deleted"
+        },
+        {
+          "name": "risk_result",
+          "type": "JSONB",
+          "required": false,
+          "default": "—",
+          "comment": "内容安全检测结果"
+        },
+        {
+          "name": "uploader_type",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "member、admin"
+        },
+        {
+          "name": "uploaded_by",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "上传人"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(storage_key)",
+        "INDEX(status, created_at)"
+      ]
+    }
+  ],
+  "states": [
+    {
+      "entity": "文件",
+      "from": "pending",
+      "event": "确认上传",
+      "to": "reviewing",
+      "condition": "大小与类型一致"
+    },
+    {
+      "entity": "文件",
+      "from": "reviewing",
+      "event": "检测通过",
+      "to": "active",
+      "condition": "—"
+    },
+    {
+      "entity": "文件",
+      "from": "reviewing",
+      "event": "检测不通过",
+      "to": "rejected",
+      "condition": "—"
+    },
+    {
+      "entity": "文件",
+      "from": "active",
+      "event": "删除或引用方删除",
+      "to": "deleted",
+      "condition": "—"
+    }
+  ],
+  "exceptions": [
+    {
+      "case": "实际文件与声明不符",
+      "handling": "status=rejected，删除对象，返回 FILE_MISMATCH。"
+    },
+    {
+      "case": "凭证过期未上传",
+      "handling": "任务在 24 小时后删除 pending 记录与对象。"
+    },
+    {
+      "case": "检测服务不可用",
+      "handling": "保持 reviewing，任务重试；超过 1 小时转人工审核。"
+    }
+  ]
+}

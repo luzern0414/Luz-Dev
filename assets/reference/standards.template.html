@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="luz-design-tokens" content="{{TOKEN_SOURCE}}">
+<title>Luz Dev 安全与功能规范</title>
+<style>
+:root{color-scheme:light;{{TOKENS_CSS}}}
+{{SHELL_CSS}}</style>
+</head>
+<body>
+<main class="doc">
+<h1>{{TITLE}}</h1>
+<section id="find"><h2>按条件查找</h2>
+<form class="filters" role="search" onsubmit="return false"><input id="q" type="search" aria-label="关键词" placeholder="规则编号、关键词或模块"><select id="level" aria-label="级别"><option value="">全部级别</option><option value="MUST">必须</option><option value="SHOULD">建议</option></select><select id="platform" aria-label="端"><option value="">全部端</option><option value="miniprogram">小程序</option><option value="admin">管理后台</option><option value="backend">后端服务</option><option value="mobile">移动 App</option><option value="agent">智能体</option></select></form>
+<p id="count">共 {{RULE_COUNT}} 条规则</p>
+</section>
+{{SECTIONS}}
+<section id="baselines"><h2>基础功能清单</h2>{{BASELINES}}</section>
+</main>
+<script>
+(() => {
+  const rules = [...document.querySelectorAll('.rule')];
+  const domains = [...document.querySelectorAll('.domain')];
+  const q = document.getElementById('q');
+  const level = document.getElementById('level');
+  const platform = document.getElementById('platform');
+  const count = document.getElementById('count');
+  const apply = () => {
+    const text = q.value.trim().toLowerCase();
+    let shown = 0;
+    for (const rule of rules) {
+      const platforms = rule.dataset.platforms.split(' ');
+      const match = (!text || rule.dataset.search.includes(text))
+        && (!level.value || rule.dataset.level === level.value)
+        && (!platform.value || platforms.includes(platform.value) || platforms.includes('all'));
+      rule.hidden = !match;
+      if (match) shown += 1;
+    }
+    for (const domain of domains) domain.hidden = !domain.querySelector('.rule:not([hidden])');
+    count.textContent = shown === rules.length ? `共 ${rules.length} 条规则` : `${shown} / ${rules.length} 条规则`;
+  };
+  for (const control of [q, level, platform]) control.addEventListener('input', apply);
+  const openTarget = () => { const target = location.hash && document.getElementById(location.hash.slice(1)); if (target && target.tagName === 'DETAILS') target.open = true; };
+  addEventListener('hashchange', openTarget);
+  openTarget();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1644 @@
+{
+ "schemaVersion": "1.0",
+ "updatedAt": "2026-10-26",
+ "description": "Luz Dev 调研路由。三层：系统原型（systemArchetypes：同类系统的开源实现、整体架构）→ 业务模块（modules：每个模块的设计做法、官方原文 officialUrls、检索模板）→ 方案主题（topicQueries）→ 必查主题（baselineTracks：Web 与后台安全、HTTPS 加固、部署发布、主机、监控、备份、密钥、数据保护，按任务类型自动加入，不论方案选了哪些模块）。tech_plan.py research 读取本文件；新增模块或原型时在这里登记。",
+ "thresholds": {
+  "implementation": {
+   "minRead": 6,
+   "minOfficial": 2,
+   "minOpenSource": 1
+  },
+  "operations": {
+   "minRead": 3,
+   "minOfficial": 1
+  },
+  "analysis": {
+   "minRead": 4,
+   "minOfficial": 1
+  },
+  "diagnosis": {
+   "minRead": 2,
+   "minOfficial": 0
+  },
+  "review": {
+   "minRead": 0,
+   "minOfficial": 0
+  },
+  "default": {
+   "minRead": 2,
+   "minOfficial": 0
+  }
+ },
+ "tiers": {
+  "official": [
+   "pay.weixin.qq.com",
+   "developers.weixin.qq.com",
+   "open.weixin.qq.com",
+   "cloud.tencent.com/document",
+   "opendocs.alipay.com",
+   "open.alipay.com",
+   "docs.python.org",
+   "fastapi.tiangolo.com",
+   "docs.sqlalchemy.org",
+   "alembic.sqlalchemy.org",
+   "docs.pydantic.dev",
+   "postgresql.org",
+   "redis.io",
+   "vuejs.org",
+   "element-plus.org",
+   "pinia.vuejs.org",
+   "router.vuejs.org",
+   "vite.dev",
+   "docs.flutter.dev",
+   "reactnative.dev",
+   "uniapp.dcloud.net.cn",
+   "tdesign.tencent.com",
+   "langchain-ai.github.io",
+   "nodejs.org",
+   "developer.mozilla.org",
+   "docs.docker.com",
+   "nginx.org",
+   "ssl-config.mozilla.org",
+   "prometheus.io",
+   "opentelemetry.io",
+   "docs.github.com",
+   "ubuntu.com"
+  ],
+  "standard": [
+   "owasp.org",
+   "cheatsheetseries.owasp.org",
+   "rfc-editor.org",
+   "datatracker.ietf.org",
+   "nist.gov",
+   "npc.gov.cn",
+   "flk.npc.gov.cn",
+   "cac.gov.cn",
+   "mps.gov.cn",
+   "samr.gov.cn",
+   "pbc.gov.cn",
+   "miit.gov.cn",
+   "tc260.org.cn",
+   "gov.cn"
+  ],
+  "opensource": [
+   "github.com",
+   "gitee.com",
+   "pypi.org",
+   "npmjs.com"
+  ],
+  "community": [
+   "cloud.tencent.com/developer",
+   "csdn.net",
+   "cnblogs.com",
+   "juejin.cn",
+   "zhihu.com",
+   "segmentfault.com",
+   "stackoverflow.com",
+   "v2ex.com",
+   "dev.to",
+   "mp.weixin.qq.com"
+  ]
+ },
+ "topicQueries": [
+  {
+   "platform": "bing",
+   "query": "{topic} 技术方案 系统架构 模块设计",
+   "purpose": "整体方案"
+  },
+  {
+   "platform": "github",
+   "query": "{topic}",
+   "purpose": "开源同类系统"
+  },
+  {
+   "platform": "gitee",
+   "query": "{topic}",
+   "purpose": "国内开源同类系统"
+  },
+  {
+   "platform": "csdn",
+   "query": "{topic} 系统设计 数据库设计",
+   "purpose": "实践经验"
+  },
+  {
+   "platform": "zhihu",
+   "query": "{topic} 系统 设计 经验",
+   "purpose": "行业经验"
+  }
+ ],
+ "modules": {
+  "login": {
+   "name": "小程序登录与会话",
+   "officialRequired": true,
+   "queries": [
+    {
+     "platform": "bing",
+     "query": "小程序登录 code2Session site:developers.weixin.qq.com",
+     "purpose": "官方登录流程"
+    },
+    {
+     "platform": "bing",
+     "query": "小程序 手机号快速验证组件 getPhoneNumber site:developers.weixin.qq.com",
+     "purpose": "官方手机号"
+    },
+    {
+     "platform": "bing",
+     "query": "getStableAccessToken 接口调用凭据 site:developers.weixin.qq.com",
+     "purpose": "官方 access_token"
+    }
+   ],
+   "officialUrls": [
+    "https://developers.weixin.qq.com/miniprogram/dev/framework/open-ability/login.html",
+    "https://developers.weixin.qq.com/miniprogram/dev/framework/open-ability/getPhoneNumber.html"
+   ]
+  },
+  "payment": {
+   "name": "微信支付",
+   "officialRequired": true,
+   "queries": [
+    {
+     "platform": "bing",
+     "query": "微信支付 JSAPI下单 site:pay.weixin.qq.com",
+     "purpose": "官方下单"
+    },
+    {
+     "platform": "bing",
+     "query": "微信支付 支付成功回调通知 验签 解密 site:pay.weixin.qq.com",
+     "purpose": "官方回调"
+    },
+    {
+     "platform": "bing",
+     "query": "微信支付 查询订单 关闭订单 trade_state site:pay.weixin.qq.com",
+     "purpose": "官方查单关单"
+    },
+    {
+     "platform": "bing",
+     "query": "wx.requestPayment site:developers.weixin.qq.com",
+     "purpose": "官方小程序调起支付"
+    },
+    {
+     "platform": "csdn",
+     "query": "微信支付 回调 幂等 掉单 主动查单",
+     "purpose": "异常实践"
+    }
+   ],
+   "officialUrls": [
+    {
+     "url": "https://pay.weixin.qq.com/doc/v3/merchant/llms.txt",
+     "title": "微信支付商户文档索引 llms.txt"
+    },
+    {
+     "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791911.md",
+     "title": "小程序支付 · 开发指引"
+    },
+    {
+     "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791897.md",
+     "title": "小程序支付 · JSAPI/小程序下单"
+    },
+    {
+     "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791898.md",
+     "title": "小程序支付 · 小程序调起支付"
+    },
+    {
+     "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791900.md",
+     "title": "小程序支付 · 商户订单号查询订单"
+    },
+    {
+     "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791901.md",
+     "title": "小程序支付 · 关闭订单"
+    },
+    {
+     "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791902.md",
+     "title": "小程序支付 · 支付成功回调通知"
+    },
+    {
+     "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012365342.md",
+     "title": "APIv3 如何签名和验签"
+    },
+    {
+     "url": "https://pay.weixin.qq.com/doc/v3/merchant/4013053249",
+     "title": "如何使用微信支付公钥验签（签名探测流量）"
+    },
+    {
+     "url": "https://pay.weixin.qq.com/doc/v3/merchant/4024350132.md",
+     "title": "证书密钥概览"
+    },
+    "https://developers.weixin.qq.com/miniprogram/dev/api/payment/wx.requestPayment.html"
+   ]
+  },
+  "refund": {
+   "name": "退款",
+   "officialRequired": true,
+   "queries": [
+    {
+     "platform": "bing",
+     "query": "微信支付 退款申请 退款结果通知 site:pay.weixin.qq.com",
+     "purpose": "官方退款"
+    },
+    {
+     "platform": "csdn",
+     "query": "微信支付 部分退款 退款失败 ABNORMAL 处理",
+     "purpose": "退款异常实践"
+    }
+   ],
+   "officialUrls": [
+    {
+     "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791903.md",
+     "title": "小程序支付 · 退款申请"
+    },
+    {
+     "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791904.md",
+     "title": "小程序支付 · 查询单笔退款"
+    },
+    {
+     "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791905.md",
+     "title": "小程序支付 · 发起异常退款"
+    },
+    {
+     "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791906.md",
+     "title": "小程序支付 · 退款结果回调通知"
+    }
+   ]
+  },
+  "reconcile": {
+   "name": "对账",
+   "officialRequired": true,
+   "queries": [
+    {
+     "platform": "bing",
+     "query": "微信支付 申请交易账单 资金账单 下载 site:pay.weixin.qq.com",
+     "purpose": "官方账单"
+    },
+    {
+     "platform": "csdn",
+     "query": "微信支付 对账 差异处理 设计",
+     "purpose": "对账实践"
+    }
+   ],
+   "officialUrls": [
+    {
+     "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791907.md",
+     "title": "小程序支付 · 申请交易账单"
+    },
+    {
+     "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791908.md",
+     "title": "小程序支付 · 申请资金账单"
+    },
+    {
+     "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791909.md",
+     "title": "小程序支付 · 下载账单"
+    }
+   ]
+  },
+  "order": {
+   "name": "订单",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "电商订单系统 状态机 设计 超时关单 拆单",
+     "purpose": "订单状态机"
+    },
+    {
+     "platform": "juejin",
+     "query": "订单系统 设计 下单 幂等 价格快照",
+     "purpose": "下单流程"
+    },
+    {
+     "platform": "github",
+     "query": "mall order state machine",
+     "purpose": "开源订单实现"
+    }
+   ]
+  },
+  "inventory": {
+   "name": "库存",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "库存 预占 扣减 释放 流水 设计 下单 支付",
+     "purpose": "库存预占"
+    },
+    {
+     "platform": "cnblogs",
+     "query": "库存扣减 防超卖 乐观锁 条件更新 对比",
+     "purpose": "防超卖方案"
+    },
+    {
+     "platform": "juejin",
+     "query": "库存系统 设计 可售库存 锁定库存 实际库存",
+     "purpose": "库存模型"
+    }
+   ]
+  },
+  "coupon": {
+   "name": "优惠券",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "优惠券系统设计 领取 核销 叠加 分摊 退款回退",
+     "purpose": "优惠券设计"
+    },
+    {
+     "platform": "juejin",
+     "query": "优惠券 发放 高并发 库存 每人限领",
+     "purpose": "领券并发"
+    },
+    {
+     "platform": "github",
+     "query": "coupon system design",
+     "purpose": "开源实现"
+    }
+   ]
+  },
+  "membership": {
+   "name": "会员与积分",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "会员积分系统设计 积分流水 过期 退款回扣",
+     "purpose": "会员积分"
+    },
+    {
+     "platform": "juejin",
+     "query": "会员等级 成长值 权益 设计",
+     "purpose": "会员等级"
+    }
+   ]
+  },
+  "recharge": {
+   "name": "储值与预付",
+   "officialRequired": true,
+   "queries": [
+    {
+     "platform": "bing",
+     "query": "单用途商业预付卡管理办法 site:gov.cn",
+     "purpose": "预付卡法规"
+    },
+    {
+     "platform": "csdn",
+     "query": "储值余额 账户流水 设计 并发 赠送金",
+     "purpose": "余额账户"
+    }
+   ],
+   "officialUrls": [
+    {
+     "url": "https://scjgj.beijing.gov.cn/bsfw/bmfw/sfwbbm/shxfl/yfk/202204/t20220421_2684551.html",
+     "title": "北京市体育健身行业预付费服务合同（2022）"
+    }
+   ]
+  },
+  "face": {
+   "name": "人脸采集与识别",
+   "officialRequired": true,
+   "queries": [
+    {
+     "platform": "bing",
+     "query": "人脸识别技术应用安全管理办法 site:cac.gov.cn",
+     "purpose": "人脸法规"
+    },
+    {
+     "platform": "bing",
+     "query": "个人信息保护法 敏感个人信息 生物识别 单独同意 site:npc.gov.cn",
+     "purpose": "个保法"
+    },
+    {
+     "platform": "bing",
+     "query": "微信小程序 人脸核身 接入 site:developers.weixin.qq.com",
+     "purpose": "官方人脸核身"
+    },
+    {
+     "platform": "bing",
+     "query": "人脸识别 人员库 接入 site:cloud.tencent.com/document",
+     "purpose": "云厂商人脸"
+    }
+   ]
+  },
+  "upload": {
+   "name": "文件上传与内容安全",
+   "officialRequired": true,
+   "queries": [
+    {
+     "platform": "bing",
+     "query": "小程序 内容安全 msgSecCheck mediaCheckAsync site:developers.weixin.qq.com",
+     "purpose": "官方内容安全"
+    },
+    {
+     "platform": "bing",
+     "query": "OWASP File Upload Cheat Sheet",
+     "purpose": "上传安全"
+    }
+   ],
+   "officialUrls": [
+    "https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html"
+   ]
+  },
+  "notification": {
+   "name": "订阅消息与通知",
+   "officialRequired": true,
+   "queries": [
+    {
+     "platform": "bing",
+     "query": "小程序 订阅消息 subscribeMessage.send site:developers.weixin.qq.com",
+     "purpose": "官方订阅消息"
+    },
+    {
+     "platform": "csdn",
+     "query": "消息通知 中心 设计 多渠道 失败重试",
+     "purpose": "通知中心"
+    }
+   ],
+   "officialUrls": [
+    {
+     "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/open-ability/subscribe-message.html",
+     "title": "小程序订阅消息"
+    }
+   ]
+  },
+  "privacy": {
+   "name": "隐私协议与个人信息",
+   "officialRequired": true,
+   "queries": [
+    {
+     "platform": "bing",
+     "query": "小程序隐私保护指引 隐私协议开发指南 site:developers.weixin.qq.com",
+     "purpose": "官方隐私协议"
+    }
+   ],
+   "officialUrls": [
+    "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/PrivacyAuthorize.html"
+   ]
+  },
+  "admin-rbac": {
+   "name": "后台权限与审计",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "bing",
+     "query": "OWASP Authorization Cheat Sheet",
+     "purpose": "授权"
+    },
+    {
+     "platform": "csdn",
+     "query": "RBAC 数据权限 部门 门店 设计",
+     "purpose": "数据权限"
+    },
+    {
+     "platform": "github",
+     "query": "vue3 admin rbac",
+     "purpose": "开源后台"
+    }
+   ],
+   "officialUrls": [
+    "https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html"
+   ]
+  },
+  "auth": {
+   "name": "账号认证",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "bing",
+     "query": "OWASP Authentication Cheat Sheet",
+     "purpose": "认证"
+    },
+    {
+     "platform": "bing",
+     "query": "OWASP Password Storage Cheat Sheet",
+     "purpose": "密码存储"
+    }
+   ],
+   "officialUrls": [
+    "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+    "https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html"
+   ]
+  },
+  "reservation": {
+   "name": "预约与排期",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "预约系统 时段 名额 并发 超约 设计",
+     "purpose": "预约名额"
+    },
+    {
+     "platform": "juejin",
+     "query": "课程预约 排课 候补 取消 设计",
+     "purpose": "课程预约"
+    },
+    {
+     "platform": "github",
+     "query": "booking system time slot capacity",
+     "purpose": "开源预约"
+    }
+   ]
+  },
+  "geo": {
+   "name": "定位与地图",
+   "officialRequired": true,
+   "queries": [
+    {
+     "platform": "bing",
+     "query": "wx.getLocation 隐私 site:developers.weixin.qq.com",
+     "purpose": "官方定位"
+    }
+   ]
+  },
+  "lottery": {
+   "name": "抽奖",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "抽奖系统 设计 概率 奖池 防刷 库存",
+     "purpose": "抽奖设计"
+    },
+    {
+     "platform": "bing",
+     "query": "规范促销行为暂行规定 抽奖式有奖销售 最高奖 site:gov.cn",
+     "purpose": "促销法规"
+    }
+   ]
+  },
+  "agent": {
+   "name": "智能体",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "bing",
+     "query": "OWASP Top 10 for LLM Applications",
+     "purpose": "LLM 安全"
+    },
+    {
+     "platform": "github",
+     "query": "langgraph human in the loop",
+     "purpose": "开源实践"
+    }
+   ]
+  },
+  "catalog": {
+   "name": "商品、SKU 与价格",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "电商 商品 SPU SKU 规格 数据库表设计",
+     "purpose": "SPU/SKU 模型"
+    },
+    {
+     "platform": "juejin",
+     "query": "商品中心 SKU 价格 上下架 设计",
+     "purpose": "商品中心"
+    },
+    {
+     "platform": "github",
+     "query": "spu sku mall product",
+     "purpose": "开源商品模型"
+    }
+   ]
+  },
+  "cart": {
+   "name": "购物车",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "购物车 设计 登录合并 价格变动 失效商品",
+     "purpose": "购物车逻辑"
+    },
+    {
+     "platform": "cnblogs",
+     "query": "购物车 Redis 数据库 设计 结算",
+     "purpose": "购物车存储"
+    }
+   ]
+  },
+  "store": {
+   "name": "门店与多租户",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "多门店 SaaS 数据隔离 租户 设计",
+     "purpose": "多门店隔离"
+    },
+    {
+     "platform": "juejin",
+     "query": "SaaS 多租户 数据隔离 方案 对比",
+     "purpose": "多租户方案"
+    }
+   ]
+  },
+  "after-sales": {
+   "name": "售后与退款申请",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "电商 售后 退款退货 状态机 设计",
+     "purpose": "售后状态机"
+    },
+    {
+     "platform": "juejin",
+     "query": "售后系统 设计 部分退款 退货 仲裁",
+     "purpose": "售后系统"
+    }
+   ]
+  },
+  "delivery": {
+   "name": "配送与履约",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "外卖 配送 履约 状态 骑手 接单 设计",
+     "purpose": "履约状态"
+    },
+    {
+     "platform": "bing",
+     "query": "同城配送 开放平台 订单回调 状态 达达 顺丰同城 接口文档",
+     "purpose": "配送平台接口"
+    }
+   ]
+  },
+  "queue": {
+   "name": "排队叫号",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "排队叫号 系统 设计 取号 过号 并发",
+     "purpose": "排队叫号"
+    }
+   ]
+  },
+  "campaign": {
+   "name": "营销活动（满减、折扣、限时）",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "电商 营销 满减 折扣 优惠叠加 计算 规则引擎",
+     "purpose": "优惠计算"
+    },
+    {
+     "platform": "juejin",
+     "query": "促销系统 设计 优惠叠加 互斥 分摊",
+     "purpose": "促销系统"
+    }
+   ]
+  },
+  "review": {
+   "name": "评价",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "商品评价 系统 设计 追评 审核 敏感词",
+     "purpose": "评价"
+    }
+   ]
+  },
+  "report": {
+   "name": "报表与统计",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "电商 报表 统计 设计 汇总表 定时 口径",
+     "purpose": "报表口径"
+    }
+   ]
+  },
+  "jobs": {
+   "name": "定时任务与延迟任务",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "订单超时取消 延迟队列 方案 对比 定时扫描 Redis RabbitMQ",
+     "purpose": "延迟关单方案"
+    },
+    {
+     "platform": "juejin",
+     "query": "分布式定时任务 幂等 补偿 重试 设计",
+     "purpose": "定时任务"
+    },
+    {
+     "platform": "github",
+     "query": "python scheduler apscheduler distributed lock",
+     "purpose": "开源调度"
+    }
+   ]
+  },
+  "settings": {
+   "name": "系统与门店配置",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "系统配置 中心 动态配置 字典 设计 缓存",
+     "purpose": "配置"
+    }
+   ]
+  },
+  "seckill": {
+   "name": "高并发抢购与热点库存",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "秒杀系统 设计 库存 预扣 Redis Lua 防超卖 削峰",
+     "purpose": "秒杀架构"
+    },
+    {
+     "platform": "juejin",
+     "query": "热点商品 库存 扣减 分桶 合并扣减",
+     "purpose": "热点库存"
+    },
+    {
+     "platform": "zhihu",
+     "query": "秒杀 系统 超卖 怎么解决",
+     "purpose": "超卖讨论"
+    },
+    {
+     "platform": "github",
+     "query": "seckill redis lua stock",
+     "purpose": "开源秒杀"
+    }
+   ]
+  },
+  "consistency": {
+   "name": "一致性：幂等、事务消息与补偿",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "本地消息表 事务消息 outbox 最终一致性 订单 库存",
+     "purpose": "最终一致"
+    },
+    {
+     "platform": "juejin",
+     "query": "分布式事务 TCC Saga 本地消息表 对比 选型",
+     "purpose": "方案对比"
+    },
+    {
+     "platform": "cnblogs",
+     "query": "接口幂等 设计 token 唯一索引 状态机",
+     "purpose": "幂等"
+    }
+   ]
+  },
+  "cache": {
+   "name": "缓存与一致性",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "缓存一致性 先更新数据库 再删除缓存 延迟双删",
+     "purpose": "缓存一致"
+    },
+    {
+     "platform": "juejin",
+     "query": "缓存 穿透 击穿 雪崩 解决方案",
+     "purpose": "缓存问题"
+    }
+   ]
+  },
+  "design-integration": {
+   "name": "接入 Luz Design 前端",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "juejin",
+     "query": "OpenAPI 生成 前端 接口 类型 TypeScript 小程序",
+     "purpose": "契约生成客户端"
+    },
+    {
+     "platform": "csdn",
+     "query": "小程序 前端 接口 封装 token 刷新 错误处理",
+     "purpose": "请求封装"
+    }
+   ]
+  },
+  "deploy": {
+   "name": "运维、部署与上线",
+   "officialRequired": true,
+   "queries": [
+    {
+     "platform": "bing",
+     "query": "微信小程序 发布上线 流程 体验版 审核 版本回退 site:developers.weixin.qq.com",
+     "purpose": "小程序发布"
+    },
+    {
+     "platform": "csdn",
+     "query": "Docker Compose 部署 FastAPI PostgreSQL Nginx HTTPS 生产环境",
+     "purpose": "部署"
+    },
+    {
+     "platform": "juejin",
+     "query": "生产环境 上线检查清单 监控 告警 备份 回滚",
+     "purpose": "上线清单"
+    },
+    {
+     "platform": "cnblogs",
+     "query": "PostgreSQL 备份 恢复 定时 pg_dump 异地",
+     "purpose": "备份恢复"
+    }
+   ],
+   "officialUrls": [
+    {
+     "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/ability/network.html",
+     "title": "小程序网络使用说明（服务器域名）"
+    },
+    {
+     "url": "https://docs.docker.com/compose/production/",
+     "title": "Docker Compose in production"
+    },
+    {
+     "url": "https://nginx.org/en/docs/http/configuring_https_servers.html",
+     "title": "nginx Configuring HTTPS servers"
+    }
+   ]
+  },
+  "compliance": {
+   "name": "商业资质与备案",
+   "officialRequired": true,
+   "queries": [
+    {
+     "platform": "bing",
+     "query": "小程序备案 ICP备案 流程 要求 site:developers.weixin.qq.com",
+     "purpose": "小程序备案"
+    },
+    {
+     "platform": "google",
+     "query": "工业和信息化部 关于开展移动互联网应用程序备案工作的通知 小程序",
+     "purpose": "APP/小程序备案法规"
+    },
+    {
+     "platform": "bing",
+     "query": "小程序 服务类目 资质 审核 体育 健身 site:developers.weixin.qq.com",
+     "purpose": "小程序类目资质"
+    },
+    {
+     "platform": "google",
+     "query": "增值电信业务经营许可证 ICP经营许可证 EDI 什么情况需要 电商 小程序",
+     "purpose": "ICP 许可证"
+    },
+    {
+     "platform": "google",
+     "query": "网络安全等级保护 定级 备案 二级 三级 要求 公安",
+     "purpose": "等级保护"
+    },
+    {
+     "platform": "bing",
+     "query": "单用途商业预付卡 发卡企业 备案 商务部门",
+     "purpose": "预付卡备案"
+    }
+   ]
+  },
+  "legal": {
+   "name": "用户协议与隐私政策",
+   "officialRequired": true,
+   "queries": [
+    {
+     "platform": "bing",
+     "query": "微信小程序 用户隐私保护指引 填写 要求 site:developers.weixin.qq.com",
+     "purpose": "隐私保护指引"
+    },
+    {
+     "platform": "google",
+     "query": "App违法违规收集使用个人信息行为认定方法 全文",
+     "purpose": "违规收集认定"
+    },
+    {
+     "platform": "google",
+     "query": "GB/T 35273 个人信息安全规范 隐私政策 应包含 内容",
+     "purpose": "隐私政策要素"
+    },
+    {
+     "platform": "csdn",
+     "query": "小程序 用户协议 隐私政策 同意 记录 版本 弹窗 实现",
+     "purpose": "同意记录实现"
+    }
+   ],
+   "officialUrls": [
+    {
+     "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/PrivacyAuthorize.html",
+     "title": "小程序隐私协议开发指南"
+    },
+    {
+     "url": "https://www.cac.gov.cn/2021-08/20/c_1631050028355286.htm",
+     "title": "中华人民共和国个人信息保护法"
+    }
+   ]
+  },
+  "license": {
+   "name": "开源与第三方许可",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "bing",
+     "query": "GPL AGPL MIT Apache 许可证 商业使用 区别 闭源",
+     "purpose": "开源许可证义务"
+    },
+    {
+     "platform": "bing",
+     "query": "CRMEB 商业授权 开源协议 商用",
+     "purpose": "商城源码授权"
+    },
+    {
+     "platform": "bing",
+     "query": "字体 商用 授权 微软雅黑 思源黑体 免费商用",
+     "purpose": "字体版权"
+    }
+   ],
+   "officialUrls": [
+    {
+     "url": "https://choosealicense.com/licenses/",
+     "title": "Choose a License · Licenses"
+    }
+   ]
+  },
+  "access-control": {
+   "name": "门禁入场与在场管理",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "无人健身房 门禁 系统 设计 扫码 人脸 防尾随",
+     "purpose": "无人健身房门禁"
+    },
+    {
+     "platform": "juejin",
+     "query": "动态二维码 门禁 签名 防截图 设计",
+     "purpose": "动态入场码"
+    },
+    {
+     "platform": "github",
+     "query": "gym access control system",
+     "purpose": "开源门禁"
+    }
+   ]
+  },
+  "iot": {
+   "name": "物联网设备接入",
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "MQTT 门禁 设备 指令 下发 回执 离线 设计",
+     "purpose": "设备指令"
+    },
+    {
+     "platform": "cnblogs",
+     "query": "EMQX 设备认证 ACL 物联网 安全",
+     "purpose": "设备认证"
+    },
+    {
+     "platform": "github",
+     "query": "mqtt device command ack",
+     "purpose": "开源设备接入"
+    }
+   ]
+  }
+ },
+ "crawlNotes": [
+  "Luz-Crawl 对同一站点默认 10 分钟内最多 40 次请求，页面图片也计入；超限后该站冷却 10 分钟。",
+  "官方文档优先用 officialUrls 直接打开；微信支付文档提供 .md 纯文本版本与 llms.txt 索引，请求更少、正文更完整。",
+  "站内搜索（bing/google site:）只用于发现 officialUrls 中没有的页面；同一引擎连续查询会触发冷却，应分散到不同引擎与轮次。",
+  "微信开放文档 OpenApiDoc 下的部分旧地址已不可用；不可用的地址从 officialUrls 中移除并补充新地址。"
+ ],
+ "systemArchetypes": {
+  "mall": {
+   "name": "电商商城（小程序 + 后台）",
+   "modules": [
+    "catalog",
+    "cart",
+    "order",
+    "inventory",
+    "payment",
+    "refund",
+    "after-sales",
+    "coupon",
+    "campaign",
+    "membership",
+    "delivery",
+    "review",
+    "report",
+    "jobs",
+    "admin-rbac",
+    "login",
+    "seckill",
+    "consistency"
+   ],
+   "queries": [
+    {
+     "platform": "github",
+     "query": "mall 电商 小程序 spring boot vue",
+     "purpose": "开源商城"
+    },
+    {
+     "platform": "gitee",
+     "query": "商城 小程序 管理后台 开源",
+     "purpose": "国内开源商城"
+    },
+    {
+     "platform": "juejin",
+     "query": "电商系统 架构设计 订单 库存 支付 交易链路",
+     "purpose": "交易链路"
+    },
+    {
+     "platform": "zhihu",
+     "query": "电商系统 从零设计 核心模块",
+     "purpose": "整体设计"
+    }
+   ],
+   "referenceRepos": [
+    {
+     "url": "https://github.com/macrozheng/mall",
+     "title": "macrozheng/mall 电商系统"
+    },
+    {
+     "url": "https://github.com/linlinjava/litemall",
+     "title": "litemall 小程序商城"
+    },
+    {
+     "url": "https://github.com/YunaiV/ruoyi-vue-pro",
+     "title": "ruoyi-vue-pro（含商城、支付、会员模块）"
+    },
+    {
+     "url": "https://github.com/gz-yami/mall4j",
+     "title": "mall4j 商城"
+    }
+   ]
+  },
+  "food": {
+   "name": "餐饮点餐 / 外卖",
+   "modules": [
+    "catalog",
+    "cart",
+    "order",
+    "inventory",
+    "payment",
+    "refund",
+    "coupon",
+    "membership",
+    "queue",
+    "delivery",
+    "store",
+    "report",
+    "jobs",
+    "admin-rbac",
+    "login",
+    "consistency",
+    "after-sales"
+   ],
+   "queries": [
+    {
+     "platform": "github",
+     "query": "restaurant ordering system mini program",
+     "purpose": "开源点餐"
+    },
+    {
+     "platform": "gitee",
+     "query": "扫码点餐 小程序 开源",
+     "purpose": "国内开源点餐"
+    },
+    {
+     "platform": "csdn",
+     "query": "扫码点餐 系统设计 桌台 加菜 厨房出餐",
+     "purpose": "点餐流程"
+    },
+    {
+     "platform": "juejin",
+     "query": "外卖系统 架构 订单 配送 设计",
+     "purpose": "外卖架构"
+    }
+   ],
+   "referenceRepos": []
+  },
+  "booking": {
+   "name": "预约门店（健身、美业、课程、场馆）",
+   "modules": [
+    "reservation",
+    "catalog",
+    "order",
+    "payment",
+    "refund",
+    "recharge",
+    "membership",
+    "coupon",
+    "store",
+    "notification",
+    "queue",
+    "face",
+    "report",
+    "jobs",
+    "admin-rbac",
+    "login",
+    "consistency",
+    "after-sales",
+    "inventory",
+    "access-control",
+    "iot"
+   ],
+   "queries": [
+    {
+     "platform": "github",
+     "query": "gym management system booking membership",
+     "purpose": "开源健身管理"
+    },
+    {
+     "platform": "gitee",
+     "query": "健身房 管理系统 预约 会员卡 开源",
+     "purpose": "国内开源健身/预约"
+    },
+    {
+     "platform": "csdn",
+     "query": "健身房 管理系统 设计 会员卡 次卡 课程预约 签到",
+     "purpose": "健身业务"
+    },
+    {
+     "platform": "zhihu",
+     "query": "健身房 SaaS 系统 核心功能",
+     "purpose": "行业做法"
+    }
+   ],
+   "referenceRepos": []
+  },
+  "membership-store": {
+   "name": "会员储值门店（美业、零售、茶饮）",
+   "modules": [
+    "membership",
+    "recharge",
+    "coupon",
+    "campaign",
+    "order",
+    "payment",
+    "refund",
+    "store",
+    "report",
+    "admin-rbac",
+    "login",
+    "consistency",
+    "after-sales"
+   ],
+   "queries": [
+    {
+     "platform": "gitee",
+     "query": "会员管理系统 储值 积分 收银 开源",
+     "purpose": "开源会员收银"
+    },
+    {
+     "platform": "csdn",
+     "query": "会员储值 系统设计 余额 赠送 退卡",
+     "purpose": "储值设计"
+    }
+   ],
+   "referenceRepos": []
+  },
+  "saas-admin": {
+   "name": "多门店 SaaS 管理后台",
+   "modules": [
+    "store",
+    "admin-rbac",
+    "auth",
+    "settings",
+    "report",
+    "jobs",
+    "upload",
+    "consistency"
+   ],
+   "queries": [
+    {
+     "platform": "github",
+     "query": "multi-tenant saas admin rbac vue",
+     "purpose": "开源多租户后台"
+    },
+    {
+     "platform": "juejin",
+     "query": "SaaS 多租户 数据隔离 权限 设计",
+     "purpose": "多租户"
+    }
+   ],
+   "referenceRepos": [
+    {
+     "url": "https://github.com/YunaiV/ruoyi-vue-pro",
+     "title": "ruoyi-vue-pro（多租户、数据权限）"
+    }
+   ]
+  }
+ },
+ "baselineTracks": {
+  "web-security": {
+   "name": "Web 与接口安全",
+   "modes": [
+    "implementation",
+    "operations",
+    "analysis",
+    "review"
+   ],
+   "officialRequired": true,
+   "queries": [
+    {
+     "platform": "bing",
+     "query": "OWASP Top 10 2021 防护措施 后端 实践",
+     "purpose": "Web 十大风险"
+    },
+    {
+     "platform": "bing",
+     "query": "OWASP API Security Top 10 2023 BOLA 越权 防护",
+     "purpose": "接口十大风险"
+    },
+    {
+     "platform": "csdn",
+     "query": "后端接口安全 越权 IDOR 防重放 签名 限流 实践",
+     "purpose": "接口防护"
+    },
+    {
+     "platform": "juejin",
+     "query": "SQL注入 XSS CSRF SSRF 防护 后端 总结",
+     "purpose": "注入与跨站"
+    },
+    {
+     "platform": "github",
+     "query": "fastapi security best practices",
+     "purpose": "开源实践"
+    },
+    {
+     "platform": "zhihu",
+     "query": "后台系统 被攻击 漏洞 经验 教训",
+     "purpose": "事故经验"
+    }
+   ],
+   "officialUrls": [
+    {
+     "url": "https://top10.owasp.org/2025",
+     "title": "OWASP Top 10"
+    },
+    {
+     "url": "https://api-security.owasp.org/editions/2023/en/0x11-t10",
+     "title": "OWASP API Security Top 10 2023"
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html",
+     "title": "REST Security Cheat Sheet"
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html",
+     "title": "Input Validation Cheat Sheet"
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html",
+     "title": "CSRF Prevention Cheat Sheet"
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html",
+     "title": "SSRF Prevention Cheat Sheet"
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html",
+     "title": "File Upload Cheat Sheet"
+    }
+   ]
+  },
+  "admin-security": {
+   "name": "后台登录、会话与操作安全",
+   "modes": [
+    "implementation",
+    "operations",
+    "analysis",
+    "review"
+   ],
+   "officialRequired": true,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "管理后台 登录安全 图形验证码 登录失败锁定 双因素认证",
+     "purpose": "后台登录"
+    },
+    {
+     "platform": "juejin",
+     "query": "JWT 刷新令牌 退出登录 令牌吊销 黑名单 实践",
+     "purpose": "会话与令牌"
+    },
+    {
+     "platform": "bing",
+     "query": "管理后台 IP 白名单 敏感操作 二次验证 操作审计 设计",
+     "purpose": "敏感操作"
+    },
+    {
+     "platform": "cnblogs",
+     "query": "密码存储 bcrypt argon2 加盐 迁移",
+     "purpose": "密码存储"
+    }
+   ],
+   "officialUrls": [
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+     "title": "Authentication Cheat Sheet"
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html",
+     "title": "Session Management Cheat Sheet"
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html",
+     "title": "Password Storage Cheat Sheet"
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html",
+     "title": "Multifactor Authentication Cheat Sheet"
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html",
+     "title": "Authorization Cheat Sheet"
+    }
+   ]
+  },
+  "http-hardening": {
+   "name": "HTTPS 与 Web 服务器加固",
+   "modes": [
+    "implementation",
+    "operations",
+    "analysis"
+   ],
+   "officialRequired": true,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "Nginx 安全配置 隐藏版本号 limit_req 限流 安全响应头",
+     "purpose": "Nginx 加固"
+    },
+    {
+     "platform": "bing",
+     "query": "Let's Encrypt certbot 自动续期 nginx 证书 到期 监控",
+     "purpose": "证书续期"
+    },
+    {
+     "platform": "cnblogs",
+     "query": "HSTS CSP X-Frame-Options 配置 实践",
+     "purpose": "安全响应头"
+    }
+   ],
+   "officialUrls": [
+    {
+     "url": "https://ssl-config.mozilla.org/",
+     "title": "Mozilla SSL Configuration Generator"
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Headers_Cheat_Sheet.html",
+     "title": "HTTP Security Response Headers Cheat Sheet"
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html",
+     "title": "Transport Layer Security Cheat Sheet"
+    },
+    {
+     "url": "https://nginx.org/en/docs/http/ngx_http_limit_req_module.html",
+     "title": "nginx limit_req module"
+    }
+   ]
+  },
+  "container-deploy": {
+   "name": "容器化部署、CI/CD 与发布回滚",
+   "modes": [
+    "implementation",
+    "operations",
+    "analysis"
+   ],
+   "officialRequired": true,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "Docker 生产部署 非root 用户 镜像瘦身 镜像漏洞扫描",
+     "purpose": "镜像与容器"
+    },
+    {
+     "platform": "juejin",
+     "query": "小团队 灰度发布 蓝绿发布 回滚 实践",
+     "purpose": "发布策略"
+    },
+    {
+     "platform": "github",
+     "query": "fastapi postgres docker compose production template",
+     "purpose": "开源部署模板"
+    },
+    {
+     "platform": "bing",
+     "query": "数据库迁移 零停机 发布 先兼容后切换 expand contract",
+     "purpose": "零停机迁移"
+    },
+    {
+     "platform": "cnblogs",
+     "query": "GitHub Actions GitLab CI 自动部署 服务器 密钥 安全",
+     "purpose": "流水线"
+    }
+   ],
+   "officialUrls": [
+    {
+     "url": "https://docs.docker.com/engine/security/",
+     "title": "Docker Engine security"
+    },
+    {
+     "url": "https://docs.docker.com/build/building/best-practices/",
+     "title": "Docker build best practices"
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html",
+     "title": "Docker Security Cheat Sheet"
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/CI_CD_Security_Cheat_Sheet.html",
+     "title": "CI/CD Security Cheat Sheet"
+    }
+   ]
+  },
+  "host-security": {
+   "name": "云服务器与网络安全",
+   "modes": [
+    "implementation",
+    "operations",
+    "analysis"
+   ],
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "bing",
+     "query": "云服务器 安全加固 SSH 密钥登录 禁用 root 安全组 最小开放 site:cloud.tencent.com",
+     "purpose": "主机加固"
+    },
+    {
+     "platform": "csdn",
+     "query": "Linux 服务器 安全加固 fail2ban 防火墙 自动安全更新",
+     "purpose": "系统加固"
+    },
+    {
+     "platform": "bing",
+     "query": "WAF DDoS 防护 接入 小程序 后端 源站隐藏",
+     "purpose": "WAF 与 DDoS"
+    },
+    {
+     "platform": "zhihu",
+     "query": "服务器 被入侵 挖矿 勒索 经验 教训",
+     "purpose": "入侵事故"
+    }
+   ],
+   "officialUrls": []
+  },
+  "observability": {
+   "name": "监控、日志与告警",
+   "modes": [
+    "implementation",
+    "operations",
+    "analysis"
+   ],
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "juejin",
+     "query": "Prometheus Grafana 告警 规则 实践 后端 接口 错误率",
+     "purpose": "指标与告警"
+    },
+    {
+     "platform": "csdn",
+     "query": "结构化日志 链路追踪 request_id 日志脱敏 实践",
+     "purpose": "日志"
+    },
+    {
+     "platform": "bing",
+     "query": "SLO 错误预算 告警 疲劳 值班 小团队",
+     "purpose": "告警策略"
+    }
+   ],
+   "officialUrls": [
+    {
+     "url": "https://prometheus.io/docs/practices/alerting/",
+     "title": "Prometheus alerting practices"
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html",
+     "title": "Logging Cheat Sheet"
+    },
+    {
+     "url": "https://opentelemetry.io/docs/concepts/",
+     "title": "OpenTelemetry concepts"
+    }
+   ]
+  },
+  "backup-dr": {
+   "name": "备份、恢复与容灾",
+   "modes": [
+    "implementation",
+    "operations",
+    "analysis"
+   ],
+   "officialRequired": true,
+   "queries": [
+    {
+     "platform": "cnblogs",
+     "query": "PostgreSQL 时间点恢复 PITR WAL 归档 备份 实践",
+     "purpose": "数据库备份"
+    },
+    {
+     "platform": "csdn",
+     "query": "数据库 备份 恢复演练 异地备份 RPO RTO",
+     "purpose": "恢复演练"
+    },
+    {
+     "platform": "juejin",
+     "query": "Redis 持久化 AOF RDB 生产 选型",
+     "purpose": "缓存持久化"
+    }
+   ],
+   "officialUrls": [
+    {
+     "url": "https://www.postgresql.org/docs/current/continuous-archiving.html",
+     "title": "PostgreSQL continuous archiving and PITR"
+    },
+    {
+     "url": "https://www.postgresql.org/docs/current/backup-dump.html",
+     "title": "PostgreSQL SQL dump"
+    },
+    {
+     "url": "https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/",
+     "title": "Redis persistence"
+    }
+   ]
+  },
+  "secrets-supply-chain": {
+   "name": "密钥管理与依赖安全",
+   "modes": [
+    "implementation",
+    "operations",
+    "analysis",
+    "review"
+   ],
+   "officialRequired": true,
+   "queries": [
+    {
+     "platform": "csdn",
+     "query": "密钥 证书 存放 环境变量 KMS 轮换 泄露 处理",
+     "purpose": "密钥管理"
+    },
+    {
+     "platform": "juejin",
+     "query": "pip-audit npm audit 依赖漏洞 CI 自动扫描",
+     "purpose": "依赖漏洞"
+    },
+    {
+     "platform": "bing",
+     "query": "GitHub 密钥泄露 扫描 gitleaks 提交前检查",
+     "purpose": "泄露防护"
+    }
+   ],
+   "officialUrls": [
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html",
+     "title": "Secrets Management Cheat Sheet"
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Vulnerable_Dependency_Management_Cheat_Sheet.html",
+     "title": "Vulnerable Dependency Management Cheat Sheet"
+    }
+   ]
+  },
+  "data-protection": {
+   "name": "数据安全、个人信息保护与等级保护",
+   "modes": [
+    "implementation",
+    "operations",
+    "analysis"
+   ],
+   "officialRequired": false,
+   "queries": [
+    {
+     "platform": "google",
+     "query": "网络安全等级保护 二级 三级 技术要求 GB/T 22239-2019 清单",
+     "purpose": "等级保护"
+    },
+    {
+     "platform": "bing",
+     "query": "个人信息保护法 第五十一条 加密 去标识化 安全措施",
+     "purpose": "个人信息保护"
+    },
+    {
+     "platform": "csdn",
+     "query": "敏感数据 加密存储 手机号 身份证 数据库 脱敏 方案",
+     "purpose": "敏感数据"
+    },
+    {
+     "platform": "bing",
+     "query": "网络数据安全管理条例 2024 企业 义务",
+     "purpose": "数据安全条例"
+    }
+   ],
+   "officialUrls": []
+  }
+ }
+}

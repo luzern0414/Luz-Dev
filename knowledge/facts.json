@@ -1,0 +1,444 @@
+{
+  "schema": "luz-dev-knowledge-facts/1",
+  "facts": [
+    {
+      "id": "KF-0001",
+      "kind": "platform",
+      "topic": "微信支付回调应答",
+      "statement": "收到支付回调后 5 秒内完成验签并应答：成功返回 HTTP 200 或 204 且无应答体；失败返回 4XX/5XX 与 {\"code\":\"FAIL\",\"message\":…}。",
+      "modules": [
+        "payment"
+      ],
+      "sources": [
+        "KS-0043",
+        "KS-0007"
+      ],
+      "checkedAt": "2026-10-26T17:00:00+08:00",
+      "status": "active",
+      "usedBy": [
+        "PAY-009"
+      ]
+    },
+    {
+      "id": "KF-0002",
+      "kind": "platform",
+      "topic": "微信支付回调重发",
+      "statement": "未应答或应答失败时按 15s/15s/30s/3m/10m/20m/30m/30m/30m/60m/3h/3h/3h/6h/6h 重发，最多 15 次；商户不能仅依赖回调，需结合查单。",
+      "modules": [
+        "payment"
+      ],
+      "sources": [
+        "KS-0043",
+        "KS-0007"
+      ],
+      "checkedAt": "2026-10-26T17:00:00+08:00",
+      "status": "active",
+      "usedBy": [
+        "PAY-009",
+        "PAY-010"
+      ]
+    },
+    {
+      "id": "KF-0003",
+      "kind": "platform",
+      "topic": "微信支付签名探测",
+      "statement": "Wechatpay-Signature 以 WECHATPAY/SIGNTEST/ 开头的是签名探测流量，商户必须验签失败并按失败应答。",
+      "modules": [
+        "payment",
+        "refund"
+      ],
+      "sources": [
+        "KS-0043",
+        "KS-0008"
+      ],
+      "checkedAt": "2026-10-26T17:00:00+08:00",
+      "status": "active",
+      "usedBy": [
+        "PAY-006"
+      ]
+    },
+    {
+      "id": "KF-0004",
+      "kind": "platform",
+      "topic": "微信支付验签公钥选择",
+      "statement": "Wechatpay-Serial 以 PUB_KEY_ID_ 开头时用微信支付公钥验签，否则用平台证书；验签串为 时间戳\\n随机串\\n原始报文\\n。",
+      "modules": [
+        "payment",
+        "refund"
+      ],
+      "sources": [
+        "KS-0043"
+      ],
+      "checkedAt": "2026-10-26T17:00:00+08:00",
+      "status": "active",
+      "usedBy": [
+        "PAY-005"
+      ]
+    },
+    {
+      "id": "KF-0005",
+      "kind": "platform",
+      "topic": "微信支付回调解密",
+      "statement": "回调 resource 使用 AEAD_AES_256_GCM，APIv3 密钥 32 字节，配合 nonce 与 associated_data 解密 Base64 密文。",
+      "modules": [
+        "payment",
+        "refund"
+      ],
+      "sources": [
+        "KS-0044"
+      ],
+      "checkedAt": "2026-10-26T17:00:00+08:00",
+      "status": "active",
+      "usedBy": [
+        "PAY-007"
+      ]
+    },
+    {
+      "id": "KF-0006",
+      "kind": "platform",
+      "topic": "JSAPI 下单约束",
+      "statement": "out_trade_no 6–32 位（数字、大小写字母、_-|*）且商户号下唯一；amount.total 为大于 0 的整数分；time_expire 不早于下单后 1 分钟、不晚于 15 天，不传则 7 天后无法支付；prepay_id 有效 2 小时。",
+      "modules": [
+        "payment",
+        "order"
+      ],
+      "sources": [
+        "KS-0042"
+      ],
+      "checkedAt": "2026-10-26T17:00:00+08:00",
+      "status": "active",
+      "usedBy": [
+        "PAY-002"
+      ]
+    },
+    {
+      "id": "KF-0007",
+      "kind": "platform",
+      "topic": "prepay_id 过期处理",
+      "statement": "prepay_id 超过 2 小时失效后，用原下单参数重新请求下单获取新 prepay_id；超过 time_expire 后先关单再换新的商户订单号。",
+      "modules": [
+        "payment"
+      ],
+      "sources": [
+        "KS-0002",
+        "KS-0042"
+      ],
+      "checkedAt": "2026-10-26T17:00:00+08:00",
+      "status": "active",
+      "usedBy": [
+        "PAY-003"
+      ]
+    },
+    {
+      "id": "KF-0008",
+      "kind": "platform",
+      "topic": "小程序支付官方流程",
+      "statement": "wx.requestPayment 返回（完成或取消）后，商户应调用查询订单确认状态再展示结果；下单按钮需防抖避免重复支付。",
+      "modules": [
+        "payment"
+      ],
+      "sources": [
+        "KS-0002"
+      ],
+      "checkedAt": "2026-10-26T17:00:00+08:00",
+      "status": "active",
+      "usedBy": [
+        "PAY-001"
+      ]
+    },
+    {
+      "id": "KF-0009",
+      "kind": "platform",
+      "topic": "交易类小程序发货管理",
+      "statement": "交易类小程序需符合《交易类小程序运营规范》并接入订单发货管理功能，否则可能被限制在正式环境调起支付。",
+      "modules": [
+        "payment",
+        "deploy",
+        "compliance"
+      ],
+      "sources": [
+        "KS-0002"
+      ],
+      "checkedAt": "2026-10-26T17:00:00+08:00",
+      "status": "active",
+      "usedBy": [
+        "MP-005"
+      ]
+    },
+    {
+      "id": "KF-0010",
+      "kind": "platform",
+      "topic": "微信支付订单状态流转",
+      "statement": "NOTPAY → SUCCESS（支付成功）或 CLOSED（7 天内关单或超 7 天自动关单）；SUCCESS → REFUND（1 年内申请退款）；CLOSED、SUCCESS、REFUND 为终态；用户支付失败时状态仍为 NOTPAY。",
+      "modules": [
+        "payment"
+      ],
+      "sources": [
+        "KS-0002",
+        "KS-0043"
+      ],
+      "checkedAt": "2026-10-26T17:00:00+08:00",
+      "status": "active",
+      "usedBy": [
+        "PAY-011"
+      ]
+    },
+    {
+      "id": "KF-0011",
+      "kind": "platform",
+      "topic": "关闭订单接口",
+      "statement": "POST /v3/pay/transactions/out-trade-no/{out_trade_no}/close，成功返回 204 无应答体；用于用户取消或超时未支付。",
+      "modules": [
+        "payment",
+        "order"
+      ],
+      "sources": [
+        "KS-0047",
+        "KS-0006"
+      ],
+      "checkedAt": "2026-10-26T17:00:00+08:00",
+      "status": "active",
+      "usedBy": [
+        "ORDER-004"
+      ]
+    },
+    {
+      "id": "KF-0012",
+      "kind": "platform",
+      "topic": "微信支付退款规则",
+      "statement": "支付成功 365 天内可退款；一笔订单最多 50 次部分退款，多次部分退款需换退款单号并间隔 1 分钟；申请失败重试必须沿用原退款单号；申请成功仅代表受理。",
+      "modules": [
+        "refund"
+      ],
+      "sources": [
+        "KS-0057",
+        "KS-0011"
+      ],
+      "checkedAt": "2026-10-26T17:00:00+08:00",
+      "status": "active",
+      "usedBy": [
+        "RFD-002",
+        "RFD-003"
+      ]
+    },
+    {
+      "id": "KF-0013",
+      "kind": "platform",
+      "topic": "微信支付退款状态与查询",
+      "statement": "退款状态 SUCCESS / CLOSED / PROCESSING / ABNORMAL（原路退回银行卡失败需人工或异常退款）；建议每 1 分钟查询，5 分钟后衰减；零钱一般 5 分钟内到账，银行卡 1–3 个工作日。",
+      "modules": [
+        "refund"
+      ],
+      "sources": [
+        "KS-0057",
+        "KS-0067"
+      ],
+      "checkedAt": "2026-10-26T17:00:00+08:00",
+      "status": "active",
+      "usedBy": [
+        "RFD-003"
+      ]
+    },
+    {
+      "id": "KF-0014",
+      "kind": "platform",
+      "topic": "微信支付账单",
+      "statement": "交易账单次日 9 点开始生成、10 点后获取，只含支付成功订单、只能下载三个月内；金额单位为元；download_url 5 分钟有效，下载后核对 SHA1。",
+      "modules": [
+        "reconcile"
+      ],
+      "sources": [
+        "KS-0069",
+        "KS-0070",
+        "KS-0071"
+      ],
+      "checkedAt": "2026-10-26T17:00:00+08:00",
+      "status": "active",
+      "usedBy": [
+        "RFD-005"
+      ]
+    },
+    {
+      "id": "KF-0015",
+      "kind": "law",
+      "topic": "人脸识别：单独同意与替代方式",
+      "statement": "处理人脸需告知处理者、目的、方式、保存期限、必要性与影响并取得单独同意，可便捷撤回；有其他方式时不得把人脸作为唯一验证方式；不满 14 周岁需监护人同意。",
+      "modules": [
+        "face",
+        "legal"
+      ],
+      "sources": [
+        "KS-0063"
+      ],
+      "checkedAt": "2026-10-26T17:00:00+08:00",
+      "status": "active",
+      "usedBy": [
+        "FACE-001",
+        "FACE-002"
+      ]
+    },
+    {
+      "id": "KF-0016",
+      "kind": "law",
+      "topic": "人脸识别：存储与备案",
+      "statement": "除法律另有规定或单独同意外，人脸信息存储于人脸识别设备内，不得通过互联网对外传输；事前做影响评估，报告保存至少 3 年；存储达 10 万人起 30 个工作日内向省级网信部门备案。",
+      "modules": [
+        "face",
+        "compliance"
+      ],
+      "sources": [
+        "KS-0063"
+      ],
+      "checkedAt": "2026-10-26T17:00:00+08:00",
+      "status": "active",
+      "usedBy": [
+        "FACE-003",
+        "FACE-004"
+      ]
+    },
+    {
+      "id": "KF-0017",
+      "kind": "law",
+      "topic": "人脸识别：私密空间",
+      "statement": "不得在宾馆客房、公共浴室、公共更衣室、公共卫生间等私密空间内部安装人脸识别设备；公共场所安装需设置显著提示。办法自 2025-06-01 施行。",
+      "modules": [
+        "face",
+        "compliance"
+      ],
+      "sources": [
+        "KS-0063"
+      ],
+      "checkedAt": "2026-10-26T17:00:00+08:00",
+      "status": "active",
+      "usedBy": [
+        "FACE-006"
+      ]
+    },
+    {
+      "id": "KF-0018",
+      "kind": "law",
+      "topic": "个人信息保护法：敏感个人信息",
+      "statement": "生物识别、金融账户、行踪轨迹及不满 14 周岁未成年人信息为敏感个人信息；处理需单独同意（第二十九条）；不满 14 周岁需监护人同意并制定专门规则（第三十一条）。",
+      "modules": [
+        "face",
+        "legal",
+        "privacy"
+      ],
+      "sources": [
+        "KS-0056"
+      ],
+      "checkedAt": "2026-10-26T17:00:00+08:00",
+      "status": "active",
+      "usedBy": [
+        "FACE-002",
+        "LEGAL-001"
+      ]
+    },
+    {
+      "id": "KF-0019",
+      "kind": "law",
+      "topic": "个人信息保护法：删除与影响评估",
+      "statement": "目的已实现、停止服务、撤回同意等情形应主动删除（第四十七条）；处理敏感个人信息前进行影响评估，报告与处理记录至少保存三年（第五十五、五十六条）。",
+      "modules": [
+        "privacy",
+        "legal",
+        "face"
+      ],
+      "sources": [
+        "KS-0056"
+      ],
+      "checkedAt": "2026-10-26T17:00:00+08:00",
+      "status": "active",
+      "usedBy": [
+        "PII-004",
+        "FACE-004"
+      ]
+    },
+    {
+      "id": "KF-0020",
+      "kind": "law",
+      "topic": "健身预付费示范合同（北京 2022）",
+      "statement": "付费 7 日内未开卡可要求全额退费，商家 5 日内一次性原路退回；因重大疾病等无法继续可解除合同，扣除已消费后退还余额；转让规则由合同约定。",
+      "modules": [
+        "recharge",
+        "legal"
+      ],
+      "sources": [
+        "KS-0064"
+      ],
+      "checkedAt": "2026-10-26T17:00:00+08:00",
+      "status": "active",
+      "usedBy": [
+        "MBR-002"
+      ]
+    },
+    {
+      "id": "KF-0021",
+      "kind": "law",
+      "topic": "规范促销行为暂行规定：抽奖",
+      "statement": "有奖销售前公布奖项、条件、开奖方式、奖品价值或概率等信息且不得变更（有利于消费者除外）；抽奖式有奖销售最高奖不超过 5 万元；不得内定中奖。",
+      "modules": [
+        "lottery",
+        "legal"
+      ],
+      "sources": [
+        "KS-0038"
+      ],
+      "checkedAt": "2026-10-26T17:00:00+08:00",
+      "status": "active",
+      "usedBy": [
+        "MKT-004"
+      ]
+    },
+    {
+      "id": "KF-0022",
+      "kind": "platform",
+      "topic": "小程序隐私协议",
+      "statement": "使用涉及用户隐私的接口前需在小程序后台填写用户隐私保护指引，并按官方隐私协议开发指南处理用户同意。",
+      "modules": [
+        "privacy",
+        "legal"
+      ],
+      "sources": [
+        "KS-0053"
+      ],
+      "checkedAt": "2026-10-26T17:00:00+08:00",
+      "status": "active",
+      "usedBy": [
+        "PII-003"
+      ]
+    },
+    {
+      "id": "KF-0023",
+      "kind": "platform",
+      "topic": "小程序登录",
+      "statement": "前端 wx.login 取得 code 交给后端，后端调用 code2Session 换取 openid 与 session_key；session_key 不下发前端。",
+      "modules": [
+        "login"
+      ],
+      "sources": [
+        "KS-0014"
+      ],
+      "checkedAt": "2026-10-26T17:00:00+08:00",
+      "status": "active",
+      "usedBy": [
+        "AUTH-003"
+      ]
+    },
+    {
+      "id": "KF-0024",
+      "kind": "practice",
+      "topic": "Luz-Crawl 站点预算",
+      "statement": "Luz-Crawl 每站 10 分钟最多 40 次请求（图片计入），超限冷却 10 分钟；站内检索无结果时回退到 Bing site: 检索，各站共享 Bing 预算；官方文档优先直读（微信支付有 .md 与 llms.txt）。",
+      "modules": [
+        "system"
+      ],
+      "sources": [
+        "KS-0001"
+      ],
+      "checkedAt": "2026-10-26T17:00:00+08:00",
+      "status": "active",
+      "usedBy": []
+    }
+  ]
+}

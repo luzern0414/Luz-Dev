@@ -1,0 +1,364 @@
+{
+  "id": "lottery",
+  "order": 65,
+  "name": "抽奖",
+  "modules": [
+    "lottery"
+  ],
+  "summary": "活动配置奖品、概率与库存，服务端随机决定结果；奖品库存条件扣减，抽中优惠券直接发放；规则与概率对会员公示。",
+  "features": [
+    {
+      "name": "活动配置",
+      "description": "活动时间、适用门店、参与条件（如持有有效卡）、每人每日次数。"
+    },
+    {
+      "name": "奖品与概率",
+      "description": "奖品类型（优惠券、谢谢参与）、库存、中奖概率（万分比），概率合计为 10000。"
+    },
+    {
+      "name": "抽奖",
+      "description": "服务端安全随机数决定结果；库存不足时降为谢谢参与。"
+    },
+    {
+      "name": "中奖记录",
+      "description": "会员查看自己的中奖记录，奖品券进入我的优惠券。"
+    }
+  ],
+  "flows": [
+    {
+      "name": "抽奖",
+      "steps": [
+        "会员点击抽奖，调用 `POST /api/v1/app/lottery/{activity_id}/draw`，携带 request_id。",
+        "校验活动进行中、会员满足参与条件、当日次数未用完（lottery_draws 当日计数）。",
+        "用安全随机数在 0–9999 之间取值，按奖品概率区间选中奖品。",
+        "条件更新奖品 issued = issued + 1 WHERE issued < stock；失败则结果改为谢谢参与。",
+        "中奖为优惠券时同一事务发券；写 lottery_draws，返回结果供前端播放动画。"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "page": "活动编辑页（后台）",
+      "field": "rule",
+      "label": "参与规则",
+      "type": "表单",
+      "required": true,
+      "rule": "每人每日次数 1–10、参与条件。"
+    },
+    {
+      "page": "活动编辑页（后台）",
+      "field": "prizes",
+      "label": "奖品",
+      "type": "表格",
+      "required": true,
+      "rule": "每项类型、券模板、库存、概率；概率合计 10000。"
+    },
+    {
+      "page": "活动编辑页（后台）",
+      "field": "rule_text",
+      "label": "规则公示",
+      "type": "富文本",
+      "required": true,
+      "rule": "写明活动时间、奖品、概率与兑奖方式。"
+    }
+  ],
+  "apis": [
+    {
+      "method": "GET",
+      "path": "/api/v1/app/lottery/{activity_id}",
+      "caller": "小程序",
+      "purpose": "活动信息",
+      "request": "无",
+      "response": "活动规则、奖品列表（含概率公示）、今日剩余次数",
+      "errors": "NOT_FOUND"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/app/lottery/{activity_id}/draw",
+      "caller": "小程序",
+      "purpose": "抽奖",
+      "request": "request_id",
+      "response": "result（won、none），prize{name，type}，coupon_id，remaining_today",
+      "errors": "ACTIVITY_NOT_ACTIVE，NO_CHANCE_LEFT，NOT_ELIGIBLE，RATE_LIMITED"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/app/me/lottery-draws",
+      "caller": "小程序",
+      "purpose": "我的中奖记录",
+      "request": "cursor",
+      "response": "记录列表",
+      "errors": "—"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/lottery-activities",
+      "caller": "后台",
+      "purpose": "创建活动",
+      "request": "活动与奖品",
+      "response": "activity_id",
+      "errors": "PROBABILITY_SUM_INVALID"
+    }
+  ],
+  "results": [
+    {
+      "case": "中奖",
+      "page": "抽奖页",
+      "display": "动画停在奖品上，弹出中奖卡片与「去使用」按钮。"
+    },
+    {
+      "case": "未中奖",
+      "page": "抽奖页",
+      "display": "显示「谢谢参与」与今日剩余次数。"
+    },
+    {
+      "case": "次数用完",
+      "page": "抽奖页",
+      "display": "抽奖按钮置灰，显示明日再来。"
+    }
+  ],
+  "writes": [
+    {
+      "when": "抽奖",
+      "table": "lottery_draws",
+      "content": "活动、会员、日期、序号、结果、奖品、发放的券。"
+    },
+    {
+      "when": "抽中",
+      "table": "lottery_prizes、coupons",
+      "content": "奖品已发数量；新券。"
+    }
+  ],
+  "tables": [
+    {
+      "name": "lottery_activities",
+      "label": "抽奖活动",
+      "purpose": "活动规则",
+      "fields": [
+        {
+          "name": "name",
+          "type": "VARCHAR(40)",
+          "required": true,
+          "default": "—",
+          "comment": "活动名称"
+        },
+        {
+          "name": "store_scope",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "all",
+          "comment": "all、list"
+        },
+        {
+          "name": "store_ids",
+          "type": "BIGINT[]",
+          "required": false,
+          "default": "—",
+          "comment": "适用门店"
+        },
+        {
+          "name": "starts_at",
+          "type": "TIMESTAMPTZ",
+          "required": true,
+          "default": "—",
+          "comment": "开始时间"
+        },
+        {
+          "name": "ends_at",
+          "type": "TIMESTAMPTZ",
+          "required": true,
+          "default": "—",
+          "comment": "结束时间"
+        },
+        {
+          "name": "daily_chances",
+          "type": "SMALLINT",
+          "required": true,
+          "default": "1",
+          "comment": "每人每日次数"
+        },
+        {
+          "name": "eligibility",
+          "type": "JSONB",
+          "required": false,
+          "default": "—",
+          "comment": "参与条件"
+        },
+        {
+          "name": "rule_text",
+          "type": "TEXT",
+          "required": true,
+          "default": "—",
+          "comment": "公示规则"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "draft",
+          "comment": "draft、active、ended"
+        }
+      ],
+      "indexes": [
+        "INDEX(status, starts_at)"
+      ]
+    },
+    {
+      "name": "lottery_prizes",
+      "label": "奖品",
+      "purpose": "奖品、库存与概率",
+      "fields": [
+        {
+          "name": "activity_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "活动"
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(40)",
+          "required": true,
+          "default": "—",
+          "comment": "奖品名称"
+        },
+        {
+          "name": "type",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "coupon、none"
+        },
+        {
+          "name": "coupon_template_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "奖品券模板"
+        },
+        {
+          "name": "stock",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "库存"
+        },
+        {
+          "name": "issued",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "已发放"
+        },
+        {
+          "name": "probability_bp",
+          "type": "INTEGER",
+          "required": true,
+          "default": "—",
+          "comment": "中奖概率（万分比）"
+        },
+        {
+          "name": "sort",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "排序"
+        }
+      ],
+      "indexes": [
+        "CHECK(issued <= stock)",
+        "INDEX(activity_id)"
+      ]
+    },
+    {
+      "name": "lottery_draws",
+      "label": "抽奖记录",
+      "purpose": "每次抽奖结果",
+      "fields": [
+        {
+          "name": "activity_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "活动"
+        },
+        {
+          "name": "member_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "会员"
+        },
+        {
+          "name": "draw_date",
+          "type": "DATE",
+          "required": true,
+          "default": "—",
+          "comment": "抽奖日期"
+        },
+        {
+          "name": "request_id",
+          "type": "VARCHAR(64)",
+          "required": true,
+          "default": "—",
+          "comment": "前端请求编号，防重复"
+        },
+        {
+          "name": "prize_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "奖品"
+        },
+        {
+          "name": "result",
+          "type": "VARCHAR(8)",
+          "required": true,
+          "default": "—",
+          "comment": "won、none"
+        },
+        {
+          "name": "coupon_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "发放的券"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(member_id, request_id)",
+        "INDEX(activity_id, member_id, draw_date)"
+      ]
+    }
+  ],
+  "states": [
+    {
+      "entity": "活动",
+      "from": "draft",
+      "event": "发布",
+      "to": "active",
+      "condition": "概率合计 10000，奖品库存已配置"
+    },
+    {
+      "entity": "活动",
+      "from": "active",
+      "event": "到达结束时间或手动结束",
+      "to": "ended",
+      "condition": "—"
+    }
+  ],
+  "exceptions": [
+    {
+      "case": "脚本刷抽奖",
+      "handling": "按会员与 IP 限流；request_id 唯一；参与条件在服务端校验。"
+    },
+    {
+      "case": "奖品库存耗尽",
+      "handling": "条件更新失败即改为谢谢参与，不超发。"
+    },
+    {
+      "case": "活动规则与概率公示",
+      "handling": "规则文本必须列出奖品、数量与概率，活动开始后不可修改概率。"
+    }
+  ]
+}

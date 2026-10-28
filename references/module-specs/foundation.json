@@ -1,0 +1,385 @@
+{
+  "id": "foundation",
+  "order": 99,
+  "name": "通用基础：幂等、事件、审计与任务",
+  "modules": [
+    "consistency",
+    "jobs"
+  ],
+  "userFacing": false,
+  "summary": "所有模块共用的可靠性设施：写接口幂等、事务内发件箱、消费去重、操作审计与定时任务清单。",
+  "features": [
+    {
+      "name": "接口幂等",
+      "description": "写接口携带 Idempotency-Key，同一会员同一键 24 小时内返回第一次的结果。"
+    },
+    {
+      "name": "事务发件箱",
+      "description": "业务数据与待发布事件在同一事务写入，任务进程投递，保证不丢事件。"
+    },
+    {
+      "name": "消费去重",
+      "description": "每个消费者按事件编号记录处理结果，重复投递直接跳过。"
+    },
+    {
+      "name": "操作审计",
+      "description": "后台写操作、敏感读取与安全事件写审计，只追加。"
+    },
+    {
+      "name": "定时任务",
+      "description": "关单、查单、离场、过期、对账、日报等任务集中登记，带运行记录与告警。"
+    }
+  ],
+  "flows": [
+    {
+      "name": "幂等请求",
+      "steps": [
+        "中间件按（调用方、Idempotency-Key）插入 idempotency_records，状态 processing。",
+        "插入冲突且已完成：直接返回保存的响应；仍在处理：返回 REQUEST_IN_PROGRESS。",
+        "业务完成后保存响应码与响应体；请求参数摘要不同则返回 IDEMPOTENCY_KEY_REUSED。"
+      ]
+    },
+    {
+      "name": "事件投递",
+      "steps": [
+        "任务进程每秒取未投递的 outbox_events（FOR UPDATE SKIP LOCKED），调用各消费者。",
+        "消费者在自己的事务里先写 processed_events，再处理业务；全部成功后事件标记已投递。",
+        "失败按退避重试，超过 10 次进入死信并告警。"
+      ]
+    }
+  ],
+  "apis": [
+    {
+      "method": "TASK",
+      "path": "order.close_expired",
+      "caller": "任务进程",
+      "purpose": "关闭超时未支付订单（先查单）",
+      "request": "每分钟",
+      "response": "订单关闭，释放券与名额",
+      "errors": "—"
+    },
+    {
+      "method": "TASK",
+      "path": "payment.query_pending",
+      "caller": "任务进程",
+      "purpose": "主动查询支付中的单",
+      "request": "每分钟",
+      "response": "补齐支付成功",
+      "errors": "—"
+    },
+    {
+      "method": "TASK",
+      "path": "refund.query_processing",
+      "caller": "任务进程",
+      "purpose": "查询退款中的单",
+      "request": "每 5 分钟",
+      "response": "退款完成或异常",
+      "errors": "—"
+    },
+    {
+      "method": "TASK",
+      "path": "presence.close_overdue",
+      "caller": "任务进程",
+      "purpose": "处理超时未离场",
+      "request": "每 5 分钟",
+      "response": "异常离场与告警",
+      "errors": "—"
+    },
+    {
+      "method": "TASK",
+      "path": "card.expire",
+      "caller": "任务进程",
+      "purpose": "会员卡与优惠券过期",
+      "request": "每日 00:10",
+      "response": "状态改为已过期",
+      "errors": "—"
+    },
+    {
+      "method": "TASK",
+      "path": "outbox.dispatch",
+      "caller": "任务进程",
+      "purpose": "投递发件箱事件",
+      "request": "每秒",
+      "response": "事件投递",
+      "errors": "—"
+    },
+    {
+      "method": "TASK",
+      "path": "payment.reconcile",
+      "caller": "任务进程",
+      "purpose": "下载微信支付账单对账",
+      "request": "每日 10:00",
+      "response": "差异记录与告警",
+      "errors": "—"
+    }
+  ],
+  "writes": [
+    {
+      "when": "写接口",
+      "table": "idempotency_records",
+      "content": "调用方、键、请求摘要、响应。"
+    },
+    {
+      "when": "业务事务内",
+      "table": "outbox_events",
+      "content": "事件类型、聚合编号、内容。"
+    },
+    {
+      "when": "消费事件",
+      "table": "processed_events",
+      "content": "消费者、事件编号。"
+    },
+    {
+      "when": "后台写操作与安全事件",
+      "table": "audit_logs",
+      "content": "操作者、动作、对象、变更前后、IP。"
+    }
+  ],
+  "tables": [
+    {
+      "name": "idempotency_records",
+      "label": "幂等记录",
+      "purpose": "写接口的重复请求保护",
+      "fields": [
+        {
+          "name": "scope",
+          "type": "VARCHAR(64)",
+          "required": true,
+          "default": "—",
+          "comment": "调用方，如 member:123"
+        },
+        {
+          "name": "idem_key",
+          "type": "VARCHAR(64)",
+          "required": true,
+          "default": "—",
+          "comment": "Idempotency-Key"
+        },
+        {
+          "name": "request_digest",
+          "type": "CHAR(64)",
+          "required": true,
+          "default": "—",
+          "comment": "请求参数摘要"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "processing",
+          "comment": "processing、done"
+        },
+        {
+          "name": "response_code",
+          "type": "INTEGER",
+          "required": false,
+          "default": "—",
+          "comment": "响应状态码"
+        },
+        {
+          "name": "response_body",
+          "type": "JSONB",
+          "required": false,
+          "default": "—",
+          "comment": "响应体"
+        },
+        {
+          "name": "expires_at",
+          "type": "TIMESTAMPTZ",
+          "required": true,
+          "default": "—",
+          "comment": "过期时间（24 小时）"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(scope, idem_key)"
+      ]
+    },
+    {
+      "name": "outbox_events",
+      "label": "发件箱",
+      "purpose": "与业务同事务写入的事件",
+      "fields": [
+        {
+          "name": "event_id",
+          "type": "UUID",
+          "required": true,
+          "default": "—",
+          "comment": "事件编号"
+        },
+        {
+          "name": "event_type",
+          "type": "VARCHAR(64)",
+          "required": true,
+          "default": "—",
+          "comment": "如 payment.succeeded"
+        },
+        {
+          "name": "aggregate_type",
+          "type": "VARCHAR(32)",
+          "required": true,
+          "default": "—",
+          "comment": "如 order"
+        },
+        {
+          "name": "aggregate_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "聚合编号"
+        },
+        {
+          "name": "payload",
+          "type": "JSONB",
+          "required": true,
+          "default": "—",
+          "comment": "事件内容"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "pending",
+          "comment": "pending、done、dead"
+        },
+        {
+          "name": "attempts",
+          "type": "SMALLINT",
+          "required": true,
+          "default": "0",
+          "comment": "投递次数"
+        },
+        {
+          "name": "next_attempt_at",
+          "type": "TIMESTAMPTZ",
+          "required": true,
+          "default": "—",
+          "comment": "下次投递时间"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(event_id)",
+        "INDEX(status, next_attempt_at)"
+      ]
+    },
+    {
+      "name": "processed_events",
+      "label": "已处理事件",
+      "purpose": "消费者去重",
+      "fields": [
+        {
+          "name": "consumer",
+          "type": "VARCHAR(64)",
+          "required": true,
+          "default": "—",
+          "comment": "消费者名称"
+        },
+        {
+          "name": "event_id",
+          "type": "UUID",
+          "required": true,
+          "default": "—",
+          "comment": "事件编号"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(consumer, event_id)"
+      ]
+    },
+    {
+      "name": "audit_logs",
+      "label": "审计记录",
+      "purpose": "只追加的操作审计",
+      "fields": [
+        {
+          "name": "actor_type",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "admin、member、system、device"
+        },
+        {
+          "name": "actor_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "操作者"
+        },
+        {
+          "name": "action",
+          "type": "VARCHAR(64)",
+          "required": true,
+          "default": "—",
+          "comment": "动作，如 refund.approve"
+        },
+        {
+          "name": "object_type",
+          "type": "VARCHAR(32)",
+          "required": true,
+          "default": "—",
+          "comment": "对象类型"
+        },
+        {
+          "name": "object_id",
+          "type": "VARCHAR(64)",
+          "required": true,
+          "default": "—",
+          "comment": "对象编号"
+        },
+        {
+          "name": "store_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "门店"
+        },
+        {
+          "name": "before_data",
+          "type": "JSONB",
+          "required": false,
+          "default": "—",
+          "comment": "变更前（敏感字段脱敏）"
+        },
+        {
+          "name": "after_data",
+          "type": "JSONB",
+          "required": false,
+          "default": "—",
+          "comment": "变更后（敏感字段脱敏）"
+        },
+        {
+          "name": "ip",
+          "type": "VARCHAR(45)",
+          "required": false,
+          "default": "—",
+          "comment": "请求 IP"
+        },
+        {
+          "name": "trace_id",
+          "type": "VARCHAR(64)",
+          "required": false,
+          "default": "—",
+          "comment": "链路编号"
+        }
+      ],
+      "indexes": [
+        "INDEX(object_type, object_id)",
+        "INDEX(actor_id, created_at DESC)"
+      ]
+    }
+  ],
+  "exceptions": [
+    {
+      "case": "同一任务在多实例同时运行",
+      "handling": "任务开始时取数据库咨询锁，未取到则跳过本轮。"
+    },
+    {
+      "case": "事件消费者长期失败",
+      "handling": "进入死信，告警给开发值班，修复后可手动重放。"
+    },
+    {
+      "case": "审计表增长",
+      "handling": "按月分区，保留 3 年，归档到冷存储。"
+    }
+  ]
+}

@@ -1,0 +1,555 @@
+{
+  "id": "order",
+  "order": 40,
+  "name": "订单",
+  "modules": [
+    "order"
+  ],
+  "summary": "统一的交易单：确认页试算、提交时服务端重新定价、锁券与预占、待支付超时关闭、支付成功后履约；订单与明细保存价格快照与分摊结果。",
+  "features": [
+    {
+      "name": "订单试算",
+      "description": "确认页展示商品快照、价格明细、可用优惠券（默认最优）与应付金额，不写库。"
+    },
+    {
+      "name": "提交订单",
+      "description": "服务端重新计算价格，与前端看到的应付金额不一致时拒绝；锁定优惠券、预占名额或库存。"
+    },
+    {
+      "name": "待支付与超时",
+      "description": "待支付有效期默认 15 分钟（可配置）；超时先查单再关闭，释放券与名额。"
+    },
+    {
+      "name": "履约",
+      "description": "支付成功后按订单类型履约：发会员卡、储值入账、确认预约。"
+    },
+    {
+      "name": "订单查询",
+      "description": "会员查看订单列表与详情；后台按门店、状态、时间查询与导出。"
+    }
+  ],
+  "flows": [
+    {
+      "name": "订单确认页加载",
+      "steps": [
+        "从卡种详情或预约页带入 items（item_type、item_id、quantity）进入订单确认页。",
+        "调用 `POST /api/v1/app/orders/preview`，服务端读取商品当前价格与状态，计算会员可用优惠券并选出最优。",
+        "返回商品快照、原价、优惠明细、应付金额、需要同意的条款（如预付卡条款），页面展示后等待提交。"
+      ]
+    },
+    {
+      "name": "提交订单",
+      "steps": [
+        "前端携带 Idempotency-Key 调用 `POST /api/v1/app/orders`，提交 items、coupon_id、expected_payable_cents、agreed_terms。",
+        "校验会员状态、手机号已绑定、条款已同意、门店营业中、限购。",
+        "重新计算价格；结果与 expected_payable_cents 不一致返回 PRICE_CHANGED 和新价格。",
+        "同一事务：锁定优惠券（available→locked）、预占名额或库存、写 orders（pending_payment，expire_at）与 order_items（价格快照与优惠分摊）、写 order.created 事件。",
+        "返回 order_no、payable_cents、expire_at，前端立即进入支付。"
+      ]
+    },
+    {
+      "name": "取消与超时关闭",
+      "steps": [
+        "会员取消或任务发现 expire_at 已过。",
+        "已发起过支付的先向微信查单：已支付则按支付成功处理并结束；未支付则关闭微信订单。",
+        "条件更新 pending_payment→closed，释放优惠券、名额与库存，写 order.closed 事件。"
+      ]
+    },
+    {
+      "name": "支付成功履约",
+      "steps": [
+        "消费 payment.succeeded：条件更新 pending_payment→paid，写 paid_at、paid_cents。",
+        "确认优惠券使用、确认库存或名额。",
+        "按 biz_type 调用履约：card 发卡、recharge 入账、booking 确认预约；全部完成后 paid→fulfilled。"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "page": "订单确认页",
+      "field": "items",
+      "label": "购买内容",
+      "type": "由上一页带入",
+      "required": true,
+      "rule": "每项 item_type、item_id、quantity；数量 1–10。"
+    },
+    {
+      "page": "订单确认页",
+      "field": "coupon_id",
+      "label": "优惠券",
+      "type": "选择器",
+      "required": false,
+      "rule": "只列出本单可用的券；可选择不使用。"
+    },
+    {
+      "page": "订单确认页",
+      "field": "agreed_terms",
+      "label": "购买条款",
+      "type": "勾选框",
+      "required": true,
+      "rule": "卡类与储值订单必须勾选预付卡条款与退款规则。"
+    },
+    {
+      "page": "订单确认页",
+      "field": "remark",
+      "label": "备注",
+      "type": "文本",
+      "required": false,
+      "rule": "不超过 200 字。"
+    },
+    {
+      "page": "订单确认页",
+      "field": "expected_payable_cents",
+      "label": "应付金额",
+      "type": "自动",
+      "required": true,
+      "rule": "取试算结果，提交时服务端比对。"
+    }
+  ],
+  "apis": [
+    {
+      "method": "POST",
+      "path": "/api/v1/app/orders/preview",
+      "caller": "小程序",
+      "purpose": "订单试算",
+      "request": "store_id，items[]，coupon_id（可选）",
+      "response": "items[]（快照、单价、数量），amounts{goods_cents，discount_cents，coupon_discount_cents，payable_cents}，coupons[]（可用与不可用原因），terms[]",
+      "errors": "OFF_SALE，PURCHASE_LIMIT，STORE_CLOSED"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/app/orders",
+      "caller": "小程序",
+      "purpose": "提交订单",
+      "request": "Idempotency-Key（请求头），store_id，items[]，coupon_id，expected_payable_cents，agreed_terms[]，remark",
+      "response": "order_no，payable_cents，expire_at，status=pending_payment",
+      "errors": "PRICE_CHANGED，COUPON_UNAVAILABLE，STOCK_INSUFFICIENT，SLOT_FULL，CONSENT_REQUIRED，PHONE_REQUIRED"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/app/orders",
+      "caller": "小程序",
+      "purpose": "订单列表",
+      "request": "status（all、pending_payment、done、refund），cursor，limit",
+      "response": "订单摘要列表，next_cursor",
+      "errors": "—"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/app/orders/{order_no}",
+      "caller": "小程序",
+      "purpose": "订单详情",
+      "request": "无",
+      "response": "状态、倒计时、明细、金额、支付信息、履约结果（如会员卡）、退款记录、可执行操作",
+      "errors": "NOT_FOUND"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/app/orders/{order_no}/cancel",
+      "caller": "小程序",
+      "purpose": "取消订单",
+      "request": "无",
+      "response": "status=closed",
+      "errors": "ORDER_NOT_CANCELLABLE（已支付）"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/orders",
+      "caller": "后台",
+      "purpose": "订单查询",
+      "request": "store_id，status，biz_type，from，to，keyword（订单号或手机号后四位），cursor",
+      "response": "订单列表",
+      "errors": "FORBIDDEN"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/orders/{order_no}",
+      "caller": "后台",
+      "purpose": "订单详情",
+      "request": "无",
+      "response": "订单、支付、退款、履约、操作记录",
+      "errors": "NOT_FOUND"
+    }
+  ],
+  "results": [
+    {
+      "case": "提交成功",
+      "page": "订单确认页内调起支付",
+      "display": "不跳转新页面，直接调起微信支付；支付后进入支付结果页。"
+    },
+    {
+      "case": "价格变化",
+      "page": "订单确认页",
+      "display": "提示价格已更新，刷新明细，用户再次确认。"
+    },
+    {
+      "case": "优惠券不可用",
+      "page": "订单确认页",
+      "display": "提示原因并重新试算为不用券或次优券。"
+    },
+    {
+      "case": "用户关闭支付",
+      "page": "订单详情页",
+      "display": "显示待支付与剩余时间，按钮「继续支付」「取消订单」。"
+    },
+    {
+      "case": "订单列表",
+      "page": "我的订单页",
+      "display": "按全部、待支付、已完成、退款分组；每单显示商品、金额、状态与操作。"
+    },
+    {
+      "case": "订单已超时关闭",
+      "page": "订单详情页",
+      "display": "显示已关闭与原因，按钮「重新购买」。"
+    }
+  ],
+  "writes": [
+    {
+      "when": "提交订单",
+      "table": "orders",
+      "content": "order_no、会员、门店、biz_type、金额字段、status=pending_payment、expire_at、coupon_id。"
+    },
+    {
+      "when": "提交订单",
+      "table": "order_items",
+      "content": "商品快照、单价、数量、优惠分摊、应付。"
+    },
+    {
+      "when": "提交订单",
+      "table": "outbox_events",
+      "content": "order.created。"
+    },
+    {
+      "when": "关闭订单",
+      "table": "orders、outbox_events",
+      "content": "status=closed、closed_at、close_reason；order.closed。"
+    },
+    {
+      "when": "支付成功",
+      "table": "orders",
+      "content": "status=paid→fulfilled、paid_cents、paid_at、fulfilled_at。"
+    },
+    {
+      "when": "履约",
+      "table": "order_items",
+      "content": "fulfill_ref_type、fulfill_ref_id。"
+    }
+  ],
+  "tables": [
+    {
+      "name": "orders",
+      "label": "订单",
+      "purpose": "交易主单",
+      "fields": [
+        {
+          "name": "order_no",
+          "type": "VARCHAR(32)",
+          "required": true,
+          "default": "—",
+          "comment": "订单号，对外展示，唯一"
+        },
+        {
+          "name": "member_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "会员"
+        },
+        {
+          "name": "store_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "门店"
+        },
+        {
+          "name": "biz_type",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "card、recharge、booking、goods"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(24)",
+          "required": true,
+          "default": "pending_payment",
+          "comment": "pending_payment、paid、fulfilled、closed、refunding、partially_refunded、refunded"
+        },
+        {
+          "name": "goods_cents",
+          "type": "INTEGER",
+          "required": true,
+          "default": "—",
+          "comment": "商品原价合计"
+        },
+        {
+          "name": "discount_cents",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "活动优惠"
+        },
+        {
+          "name": "coupon_discount_cents",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "优惠券优惠"
+        },
+        {
+          "name": "payable_cents",
+          "type": "INTEGER",
+          "required": true,
+          "default": "—",
+          "comment": "应付金额"
+        },
+        {
+          "name": "paid_cents",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "实付金额"
+        },
+        {
+          "name": "refunded_cents",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "累计已退金额"
+        },
+        {
+          "name": "coupon_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "使用的优惠券"
+        },
+        {
+          "name": "expire_at",
+          "type": "TIMESTAMPTZ",
+          "required": true,
+          "default": "—",
+          "comment": "待支付截止时间"
+        },
+        {
+          "name": "paid_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "支付时间"
+        },
+        {
+          "name": "fulfilled_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "履约完成时间"
+        },
+        {
+          "name": "closed_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "关闭时间"
+        },
+        {
+          "name": "close_reason",
+          "type": "VARCHAR(32)",
+          "required": false,
+          "default": "—",
+          "comment": "timeout、user_cancel、admin"
+        },
+        {
+          "name": "remark",
+          "type": "VARCHAR(200)",
+          "required": false,
+          "default": "—",
+          "comment": "会员备注"
+        },
+        {
+          "name": "source",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "miniprogram",
+          "comment": "miniprogram、admin"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(order_no)",
+        "INDEX(member_id, created_at DESC)",
+        "INDEX(store_id, status, created_at)",
+        "INDEX(status, expire_at) WHERE status = 'pending_payment'",
+        "CHECK(refunded_cents <= paid_cents)"
+      ]
+    },
+    {
+      "name": "order_items",
+      "label": "订单明细",
+      "purpose": "订单行与价格快照",
+      "fields": [
+        {
+          "name": "order_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "订单"
+        },
+        {
+          "name": "item_type",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "card_product、recharge_plan、booking_slot、sku"
+        },
+        {
+          "name": "item_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "商品编号"
+        },
+        {
+          "name": "name_snapshot",
+          "type": "VARCHAR(60)",
+          "required": true,
+          "default": "—",
+          "comment": "下单时名称"
+        },
+        {
+          "name": "snapshot",
+          "type": "JSONB",
+          "required": true,
+          "default": "—",
+          "comment": "下单时的规格与规则快照"
+        },
+        {
+          "name": "unit_price_cents",
+          "type": "INTEGER",
+          "required": true,
+          "default": "—",
+          "comment": "单价"
+        },
+        {
+          "name": "quantity",
+          "type": "INTEGER",
+          "required": true,
+          "default": "—",
+          "comment": "数量"
+        },
+        {
+          "name": "discount_cents",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "分摊到本行的优惠（最大余额法）"
+        },
+        {
+          "name": "payable_cents",
+          "type": "INTEGER",
+          "required": true,
+          "default": "—",
+          "comment": "本行应付"
+        },
+        {
+          "name": "refunded_cents",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "本行已退"
+        },
+        {
+          "name": "refunded_quantity",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "本行已退数量"
+        },
+        {
+          "name": "fulfill_ref_type",
+          "type": "VARCHAR(32)",
+          "required": false,
+          "default": "—",
+          "comment": "履约对象类型，如 member_card"
+        },
+        {
+          "name": "fulfill_ref_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "履约对象编号"
+        }
+      ],
+      "indexes": [
+        "INDEX(order_id)",
+        "CHECK(refunded_cents <= payable_cents)"
+      ]
+    }
+  ],
+  "states": [
+    {
+      "entity": "订单",
+      "from": "pending_payment",
+      "event": "支付成功",
+      "to": "paid",
+      "condition": "—"
+    },
+    {
+      "entity": "订单",
+      "from": "pending_payment",
+      "event": "取消或超时",
+      "to": "closed",
+      "condition": "查单确认未支付"
+    },
+    {
+      "entity": "订单",
+      "from": "paid",
+      "event": "履约完成",
+      "to": "fulfilled",
+      "condition": "—"
+    },
+    {
+      "entity": "订单",
+      "from": "paid、fulfilled",
+      "event": "退款申请通过",
+      "to": "refunding",
+      "condition": "—"
+    },
+    {
+      "entity": "订单",
+      "from": "refunding",
+      "event": "部分退款成功",
+      "to": "partially_refunded",
+      "condition": "—"
+    },
+    {
+      "entity": "订单",
+      "from": "refunding、partially_refunded",
+      "event": "累计退款等于实付",
+      "to": "refunded",
+      "condition": "—"
+    }
+  ],
+  "exceptions": [
+    {
+      "case": "重复提交",
+      "handling": "同一 Idempotency-Key 返回第一次创建的订单。"
+    },
+    {
+      "case": "关单与支付回调同时发生",
+      "handling": "两者都是条件更新；关单前先查单，已支付则不关单。"
+    },
+    {
+      "case": "订单关闭后才收到支付成功",
+      "handling": "记录为迟到支付，自动发起全额原路退款并通知会员。"
+    },
+    {
+      "case": "履约失败（如发卡异常）",
+      "handling": "订单停在 paid，事件重试；超过重试次数告警人工处理，不影响资金记录。"
+    },
+    {
+      "case": "前端篡改金额",
+      "handling": "金额只以服务端计算为准，前端金额仅用于一致性比对。"
+    }
+  ]
+}

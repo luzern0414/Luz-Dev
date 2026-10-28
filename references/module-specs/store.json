@@ -1,0 +1,396 @@
+{
+  "id": "store",
+  "order": 20,
+  "name": "门店与配置",
+  "modules": [
+    "store",
+    "settings"
+  ],
+  "summary": "维护门店资料、营业时段、容量与状态，以及全局和门店级配置项；为入场、预约、报表提供门店范围。",
+  "features": [
+    {
+      "name": "门店资料",
+      "description": "名称、编码、地址与坐标、联系电话、营业时段、容量、时区。"
+    },
+    {
+      "name": "门店状态",
+      "description": "筹备、营业、暂停、关闭；暂停时不可入场与购卡，关闭前需处理有效会员卡。"
+    },
+    {
+      "name": "实时人数",
+      "description": "在场人数随入场、离场条件更新，小程序只显示空闲、适中、拥挤三档。"
+    },
+    {
+      "name": "配置项",
+      "description": "全局默认值与门店覆盖值，如待支付时长、在场超时时长、预约取消时限；修改即时生效并审计。"
+    },
+    {
+      "name": "附近门店",
+      "description": "按定位距离排序，显示营业状态与人数档位。"
+    }
+  ],
+  "flows": [
+    {
+      "name": "小程序选择门店",
+      "steps": [
+        "前端获取定位（用户拒绝时按城市列表展示）调用 `GET /api/v1/app/stores`。",
+        "服务端按距离排序，返回营业状态（按门店时区与营业时段计算）与人数档位。",
+        "用户选择门店后保存在本地，后续卡种、预约、入场接口携带 store_id。"
+      ]
+    },
+    {
+      "name": "读取配置",
+      "steps": [
+        "业务代码按 key 读取配置：先取门店覆盖值，没有则取全局默认值，再没有使用代码内默认值。",
+        "配置缓存在 Redis，后台修改写库后删除对应缓存。"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "page": "门店编辑页（后台）",
+      "field": "name",
+      "label": "门店名称",
+      "type": "文本",
+      "required": true,
+      "rule": "2–30 个字符。"
+    },
+    {
+      "page": "门店编辑页（后台）",
+      "field": "code",
+      "label": "门店编码",
+      "type": "文本",
+      "required": true,
+      "rule": "字母数字，创建后不可改，用于门店码。"
+    },
+    {
+      "page": "门店编辑页（后台）",
+      "field": "address",
+      "label": "详细地址",
+      "type": "文本",
+      "required": true,
+      "rule": "与地图选点一致。"
+    },
+    {
+      "page": "门店编辑页（后台）",
+      "field": "location",
+      "label": "位置",
+      "type": "地图选点",
+      "required": true,
+      "rule": "保存经纬度。"
+    },
+    {
+      "page": "门店编辑页（后台）",
+      "field": "capacity",
+      "label": "最大在场人数",
+      "type": "数字",
+      "required": true,
+      "rule": "1–500，按消防与场地面积确定。"
+    },
+    {
+      "page": "门店编辑页（后台）",
+      "field": "open_rule",
+      "label": "营业时段",
+      "type": "时段选择",
+      "required": true,
+      "rule": "支持全天 24 小时或分时段，按星期设置。"
+    },
+    {
+      "page": "门店编辑页（后台）",
+      "field": "contact_phone",
+      "label": "联系电话",
+      "type": "文本",
+      "required": true,
+      "rule": "对会员公开的客服电话。"
+    },
+    {
+      "page": "配置页（后台）",
+      "field": "value",
+      "label": "配置值",
+      "type": "按配置类型",
+      "required": true,
+      "rule": "数值类有上下限，例如待支付时长 5–30 分钟。"
+    }
+  ],
+  "apis": [
+    {
+      "method": "GET",
+      "path": "/api/v1/app/stores",
+      "caller": "小程序",
+      "purpose": "附近门店",
+      "request": "latitude，longitude（可选），city_code（可选）",
+      "response": "门店列表：id，name，address，distance_m，is_open，occupancy_level",
+      "errors": "—"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/app/stores/{id}",
+      "caller": "小程序",
+      "purpose": "门店详情",
+      "request": "无",
+      "response": "门店资料、营业时段、人数档位、可售卡种数量",
+      "errors": "NOT_FOUND"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/stores",
+      "caller": "后台",
+      "purpose": "创建门店",
+      "request": "门店资料",
+      "response": "store_id",
+      "errors": "CODE_EXISTS，VALIDATION_FAILED"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/admin/stores/{id}",
+      "caller": "后台",
+      "purpose": "修改门店",
+      "request": "需修改的字段",
+      "response": "门店资料",
+      "errors": "STORE_HAS_ACTIVE_CARDS（关闭时）"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/settings",
+      "caller": "后台",
+      "purpose": "配置列表",
+      "request": "store_id（可选）",
+      "response": "key，value，默认值，覆盖来源",
+      "errors": "—"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/admin/settings/{key}",
+      "caller": "后台",
+      "purpose": "修改配置",
+      "request": "store_id（可选），value",
+      "response": "生效后的值",
+      "errors": "VALIDATION_FAILED"
+    }
+  ],
+  "results": [
+    {
+      "case": "打开门店列表",
+      "page": "门店列表页",
+      "display": "每个门店显示距离、营业中或已打烊、人数档位，点击进入门店详情。"
+    },
+    {
+      "case": "门店详情",
+      "page": "门店详情页",
+      "display": "地址与导航按钮、营业时段、当前人数档位、「购买会员卡」与「预约课程」入口。"
+    },
+    {
+      "case": "门店暂停营业",
+      "page": "门店详情页",
+      "display": "顶部显示暂停原因与预计恢复时间，购卡与入场按钮不可用。"
+    }
+  ],
+  "writes": [
+    {
+      "when": "创建或修改门店",
+      "table": "stores",
+      "content": "门店资料与状态。"
+    },
+    {
+      "when": "修改配置",
+      "table": "store_settings",
+      "content": "store_id、key、value、updated_by。"
+    },
+    {
+      "when": "修改门店或配置",
+      "table": "audit_logs",
+      "content": "修改前后的值。"
+    }
+  ],
+  "tables": [
+    {
+      "name": "stores",
+      "label": "门店",
+      "purpose": "门店资料、容量与实时人数",
+      "fields": [
+        {
+          "name": "code",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "门店编码，唯一"
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(40)",
+          "required": true,
+          "default": "—",
+          "comment": "门店名称"
+        },
+        {
+          "name": "city_code",
+          "type": "CHAR(6)",
+          "required": true,
+          "default": "—",
+          "comment": "行政区划代码"
+        },
+        {
+          "name": "address",
+          "type": "VARCHAR(200)",
+          "required": true,
+          "default": "—",
+          "comment": "详细地址"
+        },
+        {
+          "name": "latitude",
+          "type": "NUMERIC(9,6)",
+          "required": true,
+          "default": "—",
+          "comment": "纬度"
+        },
+        {
+          "name": "longitude",
+          "type": "NUMERIC(9,6)",
+          "required": true,
+          "default": "—",
+          "comment": "经度"
+        },
+        {
+          "name": "contact_phone",
+          "type": "VARCHAR(20)",
+          "required": true,
+          "default": "—",
+          "comment": "客服电话"
+        },
+        {
+          "name": "capacity",
+          "type": "INTEGER",
+          "required": true,
+          "default": "—",
+          "comment": "最大在场人数"
+        },
+        {
+          "name": "current_occupancy",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "当前在场人数，只做条件加减"
+        },
+        {
+          "name": "open_rule",
+          "type": "JSONB",
+          "required": true,
+          "default": "—",
+          "comment": "营业时段，按星期的时间段列表"
+        },
+        {
+          "name": "timezone",
+          "type": "VARCHAR(32)",
+          "required": true,
+          "default": "Asia/Shanghai",
+          "comment": "门店时区"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "preparing",
+          "comment": "preparing、open、paused、closed"
+        },
+        {
+          "name": "pause_reason",
+          "type": "VARCHAR(200)",
+          "required": false,
+          "default": "—",
+          "comment": "暂停原因"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(code)",
+        "INDEX(city_code, status)",
+        "CHECK(current_occupancy >= 0)"
+      ]
+    },
+    {
+      "name": "store_settings",
+      "label": "配置",
+      "purpose": "全局默认与门店覆盖配置",
+      "fields": [
+        {
+          "name": "store_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "门店；为空表示全局默认"
+        },
+        {
+          "name": "key",
+          "type": "VARCHAR(64)",
+          "required": true,
+          "default": "—",
+          "comment": "配置键，如 order.pay_timeout_minutes"
+        },
+        {
+          "name": "value",
+          "type": "JSONB",
+          "required": true,
+          "default": "—",
+          "comment": "配置值"
+        },
+        {
+          "name": "updated_by",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "修改人"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(store_id, key) NULLS NOT DISTINCT"
+      ]
+    }
+  ],
+  "states": [
+    {
+      "entity": "门店",
+      "from": "preparing",
+      "event": "开业",
+      "to": "open",
+      "condition": "已配置营业时段、容量与设备"
+    },
+    {
+      "entity": "门店",
+      "from": "open",
+      "event": "暂停",
+      "to": "paused",
+      "condition": "填写原因"
+    },
+    {
+      "entity": "门店",
+      "from": "paused",
+      "event": "恢复",
+      "to": "open",
+      "condition": "—"
+    },
+    {
+      "entity": "门店",
+      "from": "open",
+      "event": "关闭",
+      "to": "closed",
+      "condition": "没有有效会员卡或已完成迁移与退卡"
+    }
+  ],
+  "exceptions": [
+    {
+      "case": "关闭门店时仍有有效会员卡",
+      "handling": "返回 STORE_HAS_ACTIVE_CARDS，列出数量；先迁移到其他门店或办理退卡。"
+    },
+    {
+      "case": "容量改得小于当前在场人数",
+      "handling": "允许保存；在场人数降到容量以下前，新入场被拒绝。"
+    },
+    {
+      "case": "用户拒绝定位",
+      "handling": "按城市选择展示门店，不反复弹出授权。"
+    },
+    {
+      "case": "配置值非法",
+      "handling": "按配置定义的类型与上下限校验，返回 VALIDATION_FAILED。"
+    }
+  ]
+}

@@ -1,0 +1,701 @@
+{
+  "id": "membership",
+  "order": 30,
+  "name": "会员卡与权益",
+  "modules": [
+    "membership"
+  ],
+  "summary": "定义可售卡种（次卡、期限卡、时段卡），支付成功后按购买时的快照发卡；管理剩余次数、有效期、冻结与到期，所有次数变化写流水。",
+  "features": [
+    {
+      "name": "卡种管理",
+      "description": "类型、价格、次数、有效天数、可用时段、每日入场上限、适用门店、生效方式、限购、退卡规则。"
+    },
+    {
+      "name": "发卡",
+      "description": "支付成功后按订单中的卡种快照创建会员卡，之后卡种改价或下架不影响已售卡。"
+    },
+    {
+      "name": "卡包",
+      "description": "会员查看所有卡的剩余次数、有效期、状态与使用记录。"
+    },
+    {
+      "name": "冻结（请假）",
+      "description": "按卡种规则冻结，冻结期间不能入场，解冻后到期日顺延。"
+    },
+    {
+      "name": "次数与有效期调整",
+      "description": "后台补次、延期需填写原因并审计。"
+    }
+  ],
+  "flows": [
+    {
+      "name": "发卡",
+      "steps": [
+        "消费 payment.succeeded 事件，读取订单中 item_type=card_product 的明细。",
+        "按快照创建 member_cards：生效方式为购买即生效时 status=active，starts_at=支付时间；首次使用生效时 status=pending。",
+        "次卡写一条 card_usage_ledger（change_times 为购买次数，reason=purchase）。",
+        "订单明细记录 fulfill_ref_id=会员卡编号，订单改为 fulfilled，发送开卡通知。"
+      ]
+    },
+    {
+      "name": "入场扣次",
+      "steps": [
+        "入场判定事务内选择可用卡：当前门店适用、在可用时段、未冻结、未到期，优先最早到期的卡。",
+        "次卡执行条件更新：remaining_times = remaining_times - 1 WHERE remaining_times > 0；更新 0 行视为不可用。",
+        "写 card_usage_ledger（reason=entry，ref 为入场事件），唯一约束防止同一次入场重复扣次。",
+        "pending 状态的卡在首次入场时改为 active，并按有效天数计算 expires_at。"
+      ]
+    },
+    {
+      "name": "冻结",
+      "steps": [
+        "会员选择开始日期与天数提交冻结；服务端校验卡种允许的冻结次数与累计天数。",
+        "冻结开始日期为今天时立即 status=frozen，否则登记计划由任务在当天执行。",
+        "解冻（到期或主动）时 expires_at 加上实际冻结天数，status=active。"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "page": "卡种编辑页（后台）",
+      "field": "kind",
+      "label": "卡种类型",
+      "type": "单选",
+      "required": true,
+      "rule": "times（次卡）、period（期限卡）、timeslot（时段卡）。"
+    },
+    {
+      "page": "卡种编辑页（后台）",
+      "field": "price_cents",
+      "label": "售价",
+      "type": "金额",
+      "required": true,
+      "rule": "大于 0，单位分。"
+    },
+    {
+      "page": "卡种编辑页（后台）",
+      "field": "times",
+      "label": "次数",
+      "type": "数字",
+      "required": false,
+      "rule": "次卡必填，1–999。"
+    },
+    {
+      "page": "卡种编辑页（后台）",
+      "field": "valid_days",
+      "label": "有效天数",
+      "type": "数字",
+      "required": true,
+      "rule": "1–1095。"
+    },
+    {
+      "page": "卡种编辑页（后台）",
+      "field": "time_windows",
+      "label": "可用时段",
+      "type": "时段选择",
+      "required": false,
+      "rule": "时段卡必填，如工作日 06:00–16:00。"
+    },
+    {
+      "page": "卡种编辑页（后台）",
+      "field": "daily_entry_limit",
+      "label": "每日入场上限",
+      "type": "数字",
+      "required": false,
+      "rule": "为空表示不限。"
+    },
+    {
+      "page": "卡种编辑页（后台）",
+      "field": "activate_rule",
+      "label": "生效方式",
+      "type": "单选",
+      "required": true,
+      "rule": "购买即生效或首次入场生效。"
+    },
+    {
+      "page": "卡种编辑页（后台）",
+      "field": "refund_rule",
+      "label": "退卡规则",
+      "type": "规则表单",
+      "required": true,
+      "rule": "可退期限、手续费比例、已用部分折算方式。"
+    },
+    {
+      "page": "冻结页",
+      "field": "start_date",
+      "label": "开始日期",
+      "type": "日期",
+      "required": true,
+      "rule": "今天到 30 天内。"
+    },
+    {
+      "page": "冻结页",
+      "field": "days",
+      "label": "冻结天数",
+      "type": "数字",
+      "required": true,
+      "rule": "7–90，累计不超过卡种上限。"
+    },
+    {
+      "page": "冻结页",
+      "field": "reason",
+      "label": "原因",
+      "type": "单选 + 文本",
+      "required": false,
+      "rule": "出差、伤病、其他。"
+    }
+  ],
+  "apis": [
+    {
+      "method": "GET",
+      "path": "/api/v1/app/card-products",
+      "caller": "小程序",
+      "purpose": "可售卡种列表",
+      "request": "store_id",
+      "response": "id，name，kind，price_cents，original_price_cents，times，valid_days，time_windows，tags",
+      "errors": "—"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/app/card-products/{id}",
+      "caller": "小程序",
+      "purpose": "卡种详情",
+      "request": "store_id",
+      "response": "卡种全部可公开字段、适用门店、退卡规则摘要、购买须知",
+      "errors": "NOT_FOUND，OFF_SALE"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/app/me/cards",
+      "caller": "小程序",
+      "purpose": "我的卡包",
+      "request": "status（可选）",
+      "response": "会员卡列表：name，kind，remaining_times，starts_at，expires_at，status，frozen_until",
+      "errors": "—"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/app/me/cards/{id}/usages",
+      "caller": "小程序",
+      "purpose": "使用记录",
+      "request": "cursor，limit",
+      "response": "流水：时间、变化次数、原因、门店",
+      "errors": "NOT_FOUND"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/app/me/cards/{id}/freeze",
+      "caller": "小程序",
+      "purpose": "申请冻结",
+      "request": "start_date，days，reason",
+      "response": "status，frozen_until，new_expires_at",
+      "errors": "FREEZE_NOT_ALLOWED，FREEZE_LIMIT_REACHED"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/app/me/cards/{id}/unfreeze",
+      "caller": "小程序",
+      "purpose": "提前解冻",
+      "request": "无",
+      "response": "status=active，new_expires_at",
+      "errors": "NOT_FROZEN"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/card-products",
+      "caller": "后台",
+      "purpose": "创建卡种",
+      "request": "卡种字段",
+      "response": "card_product_id",
+      "errors": "VALIDATION_FAILED"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/admin/card-products/{id}",
+      "caller": "后台",
+      "purpose": "修改或上下架卡种",
+      "request": "需修改的字段，sale_status",
+      "response": "卡种",
+      "errors": "VALIDATION_FAILED"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/member-cards/{id}/adjust",
+      "caller": "后台",
+      "purpose": "补次或延期",
+      "request": "change_times 或 extend_days，reason",
+      "response": "调整后的会员卡",
+      "errors": "FORBIDDEN，VALIDATION_FAILED"
+    }
+  ],
+  "results": [
+    {
+      "case": "浏览卡种",
+      "page": "卡种列表页 → 卡种详情页",
+      "display": "详情页显示价格、权益、适用门店、退卡规则摘要，底部「立即购买」进入订单确认页。"
+    },
+    {
+      "case": "购卡支付成功",
+      "page": "支付结果页",
+      "display": "显示开卡成功、卡名称、剩余次数或有效期，按钮「查看我的卡」「去入场」。"
+    },
+    {
+      "case": "查看卡包",
+      "page": "我的卡页",
+      "display": "每张卡显示名称、剩余次数或到期日、状态标签（生效中、待生效、冻结中、已过期）。"
+    },
+    {
+      "case": "冻结成功",
+      "page": "会员卡详情页",
+      "display": "显示冻结至某日与顺延后的到期日。"
+    }
+  ],
+  "writes": [
+    {
+      "when": "支付成功发卡",
+      "table": "member_cards",
+      "content": "会员、卡种、订单、快照、次数、生效与到期时间、状态。"
+    },
+    {
+      "when": "发卡、入场、退卡、调整",
+      "table": "card_usage_ledger",
+      "content": "change_times、原因、关联单据、变化后余额。"
+    },
+    {
+      "when": "冻结与解冻",
+      "table": "member_card_freezes、member_cards",
+      "content": "冻结区间与状态、新的到期时间。"
+    },
+    {
+      "when": "后台调整",
+      "table": "audit_logs",
+      "content": "调整人、原因、调整前后。"
+    }
+  ],
+  "tables": [
+    {
+      "name": "card_products",
+      "label": "卡种",
+      "purpose": "可售卡种定义",
+      "fields": [
+        {
+          "name": "name",
+          "type": "VARCHAR(40)",
+          "required": true,
+          "default": "—",
+          "comment": "卡种名称"
+        },
+        {
+          "name": "kind",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "times、period、timeslot"
+        },
+        {
+          "name": "price_cents",
+          "type": "INTEGER",
+          "required": true,
+          "default": "—",
+          "comment": "售价（分）"
+        },
+        {
+          "name": "original_price_cents",
+          "type": "INTEGER",
+          "required": false,
+          "default": "—",
+          "comment": "划线价（分）"
+        },
+        {
+          "name": "times",
+          "type": "INTEGER",
+          "required": false,
+          "default": "—",
+          "comment": "次卡次数"
+        },
+        {
+          "name": "valid_days",
+          "type": "INTEGER",
+          "required": true,
+          "default": "—",
+          "comment": "有效天数"
+        },
+        {
+          "name": "time_windows",
+          "type": "JSONB",
+          "required": false,
+          "default": "—",
+          "comment": "可用时段"
+        },
+        {
+          "name": "daily_entry_limit",
+          "type": "SMALLINT",
+          "required": false,
+          "default": "—",
+          "comment": "每日入场上限"
+        },
+        {
+          "name": "store_scope",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "all",
+          "comment": "all、list"
+        },
+        {
+          "name": "store_ids",
+          "type": "BIGINT[]",
+          "required": false,
+          "default": "—",
+          "comment": "适用门店（store_scope=list 时）"
+        },
+        {
+          "name": "activate_rule",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "on_purchase",
+          "comment": "on_purchase、on_first_entry"
+        },
+        {
+          "name": "purchase_limit",
+          "type": "SMALLINT",
+          "required": false,
+          "default": "—",
+          "comment": "每人限购张数"
+        },
+        {
+          "name": "freeze_rule",
+          "type": "JSONB",
+          "required": false,
+          "default": "—",
+          "comment": "可冻结次数与累计天数"
+        },
+        {
+          "name": "refund_rule",
+          "type": "JSONB",
+          "required": true,
+          "default": "—",
+          "comment": "退卡规则"
+        },
+        {
+          "name": "sale_status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "off_sale",
+          "comment": "on_sale、off_sale"
+        },
+        {
+          "name": "sort",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "排序"
+        }
+      ],
+      "indexes": [
+        "INDEX(sale_status, sort)"
+      ]
+    },
+    {
+      "name": "member_cards",
+      "label": "会员卡",
+      "purpose": "会员持有的卡",
+      "fields": [
+        {
+          "name": "member_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "会员"
+        },
+        {
+          "name": "card_product_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "卡种"
+        },
+        {
+          "name": "order_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "购卡订单；后台赠送为空"
+        },
+        {
+          "name": "snapshot",
+          "type": "JSONB",
+          "required": true,
+          "default": "—",
+          "comment": "购买时的卡种快照"
+        },
+        {
+          "name": "kind",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "times、period、timeslot"
+        },
+        {
+          "name": "remaining_times",
+          "type": "INTEGER",
+          "required": false,
+          "default": "—",
+          "comment": "剩余次数（次卡）"
+        },
+        {
+          "name": "starts_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "生效时间"
+        },
+        {
+          "name": "expires_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "到期时间"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "pending",
+          "comment": "pending、active、frozen、used_up、expired、refunding、refunded"
+        },
+        {
+          "name": "frozen_until",
+          "type": "DATE",
+          "required": false,
+          "default": "—",
+          "comment": "冻结截止日期"
+        },
+        {
+          "name": "frozen_days_used",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "累计冻结天数"
+        },
+        {
+          "name": "version",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "并发更新版本"
+        }
+      ],
+      "indexes": [
+        "INDEX(member_id, status, expires_at)",
+        "CHECK(remaining_times IS NULL OR remaining_times >= 0)"
+      ]
+    },
+    {
+      "name": "card_usage_ledger",
+      "label": "次数流水",
+      "purpose": "会员卡次数变化，只追加",
+      "fields": [
+        {
+          "name": "member_card_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "会员卡"
+        },
+        {
+          "name": "member_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "会员"
+        },
+        {
+          "name": "change_times",
+          "type": "INTEGER",
+          "required": true,
+          "default": "—",
+          "comment": "变化次数，扣减为负"
+        },
+        {
+          "name": "balance_after",
+          "type": "INTEGER",
+          "required": true,
+          "default": "—",
+          "comment": "变化后剩余次数"
+        },
+        {
+          "name": "reason",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "purchase、entry、rollback、refund、adjust"
+        },
+        {
+          "name": "ref_type",
+          "type": "VARCHAR(32)",
+          "required": true,
+          "default": "—",
+          "comment": "关联单据类型"
+        },
+        {
+          "name": "ref_id",
+          "type": "VARCHAR(64)",
+          "required": true,
+          "default": "—",
+          "comment": "关联单据编号"
+        },
+        {
+          "name": "store_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "发生门店"
+        },
+        {
+          "name": "operator_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "后台操作人"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(ref_type, ref_id, reason)",
+        "INDEX(member_card_id, created_at DESC)"
+      ]
+    },
+    {
+      "name": "member_card_freezes",
+      "label": "冻结记录",
+      "purpose": "会员卡冻结区间",
+      "fields": [
+        {
+          "name": "member_card_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "会员卡"
+        },
+        {
+          "name": "start_date",
+          "type": "DATE",
+          "required": true,
+          "default": "—",
+          "comment": "开始日期"
+        },
+        {
+          "name": "end_date",
+          "type": "DATE",
+          "required": true,
+          "default": "—",
+          "comment": "计划结束日期"
+        },
+        {
+          "name": "actual_end_date",
+          "type": "DATE",
+          "required": false,
+          "default": "—",
+          "comment": "实际结束日期"
+        },
+        {
+          "name": "reason",
+          "type": "VARCHAR(200)",
+          "required": false,
+          "default": "—",
+          "comment": "原因"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "scheduled",
+          "comment": "scheduled、active、finished、cancelled"
+        }
+      ],
+      "indexes": [
+        "INDEX(member_card_id, status)"
+      ]
+    }
+  ],
+  "states": [
+    {
+      "entity": "会员卡",
+      "from": "pending",
+      "event": "首次入场",
+      "to": "active",
+      "condition": "生效方式为首次入场生效"
+    },
+    {
+      "entity": "会员卡",
+      "from": "active",
+      "event": "冻结开始",
+      "to": "frozen",
+      "condition": "—"
+    },
+    {
+      "entity": "会员卡",
+      "from": "frozen",
+      "event": "冻结结束或提前解冻",
+      "to": "active",
+      "condition": "到期日顺延实际冻结天数"
+    },
+    {
+      "entity": "会员卡",
+      "from": "active",
+      "event": "次数用完",
+      "to": "used_up",
+      "condition": "—"
+    },
+    {
+      "entity": "会员卡",
+      "from": "active",
+      "event": "到期",
+      "to": "expired",
+      "condition": "每日任务"
+    },
+    {
+      "entity": "会员卡",
+      "from": "pending、active、frozen",
+      "event": "提交退卡",
+      "to": "refunding",
+      "condition": "暂停使用"
+    },
+    {
+      "entity": "会员卡",
+      "from": "refunding",
+      "event": "退款成功",
+      "to": "refunded",
+      "condition": "—"
+    },
+    {
+      "entity": "会员卡",
+      "from": "refunding",
+      "event": "退卡申请被驳回或撤销",
+      "to": "原状态",
+      "condition": "—"
+    }
+  ],
+  "exceptions": [
+    {
+      "case": "卡种改价或下架",
+      "handling": "已售卡按快照执行，不受影响。"
+    },
+    {
+      "case": "并发入场扣次",
+      "handling": "条件更新保证不出现负数；流水唯一约束防止重复扣次。"
+    },
+    {
+      "case": "开门失败需要退回次数",
+      "handling": "写 reason=rollback 的流水把次数加回，关联同一入场事件。"
+    },
+    {
+      "case": "冻结期间尝试入场",
+      "handling": "入场判定返回 CARD_FROZEN，提示可提前解冻。"
+    },
+    {
+      "case": "限购",
+      "handling": "下单时统计该会员有效卡与待支付订单中的同卡种数量。"
+    }
+  ]
+}

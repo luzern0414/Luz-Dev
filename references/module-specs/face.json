@@ -1,0 +1,214 @@
+{
+  "id": "face",
+  "order": 75,
+  "name": "人脸录入与识别",
+  "modules": [
+    "face"
+  ],
+  "summary": "会员单独同意后录入人脸，用于刷脸入场；只保存人脸服务返回的标识，不长期保存原始照片；随时可关闭并删除。",
+  "features": [
+    {
+      "name": "单独同意",
+      "description": "录入前展示人脸信息处理规则并单独勾选，记录同意版本。"
+    },
+    {
+      "name": "活体录入",
+      "description": "小程序采集并做活体检测，服务端提交人脸服务注册，取得人员标识。"
+    },
+    {
+      "name": "刷脸入场",
+      "description": "门禁设备识别后把人员标识提交到入场核验，与动态码走同一套判定。"
+    },
+    {
+      "name": "替代方式",
+      "description": "不同意或识别失败时使用动态码入场，功能不受影响。"
+    },
+    {
+      "name": "关闭与删除",
+      "description": "会员关闭人脸入场、撤回同意或注销时，删除人脸服务中的数据与本地关联。"
+    }
+  ],
+  "flows": [
+    {
+      "name": "录入",
+      "steps": [
+        "会员进入人脸设置页，前端读取人脸信息处理规则，会员单独勾选同意后写入同意记录。",
+        "前端调用活体检测采集，取得一次性的检测凭证与照片，调用 `POST /api/v1/app/me/face`。",
+        "服务端校验同意记录与会员年龄（未满 14 周岁拒绝），调用人脸服务注册，保存 provider_person_id。",
+        "照片在注册完成后立即删除，不写对象存储；下发到门店设备的是人脸服务的特征同步任务。"
+      ]
+    },
+    {
+      "name": "删除",
+      "steps": [
+        "会员关闭人脸入场，调用 `DELETE /api/v1/app/me/face`。",
+        "调用人脸服务删除人员，通知门店设备删除本地特征，face_profiles→deleted，写审计。"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "page": "人脸设置页",
+      "field": "face_consent",
+      "label": "人脸信息处理规则",
+      "type": "单独勾选框",
+      "required": true,
+      "rule": "不默认勾选。"
+    },
+    {
+      "page": "人脸采集",
+      "field": "liveness_token",
+      "label": "活体检测结果",
+      "type": "自动",
+      "required": true,
+      "rule": "一次性，5 分钟内有效。"
+    }
+  ],
+  "apis": [
+    {
+      "method": "GET",
+      "path": "/api/v1/app/me/face",
+      "caller": "小程序",
+      "purpose": "人脸状态",
+      "request": "无",
+      "response": "enabled，enrolled_at",
+      "errors": "—"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/app/me/face",
+      "caller": "小程序",
+      "purpose": "录入人脸",
+      "request": "liveness_token，image（一次性上传）",
+      "response": "enabled=true，enrolled_at",
+      "errors": "CONSENT_REQUIRED，FACE_QUALITY_LOW，LIVENESS_FAILED，AGE_RESTRICTED"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/app/me/face",
+      "caller": "小程序",
+      "purpose": "关闭并删除",
+      "request": "无",
+      "response": "enabled=false",
+      "errors": "—"
+    }
+  ],
+  "results": [
+    {
+      "case": "录入成功",
+      "page": "人脸设置页",
+      "display": "显示「人脸入场已开启」，可在门店刷脸入场；同时保留动态码入口。"
+    },
+    {
+      "case": "采集质量不合格",
+      "page": "人脸采集页",
+      "display": "提示调整光线与角度后重试，3 次失败后建议使用动态码。"
+    },
+    {
+      "case": "关闭人脸",
+      "page": "人脸设置页",
+      "display": "显示已关闭，数据已删除。"
+    }
+  ],
+  "writes": [
+    {
+      "when": "同意",
+      "table": "user_consents",
+      "content": "kind=face 的同意记录。"
+    },
+    {
+      "when": "录入",
+      "table": "face_profiles",
+      "content": "provider、provider_person_id、consent_id、status=active。"
+    },
+    {
+      "when": "删除",
+      "table": "face_profiles、audit_logs",
+      "content": "status=deleted、deleted_at；审计。"
+    }
+  ],
+  "tables": [
+    {
+      "name": "face_profiles",
+      "label": "人脸档案",
+      "purpose": "会员与人脸服务人员标识的关联",
+      "fields": [
+        {
+          "name": "member_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "会员"
+        },
+        {
+          "name": "provider",
+          "type": "VARCHAR(32)",
+          "required": true,
+          "default": "—",
+          "comment": "人脸服务提供方"
+        },
+        {
+          "name": "provider_person_id",
+          "type": "VARCHAR(64)",
+          "required": true,
+          "default": "—",
+          "comment": "人脸服务中的人员标识"
+        },
+        {
+          "name": "consent_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "对应的同意记录"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "active",
+          "comment": "active、deleted"
+        },
+        {
+          "name": "enrolled_at",
+          "type": "TIMESTAMPTZ",
+          "required": true,
+          "default": "—",
+          "comment": "录入时间"
+        },
+        {
+          "name": "deleted_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "删除时间"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(member_id) WHERE status = 'active'"
+      ]
+    }
+  ],
+  "states": [
+    {
+      "entity": "人脸档案",
+      "from": "active",
+      "event": "会员关闭、撤回同意或注销",
+      "to": "deleted",
+      "condition": "同步删除人脸服务与门店设备数据"
+    }
+  ],
+  "exceptions": [
+    {
+      "case": "未满 14 周岁",
+      "handling": "不开放人脸入场，返回 AGE_RESTRICTED。"
+    },
+    {
+      "case": "人脸服务删除失败",
+      "handling": "保留删除任务重试，直到成功；期间该人员标识在入场核验中视为无效。"
+    },
+    {
+      "case": "识别为他人",
+      "handling": "设备识别结果需达到阈值；入场核验时比对人员标识对应的会员状态与卡。"
+    }
+  ]
+}

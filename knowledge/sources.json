@@ -1,0 +1,2018 @@
+{
+  "schema": "luz-dev-knowledge-sources/1",
+  "sources": [
+    {
+      "id": "KS-0001",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/llms.txt",
+      "title": "微信支付商户文档索引 llms.txt",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "payment"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\011_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 官方原文\\raw\\sources\\links\\001_pay.weixin.qq.com",
+        "D:\\Codes\\skill输出\\Luz-Crawl\\005_Luz-Dev 官方文档直读\\raw\\sources\\links\\001_pay.weixin.qq.com"
+      ],
+      "excerpt": "微信支付商户平台文档中心 > 微信支付商户平台为普通商户提供完整的支付接入与经营能力。支付产品涵盖 JSAPI 支付、APP 支付、H5 支付、Native 支付、小程序支付、合单支付、刷脸支付、医保支付等多种收款方式，以及订单退款和账单下载。运营工具包括商家转账、微信支付分、代金券、支付有礼、现金红包、智慧商圈等营销…",
+      "queries": []
+    },
+    {
+      "id": "KS-0002",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791911.md",
+      "title": "小程序支付 · 开发指引",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "payment"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\011_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 官方原文\\raw\\sources\\links\\002_pay.weixin.qq.com",
+        "D:\\Codes\\skill输出\\Luz-Crawl\\009_Luz-Dev 05 Luz-Dev-调研审核门禁与安全规范体系 官方原文\\raw\\sources\\links\\001_pay.weixin.qq.com"
+      ],
+      "excerpt": "1、整体业务开发流程概览 - 商户通过调用[JSAPI/小程序下单](https://pay.weixin.qq.com/doc/v3/merchant/4012791897.md)接口获取预支付交易会话标识(prepay\\_id)，再通过小程序提供的[requestPayment](https://developer…",
+      "queries": []
+    },
+    {
+      "id": "KS-0003",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791897.md",
+      "title": "小程序支付 · JSAPI/小程序下单",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "payment"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\011_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 官方原文\\raw\\sources\\links\\003_pay.weixin.qq.com"
+      ],
+      "excerpt": "JSAPI支付场景(微信内置浏览器打开的网页)或小程序支付场景，商户需调用该接口在微信支付下单，生成用于调起支付的预支付交易会话标识(prepay\\_id)。 接口说明 支持商户：【普通商户】 请求方式：【POST】/v3/pay/transactions/jsapi 请求域名：【主域名】https://api.mch…",
+      "queries": []
+    },
+    {
+      "id": "KS-0004",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791898.md",
+      "title": "小程序支付 · 小程序调起支付",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "payment"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\011_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 官方原文\\raw\\sources\\links\\004_pay.weixin.qq.com",
+        "D:\\Codes\\skill输出\\Luz-Crawl\\009_Luz-Dev 05 Luz-Dev-调研审核门禁与安全规范体系 官方原文\\raw\\sources\\links\\003_pay.weixin.qq.com"
+      ],
+      "excerpt": "通过[JSAPI/小程序下单](https://pay.weixin.qq.com/doc/v3/merchant/4012791897.md)接口获取到发起支付的必要参数prepay\\_id，然后使用微信支付提供的[小程序方法](https://developers.weixin.qq.com/miniprogram…",
+      "queries": []
+    },
+    {
+      "id": "KS-0005",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791900.md",
+      "title": "小程序支付 · 商户订单号查询订单",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "payment"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\011_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 官方原文\\raw\\sources\\links\\005_pay.weixin.qq.com"
+      ],
+      "excerpt": "订单支付成功后，商户可使用[微信订单号查询订单](https://pay.weixin.qq.com/doc/v3/merchant/4013070354.md)或商户订单号查询订单；若订单未支付，则只能使用商户订单号查询订单。 接口说明 支持商户：【普通商户】 请求方式：【GET】 `/v3/pay/transact…",
+      "queries": []
+    },
+    {
+      "id": "KS-0006",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791901.md",
+      "title": "小程序支付 · 关闭订单",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "payment"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\011_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 官方原文\\raw\\sources\\links\\006_pay.weixin.qq.com",
+        "D:\\Codes\\skill输出\\Luz-Crawl\\009_Luz-Dev 05 Luz-Dev-调研审核门禁与安全规范体系 官方原文\\raw\\sources\\links\\005_pay.weixin.qq.com"
+      ],
+      "excerpt": "未支付状态的订单，可在无需支付时调用此接口关闭订单。常见关单情况包括： - 用户在商户系统提交取消订单请求，商户需执行关单操作。 - 订单超时未支付（超出商户系统设定的可支付时间或下单时的time\\_expire支付截止时间），商户需进行关单处理。 接口说明 支持商户：【普通商户】 请求方式：【POST】 `/v3/p…",
+      "queries": []
+    },
+    {
+      "id": "KS-0007",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791902.md",
+      "title": "小程序支付 · 支付成功回调通知",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "payment"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\011_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 官方原文\\raw\\sources\\links\\007_pay.weixin.qq.com"
+      ],
+      "excerpt": "一、回调描述 用户使用普通支付（APP支付/H5支付/JSAPI支付/Native支付/小程序支付）功能，当用户成功支付订单后，微信支付会通过POST的请求方式，向商户预先设置的回调地址([APP支付](https://pay.weixin.qq.com/doc/v3/merchant/4013070347.md)/[…",
+      "queries": []
+    },
+    {
+      "id": "KS-0008",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4013053249",
+      "title": "如何使用微信支付公钥验签_通用规则|微信支付商户文档中心",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "payment"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\011_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 官方原文\\raw\\sources\\links\\009_如何使用微信支付公钥验签_通用规则 微信支付商户文档中心",
+        "D:\\Codes\\skill输出\\Luz-Crawl\\005_Luz-Dev 官方文档直读\\raw\\sources\\links\\006_如何使用微信支付公钥验签_通用规则 微信支付商户文档中心"
+      ],
+      "excerpt": "如何使用微信支付公钥验签 注意： 本文档中的示例不可直接使用，需将示例中的内容替换为真实请求的信息 请参考本章节，只需4步，完成微信支付公钥对接 1. 获取微信支付公钥 超级管理员或者安全联系人登录商户平台，进入账户中心-API安全页面，点击申请公钥后，可下载微信支付公钥 （1）帐户中心->API安全 （2）微信支付公…",
+      "queries": []
+    },
+    {
+      "id": "KS-0009",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4024350132.md",
+      "title": "证书密钥概览",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "payment"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\011_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 官方原文\\raw\\sources\\links\\010_pay.weixin.qq.com",
+        "D:\\Codes\\skill输出\\Luz-Crawl\\009_Luz-Dev 05 Luz-Dev-调研审核门禁与安全规范体系 官方原文\\raw\\sources\\links\\008_pay.weixin.qq.com"
+      ],
+      "excerpt": "微信支付API的签名、验签及敏感信息加解密均依赖证书和密钥，商户需妥善保管相关信息，并在证书过期前完成更换。 商户 API 证书 平台证书 微信支付公钥 APIv3 密钥 APIv2 密钥 | --- --- --- --- --- --- | 概述 商户在商户平台申请，证明商户身份的数字证书 微信支付平台生成，给商户…",
+      "queries": []
+    },
+    {
+      "id": "KS-0010",
+      "url": "https://developers.weixin.qq.com/miniprogram/dev/api/payment/wx.requestPayment.html",
+      "title": "支付 / wx.requestPayment",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "payment"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\011_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 官方原文\\raw\\sources\\links\\011_支付 wx.requestPayment",
+        "D:\\Codes\\skill输出\\Luz-Crawl\\005_Luz-Dev 官方文档直读\\raw\\sources\\links\\010_微信开放文档 小程序-开发-API 支付 wx.requestPayment"
+      ],
+      "excerpt": "支付 /wx.requestPayment wx.requestPayment(Object object) 以 Promise 风格 调用：支持 小程序插件：不支持 微信 Windows 版：支持 微信 Mac 版：支持 微信 鸿蒙 OS 版：支持 功能描述 发起微信支付。调用前需在小程序微信公众平台-功能-微信支付…",
+      "queries": []
+    },
+    {
+      "id": "KS-0011",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791903.md",
+      "title": "小程序支付 · 退款申请",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "refund"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\011_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 官方原文\\raw\\sources\\links\\012_pay.weixin.qq.com",
+        "D:\\Codes\\skill输出\\Luz-Crawl\\009_Luz-Dev 05 Luz-Dev-调研审核门禁与安全规范体系 官方原文\\raw\\sources\\links\\009_pay.weixin.qq.com"
+      ],
+      "excerpt": "在交易完成后的一年内（以支付成功时间为起点+365天计算），若因用户或商户方面导致需进行订单退款，商户可通过此接口将支付金额的全部或部分原路退还至用户。详细介绍参考：[订单退款-产品介绍](https://pay.weixin.qq.com/doc/v3/merchant/4013071001.md)。 注意： 1、一…",
+      "queries": []
+    },
+    {
+      "id": "KS-0012",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791906.md",
+      "title": "小程序支付 · 退款结果回调通知",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "refund"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\011_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 官方原文\\raw\\sources\\links\\015_pay.weixin.qq.com",
+        "D:\\Codes\\skill输出\\Luz-Crawl\\009_Luz-Dev 05 Luz-Dev-调研审核门禁与安全规范体系 官方原文\\raw\\sources\\links\\012_pay.weixin.qq.com"
+      ],
+      "excerpt": "一、回调描述 用户支付完成后，商户可根据需求发起退款。当退款单状态发生变更时（变更为退款成功/退款关闭/退款异常），微信支付会通过POST的请求方式，向商户预先设置的退款回调地址([申请退款](https://pay.weixin.qq.com/doc/v3/merchant/4013071036.md)传入的notf…",
+      "queries": []
+    },
+    {
+      "id": "KS-0013",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html",
+      "title": "Authorization - OWASP Cheat Sheet Series",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "admin-rbac"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\011_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 官方原文\\raw\\sources\\links\\016_Authorization - OWASP Cheat Sheet Series",
+        "D:\\Codes\\skill输出\\Luz-Crawl\\005_Luz-Dev 官方文档直读\\raw\\sources\\links\\018_Authorization - OWASP Cheat Sheet Series"
+      ],
+      "excerpt": "Authorization Cheat Sheet¶ Introduction¶ Authorization may be defined as \"the process of verifying that a requested action or service is approved for a specific…",
+      "queries": []
+    },
+    {
+      "id": "KS-0014",
+      "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/open-ability/login.html",
+      "title": "开放能力 / 用户信息 / 小程序登录",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "login"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\011_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 官方原文\\raw\\sources\\links\\017_开放能力 用户信息 小程序登录",
+        "D:\\Codes\\skill输出\\Luz-Crawl\\005_Luz-Dev 官方文档直读\\raw\\sources\\links\\011_微信开放文档 小程序-开发-指南 开放能力 用户信息 小程序登录"
+      ],
+      "excerpt": "开放能力 /用户信息 /小程序登录 小程序登录 小程序可以通过微信官方提供的登录能力方便地获取微信提供的用户身份标识，快速建立小程序内的用户体系。 登录流程时序 说明 调用 wx.login() 获取 临时登录凭证code ，并回传到开发者服务器。 调用 auth.code2Session 接口，换取 用户唯一标识 O…",
+      "queries": []
+    },
+    {
+      "id": "KS-0015",
+      "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/open-ability/getPhoneNumber.html",
+      "title": "开放能力 / 用户信息 / 手机号快速验证组件",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "login"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\011_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 官方原文\\raw\\sources\\links\\018_开放能力 用户信息 手机号快速验证组件",
+        "D:\\Codes\\skill输出\\Luz-Crawl\\005_Luz-Dev 官方文档直读\\raw\\sources\\links\\013_微信开放文档 小程序-开发-指南 开放能力 用户信息 手机号快速验证组件"
+      ],
+      "excerpt": "开放能力 /用户信息 /手机号快速验证组件 手机号快速验证组件 该能力旨在帮助开发者向用户发起手机号申请，并且必须经过用户同意后，开发者才可获得由平台验证后的手机号，进而为用户提供相应服务。 该能力与手机号实时验证组件的区别为： 手机号快速验证组件，平台会对号码进行验证，但不保证是实时验证； 手机号实时验证组件，在每次…",
+      "queries": []
+    },
+    {
+      "id": "KS-0016",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+      "title": "Authentication - OWASP Cheat Sheet Series",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "auth"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\011_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 官方原文\\raw\\sources\\links\\019_Authentication - OWASP Cheat Sheet Series",
+        "D:\\Codes\\skill输出\\Luz-Crawl\\009_Luz-Dev 05 Luz-Dev-调研审核门禁与安全规范体系 官方原文\\raw\\sources\\links\\016_Authentication - OWASP Cheat Sheet Series"
+      ],
+      "excerpt": "Authentication Cheat Sheet¶ Introduction¶ Authentication (AuthN) is the process of verifying that an individual, entity, or website is who or what it claims to …",
+      "queries": []
+    },
+    {
+      "id": "KS-0017",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html",
+      "title": "Password Storage - OWASP Cheat Sheet Series",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "auth"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\011_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 官方原文\\raw\\sources\\links\\020_Password Storage - OWASP Cheat Sheet Series",
+        "D:\\Codes\\skill输出\\Luz-Crawl\\005_Luz-Dev 官方文档直读\\raw\\sources\\links\\020_Password Storage - OWASP Cheat Sheet Series"
+      ],
+      "excerpt": "Password Storage Cheat Sheet¶ Introduction¶ This cheat sheet advises you on the proper methods for storing passwords for authentication. When passwords are stor…",
+      "queries": []
+    },
+    {
+      "id": "KS-0018",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html",
+      "title": "File Upload - OWASP Cheat Sheet Series",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "upload"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\011_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 官方原文\\raw\\sources\\links\\021_File Upload - OWASP Cheat Sheet Series",
+        "D:\\Codes\\skill输出\\Luz-Crawl\\005_Luz-Dev 官方文档直读\\raw\\sources\\links\\019_File Upload - OWASP Cheat Sheet Series"
+      ],
+      "excerpt": "File Upload Cheat Sheet¶ Introduction¶ File upload is becoming a more and more essential part of any application, where the user is able to upload their photo, …",
+      "queries": []
+    },
+    {
+      "id": "KS-0019",
+      "url": "https://github.com/macrozheng/mall",
+      "title": "macrozheng/mall: mall项目是一套电商系统，包括前台商城系统及后台管理系统，基于Spring Boot+MyBatis实现，采用Docker容器化部署。 前台商城系统包含首页门户、商品推荐、商品搜索、商品展示、购物车、订单流程、会员中心、客户服务、帮助中心等模块。 后台管理系统包含商品管理、订单管理、会员管理、促销管理、运营管理、内容管理、统计报表、财务管理、权限管理、设置等模块。",
+      "tier": "opensource",
+      "kind": "opensource",
+      "modules": [
+        "system"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\011_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 官方原文\\raw\\sources\\links\\022_macrozheng mall mall项目是一套电商系统，包括前台商城系统及后台管理系统，基于Spring Boot+MyBa"
+      ],
+      "excerpt": "mall Public Watch 2201 (2201) Fork29.8k (29.8k) Star85k (85k) master 4 Branches 4 Tags t T Add file Code Latest commit macrozheng 支付订单金额改为从数据库订单表中获取 dcaa93b · H…",
+      "queries": []
+    },
+    {
+      "id": "KS-0020",
+      "url": "https://github.com/linlinjava/litemall",
+      "title": "linlinjava/litemall: 又一个小商城。litemall = Spring Boot后端 + Vue管理员前端 + 微信小程序用户前端 + Vue用户移动端",
+      "tier": "opensource",
+      "kind": "opensource",
+      "modules": [
+        "system"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\011_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 官方原文\\raw\\sources\\links\\023_linlinjava litemall 又一个小商城。litemall = Spring Boot后端 + Vue管理员前端 +"
+      ],
+      "excerpt": "litemall Public Watch 721 (721) Fork7.3k (7.3k) Star20.4k (20.4k) master 8 Branches 24 Tags t T Add file Code Latest commit linlinjava and gitee-org update READ…",
+      "queries": []
+    },
+    {
+      "id": "KS-0021",
+      "url": "https://blog.csdn.net/AlibabaTech1024/article/details/163275205",
+      "title": "分解一座冰山：后端系统「AI 知识库体系」建设实践（长文干货）_service-knowledge-generate-CSDN博客",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\014_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 检索\\raw\\sources\\bing\\002_分解一座冰山：后端系统「AI 知识库体系」建设实践（长文干货）_service-knowledge-generate-CSDN博"
+      ],
+      "excerpt": "分解一座冰山：后端系统「AI 知识库体系」建设实践（长文干货） 阿里技术 墨衍会员 · AI 创作全网分发 码龄5年 关注 原创 2026-07-28 15:22:15 578 阅读 AI 写同款 · GEO 优化 › 本文作者：刘瑞洲 01从「让 AI 看懂代码」到「让 AI 正确行动」 在上一篇讨论《后端系统 AI…",
+      "queries": [
+        "Luz-Dev-后端业务逻辑知识库与系统方案调研 技术方案 系统架构 模块设计"
+      ]
+    },
+    {
+      "id": "KS-0022",
+      "url": "https://developer.baidu.com/article/detail.html?id=5592253",
+      "title": "知识库系统业务架构与结构设计指南-百度开发者中心",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\014_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 检索\\raw\\sources\\bing\\003_知识库系统业务架构与结构设计指南-百度开发者中心"
+      ],
+      "excerpt": "0 0 知识库系统业务架构与结构设计指南 1月7日 150看过 本文详细解析知识库系统业务架构图与结构设计方法，涵盖分层架构、模块划分、数据存储与交互等核心要素，提供可落地的设计思路与优化建议，助力开发者构建高效稳定的知识管理系统。 一、知识库系统业务架构的核心价值 知识库系统作为企业知识管理的核心载体，承担着知识采集…",
+      "queries": [
+        "Luz-Dev-后端业务逻辑知识库与系统方案调研 技术方案 系统架构 模块设计"
+      ]
+    },
+    {
+      "id": "KS-0023",
+      "url": "https://gitee.com/del-space/team-knowledge-base",
+      "title": "Team knowledge base: 专注于后端知识库管理的开源团队，提供高效、灵活的知识存储与查询解决方案，支持多语言和跨平台应用。",
+      "tier": "opensource",
+      "kind": "opensource",
+      "modules": [],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\014_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 检索\\raw\\sources\\gitee\\003_Team knowledge base 专注于后端知识库管理的开源团队，提供高效、灵活的知识存储与查询解决方案，支持多语言和跨平"
+      ],
+      "excerpt": "开源企业版高校版私有云模力方舟 AI 队友 登录注册 【活动通知】GOTC 2026 全球开源技术峰会11月14日北京开幕，开源 × AI 生态创新活动，创客、开发者免费报名通道开启！ Watch 1 Star 0 Fork 0 DeL / Team knowledge base 代码 Issues 0 Pull Re…",
+      "queries": [
+        "Luz-Dev-后端业务逻辑知识库与系统方案调研"
+      ]
+    },
+    {
+      "id": "KS-0024",
+      "url": "https://gitee.com/carpONE_admin/knowledge-base",
+      "title": "知识库: 基于vue3+springboot开发的知识库，管理后台涵盖也在一起的，可以自定义侧边栏以及内容",
+      "tier": "opensource",
+      "kind": "opensource",
+      "modules": [],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\014_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 检索\\raw\\sources\\gitee\\004_知识库 基于vue3+springboot开发的知识库，管理后台涵盖也在一起的，可以自定义侧边栏以及内容"
+      ],
+      "excerpt": "开源企业版高校版私有云模力方舟 AI 队友 登录注册 【活动通知】GOTC 2026 全球开源技术峰会11月14日北京开幕，开源 × AI 生态创新活动，创客、开发者免费报名通道开启！ Watch 2 Star 14 Fork 1 carpONE / 知识库 代码 Issues 2 Pull Requests 0 Wi…",
+      "queries": [
+        "Luz-Dev-后端业务逻辑知识库与系统方案调研"
+      ]
+    },
+    {
+      "id": "KS-0025",
+      "url": "https://blog.csdn.net/blogdevteam/article/details/126135357",
+      "title": "CSDN帐号管理规范_csdn账号怎么禁止发评论-CSDN博客",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\014_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 检索\\raw\\sources\\csdn\\002_CSDN帐号管理规范_csdn账号怎么禁止发评论-CSDN博客"
+      ],
+      "excerpt": "CSDN帐号管理规范 CSDN官方博客 2025-11-05 11:20:02 关注 第一章、概述 1、目的 为保障北京创新乐知网络技术有限公司及其关联公司（以下简称“CSDN”）业务健康可持续发展，维护CSDN正常运营秩序，规范CSDN帐号的使用者（以下简称“用户”）行为，保障产品用户体验，整体提升CSDN环境，履行…",
+      "queries": [
+        "Luz-Dev-后端业务逻辑知识库与系统方案调研 系统设计 数据库设计"
+      ]
+    },
+    {
+      "id": "KS-0026",
+      "url": "https://blog.csdn.net/blogdevteam/article/details/90369522",
+      "title": "版权申诉指引_csdn文章如何举报-CSDN博客",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\014_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 检索\\raw\\sources\\csdn\\003_版权申诉指引_csdn文章如何举报-CSDN博客"
+      ],
+      "excerpt": "版权申诉指引 CSDN官方博客 墨衍会员 · 1 平台 · 10w+ 阅读 码龄21年 关注 原创 2026-04-27 15:56:53 10w+ 阅读 AI 写同款 · GEO 优化 › CSDN社区做为开发者彼此分享和交换知识的 IT 资源共享平台，高度重视所有知识的产权保护，欢迎大家及时对侵权内容进行申诉/举报…",
+      "queries": [
+        "Luz-Dev-后端业务逻辑知识库与系统方案调研 系统设计 数据库设计"
+      ]
+    },
+    {
+      "id": "KS-0027",
+      "url": "https://github.com/daigang666/mall",
+      "title": "daigang666/mall: 这是一个社区电商平台，基于spring boot的后端，vue前端管理，微信小程序构建",
+      "tier": "opensource",
+      "kind": "opensource",
+      "modules": [
+        "system"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\014_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 检索\\raw\\sources\\github\\003_daigang666 mall 这是一个社区电商平台，基于spring boot的后端，vue前端管理，微信小程序构建"
+      ],
+      "excerpt": "mall Public Watch 0 (0) Fork12 (12) Star51 (51) master 2 Branches 0 Tags t T Add file Code Latest commit junrenzhao add more interfaces descripte 98938e2 · Hist…",
+      "queries": [
+        "mall 电商 小程序 spring boot vue"
+      ]
+    },
+    {
+      "id": "KS-0028",
+      "url": "https://github.com/simon-ferryman/TreeMall",
+      "title": "simon-ferryman/TreeMall: 电商小程序项目 - Spring Boot 3.2 + uni-app (Vue 3)",
+      "tier": "opensource",
+      "kind": "opensource",
+      "modules": [
+        "system"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\014_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 检索\\raw\\sources\\github\\004_simon-ferryman TreeMall 电商小程序项目 - Spring Boot 3.2 + uni-app (Vue"
+      ],
+      "excerpt": "TreeMall Public Watch 0 (0) Fork1 (1) Star0 (0) main 2 Branches 0 Tags t T Add file Code Latest commit simon-ferryman Merge pull request #3 from SimonFerrymanTe…",
+      "queries": [
+        "mall 电商 小程序 spring boot vue"
+      ]
+    },
+    {
+      "id": "KS-0029",
+      "url": "https://github.com/M-Attaullah/Gym-Management-System",
+      "title": "M-Attaullah/Gym-Management-System: A Gym Management System built with PHP and MySQL to manage memberships, class scheduling, trainers, and equipment. It features user authentication, payment tracking, and booking management. The frontend uses HTML, CSS, and JavaScript, while XAMPP and phpMyAdmin handle deployment and database management, ensuring smooth and efficient operations.",
+      "tier": "opensource",
+      "kind": "opensource",
+      "modules": [
+        "system"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\015_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 检索-02\\raw\\sources\\github\\002_M-Attaullah Gym-Management-System A Gym Management System built"
+      ],
+      "excerpt": "Gym-Management-System Public Watch 2 (2) Fork4 (4) Star5 (5) main 1 Branch 0 Tags t T Add file Add file Code Latest commit M-Attaullah Add files via upload c2b6…",
+      "queries": [
+        "gym management system booking membership"
+      ]
+    },
+    {
+      "id": "KS-0030",
+      "url": "https://github.com/emrecelik07/Gym-Management-and-Scheduling-System",
+      "title": "emrecelik07/Gym-Management-and-Scheduling-System: A full-stack Gym Management and Scheduling System built with Node.js, Express, and MySQL. Includes role-based access, class booking, scheduling conflict checks, and membership tracking.",
+      "tier": "opensource",
+      "kind": "opensource",
+      "modules": [
+        "system"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\015_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 检索-02\\raw\\sources\\github\\003_emrecelik07 Gym-Management-and-Scheduling-System A full-stack Gy"
+      ],
+      "excerpt": "Gym-Management-and-Scheduling-System Public Watch 0 (0) Fork0 (0) Star4 (4) main 1 Branch 0 Tags t T Add file Add file Code Latest commit emrecelik07 licanse up…",
+      "queries": [
+        "gym management system booking membership"
+      ]
+    },
+    {
+      "id": "KS-0031",
+      "url": "https://gitee.com/brandy-empty-bottle/gym-member-management-system",
+      "title": "健身房会员管理系统: 健身房会员管理信息系统（Gym Member Management System）是一个基于 React + NestJS 全栈架构开发的管理平台，用于实现健身房会员、教练以及管理员之间的业务管理与数据交互。系统支持 会员管理、课程预约、健身记录、教练课程管理、后台数据统计等功能，通过角色权限控制，实现不同用户访问不同系统模块，从而完成完整的健身房管理流程。",
+      "tier": "opensource",
+      "kind": "opensource",
+      "modules": [
+        "system"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\015_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 检索-02\\raw\\sources\\gitee\\002_健身房会员管理系统 健身房会员管理信息系统（Gym Member Management System）是一个基于 React +"
+      ],
+      "excerpt": "开源企业版高校版私有云模力方舟 AI 队友 登录注册 【活动通知】GOTC 2026 全球开源技术峰会11月14日北京开幕，开源 × AI 生态创新活动，创客、开发者免费报名通道开启！ Watch 1 Star 0 Fork 0 白兰地空瓶 / 健身房会员管理系统 代码 Issues 0 Pull Requests 0…",
+      "queries": [
+        "健身房 管理系统 预约 会员卡 开源"
+      ]
+    },
+    {
+      "id": "KS-0032",
+      "url": "https://gitee.com/frost-blossom/gym-member-management-system",
+      "title": "健身房会员管理系统: 会员注册与档案管理，课程发布与预约，私教预约，签到打卡，消费记录查询，教练信息管理，课程销量统计，会员到期体系，会员卡充值续费",
+      "tier": "opensource",
+      "kind": "opensource",
+      "modules": [
+        "system"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\015_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 检索-02\\raw\\sources\\gitee\\003_健身房会员管理系统 会员注册与档案管理，课程发布与预约，私教预约，签到打卡，消费记录查询，教练信息管理，课程销量统计，会员到期体"
+      ],
+      "excerpt": "开源企业版高校版私有云模力方舟 AI 队友 登录注册 【活动通知】GOTC 2026 全球开源技术峰会11月14日北京开幕，开源 × AI 生态创新活动，创客、开发者免费报名通道开启！ Watch 4 Star 0 Fork 1 霜华 / 健身房会员管理系统 代码 Issues 0 Pull Requests 0 Wi…",
+      "queries": [
+        "健身房 管理系统 预约 会员卡 开源"
+      ]
+    },
+    {
+      "id": "KS-0033",
+      "url": "https://blog.csdn.net/vx17661296331/article/details/161118129",
+      "title": "扫码点餐系统源码如何从0开始搭建完整餐饮点餐系统_扫码点餐小程序搭建流程详解:从桌码到订单系统如何实现-CSDN博客",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "system"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\015_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 检索-02\\raw\\sources\\csdn\\003_扫码点餐系统源码如何从0开始搭建完整餐饮点餐系统_扫码点餐小程序搭建流程详解 从桌码到订单系统如何实现-CSDN博客"
+      ],
+      "excerpt": "扫码点餐系统源码如何从0开始搭建完整餐饮点餐系统 万岳科技系统开发 墨衍会员 · AI 创作全网分发 码龄7年 关注 原创 2026-05-15 16:47:46 420 阅读 AI 写同款 · GEO 优化 › 随着餐饮行业数字化的发展，扫码点餐已经逐渐成为门店运营中的基础能力。相比传统人工点餐模式，扫码点餐系统能够…",
+      "queries": [
+        "扫码点餐 系统设计 桌台 加菜 厨房出餐"
+      ]
+    },
+    {
+      "id": "KS-0034",
+      "url": "https://blog.csdn.net/hudie765/article/details/168774775",
+      "title": "堂食扫码点餐系统技术拆解：桌台绑定、订单状态机与厨房打印链路-CSDN博客",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "system"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\015_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 检索-02\\raw\\sources\\csdn\\004_堂食扫码点餐系统技术拆解：桌台绑定、订单状态机与厨房打印链路-CSDN博客"
+      ],
+      "excerpt": "堂食扫码点餐系统技术拆解：桌台绑定、订单状态机与厨房打印链路 原创 于 2026-10-22 23:00:41 发布 · 144 阅读 · 2 · 6 · 本内容遵循CC 4.0 BY-SA版权协议 GEO检测 话题 #AtomGit「码动四季·开源同行」秋季征稿活动 本文深入拆解堂食扫码点餐系统三大技术支柱：以带签名…",
+      "queries": [
+        "扫码点餐 系统设计 桌台 加菜 厨房出餐"
+      ]
+    },
+    {
+      "id": "KS-0035",
+      "url": "https://juejin.cn/post/7438428164279697408?searchId=2026102616382143C7470030266D8DA9FC",
+      "title": "多租户SaaS系统的自定义域名和独立域名绑定架构设计一、需求场景说明 我们在做多租户的SaaS服务时，时长碰到需要自定义 - 掘金",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "system"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\015_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 检索-02\\raw\\sources\\juejin\\002_多租户SaaS系统的自定义域名和独立域名绑定架构设计一、需求场景说明 我们在做多租户的SaaS服务时，时长碰到需要自定义 - 掘"
+      ],
+      "excerpt": "多租户SaaS系统的自定义域名和独立域名绑定架构设计 Hamm 2024-11-18 3,340 阅读4分钟 专栏： 你好，全干工程师 一、需求场景说明 我们在做多租户的SaaS服务时，时长碰到需要自定义子域名以及独立域名绑定的问题，例如 Coding 的设计： 注册租户（团队），填写团队名称、团队域名（团队编码），例…",
+      "queries": [
+        "SaaS 多租户 数据隔离 权限 设计"
+      ]
+    },
+    {
+      "id": "KS-0036",
+      "url": "https://juejin.cn/post/7330300019021676579?searchId=2026102616382143C7470030266D8DA9FC",
+      "title": "SAAS多租户系统平台技术架构与实践一、背景 随着云计算的快速发展，软件即服务（SAAS）模式逐渐成为企业应用程序的首选 - 掘金",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "system"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\015_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 检索-02\\raw\\sources\\juejin\\003_SAAS多租户系统平台技术架构与实践一、背景 随着云计算的快速发展，软件即服务（SAAS）模式逐渐成为企业应用程序的首选 - 掘"
+      ],
+      "excerpt": "SAAS多租户系统平台技术架构与实践 360_go_php 2024-02-01 6,045 阅读4分钟 专栏： 后端与系统架构 一、背景 随着云计算的快速发展，软件即服务（SAAS）模式逐渐成为企业应用程序的首选部署方式。多租户系统平台作为SAAS的核心技术，允许多个租户共享同一个软件实例，从而实现资源的最大化利用。…",
+      "queries": [
+        "SaaS 多租户 数据隔离 权限 设计"
+      ]
+    },
+    {
+      "id": "KS-0037",
+      "url": "https://www.cnblogs.com/jzssuanfa/p/19632520",
+      "title": "从零到一掌握Redis：核心概念、实战购物车与进阶应用指南 - jzssuanfa - 博客园",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "cart"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\015_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 检索-02\\raw\\sources\\cnblogs\\004_从零到一掌握Redis：核心概念、实战购物车与进阶应用指南 - jzssuanfa - 博客园"
+      ],
+      "excerpt": "在当今高并发的互联网应用中，性能瓶颈往往出现在数据库层面。如何让应用响应如飞？Redis作为一款高性能的内存数据库和缓存中间件，已成为后端开发者必须掌握的利器。本文将从核心概念入手，带你快速搭建环境，并通过一个完整的Spring Boot购物车实战项目，深入理解Redis的应用。无论你是刚接触服务端开发的新手，还是希望…",
+      "queries": [
+        "购物车 Redis 数据库 设计 结算"
+      ]
+    },
+    {
+      "id": "KS-0038",
+      "url": "https://www.gov.cn/zhengce/zhengceku/2020-11/06/content_5557730.htm",
+      "title": "规范促销行为暂行规定_国务院部门文件_中国政府网",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "lottery"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\015_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 检索-02\\raw\\sources\\bing\\002_规范促销行为暂行规定_国务院部门文件_中国政府网",
+        "D:\\Codes\\skill输出\\Luz-Crawl\\006_健身房小程序与后台系统调研\\raw\\sources\\bing\\006_规范促销行为暂行规定_国务院部门文件_中国政府网"
+      ],
+      "excerpt": "首页 简 繁 EN 登录 邮箱 无障碍 首页 > 政策 > 国务院政策文件库 > 国务院部门文件 字号：默认 大 超大 打印 收藏 标 题： 规范促销行为暂行规定 发文机关： 市场监管总局 发文字号： 国家市场监督管理总局令第32号 来 源： 市场监管总局网站 主题分类： 市场监管、安全生产监管\\其他 公文种类： 命令…",
+      "queries": [
+        "规范促销行为暂行规定 抽奖式有奖销售 最高奖 site:gov.cn",
+        "规范促销行为暂行规定 抽奖式有奖销售 最高奖金额"
+      ]
+    },
+    {
+      "id": "KS-0039",
+      "url": "https://github.com/niexiangwen/restaurant-mp",
+      "title": "niexiangwen/restaurant-mp: WeChat Mini Program - Restaurant Ordering System",
+      "tier": "opensource",
+      "kind": "opensource",
+      "modules": [
+        "system"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\015_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 检索-02\\raw\\sources\\github\\005_niexiangwen restaurant-mp WeChat Mini Program - Restaurant Order"
+      ],
+      "excerpt": "restaurant-mp Public Watch 0 (0) Fork1 (1) Star2 (2) main 1 Branch 0 Tags t T Add file Add file Code Latest commit user feat: 扫码点餐小程序初始版本 e5a772f · History 1 Co…",
+      "queries": [
+        "restaurant ordering system mini program"
+      ]
+    },
+    {
+      "id": "KS-0040",
+      "url": "https://github.com/anne-07/Programming-Paradigm",
+      "title": "anne-07/Programming-Paradigm: Mini Project On Restaurant Ordering System",
+      "tier": "opensource",
+      "kind": "opensource",
+      "modules": [
+        "system"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:51:07+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\015_Luz-Dev 06 Luz-Dev-后端业务逻辑知识库与系统方案调研 检索-02\\raw\\sources\\github\\006_anne-07 Programming-Paradigm Mini Project On Restaurant Ordering"
+      ],
+      "excerpt": "Programming-Paradigm Public Watch 1 (1) Fork0 (0) Star0 (0) main 1 Branch 0 Tags t T Add file Add file Code Latest commit anne-07 Create README.md 3916440 · His…",
+      "queries": [
+        "restaurant ordering system mini program"
+      ]
+    },
+    {
+      "id": "KS-0041",
+      "url": "https://pay.weixin.qq.com/doc/v3/partner/4012738519",
+      "title": "JSAPI下单_JSAPI支付|微信支付合作伙伴文档中心",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\004_Luz-Dev 微信支付与人脸安全规范调研\\raw\\sources\\bing\\002_JSAPI下单_JSAPI支付 微信支付合作伙伴文档中心"
+      ],
+      "excerpt": "JSAPI下单 更新时间：2026.10.11 以 Markdown 格式查看 | 复制给 LLM | 问 AI | 安装 Skill JSAPI支付场景(微信内置浏览器打开的网页)或小程序支付场景，服务商需调用该接口在微信支付下单，生成用于调起支付的预支付交易会话标识(prepay_id)。 接口说明 支持商户：【普通服务商】 请求方式：【POST】/v3/pay/partner/transactions/jsapi 请求域名：【主域名】https://api.mch.weixin.qq.com 使用该域名将访问就近的接入点 【备域名】https://api2.mch.weixin.qq.c",
+      "queries": [
+        "微信支付 APIv3 JSAPI下单 prepay_id site:pay.weixin.qq.com"
+      ]
+    },
+    {
+      "id": "KS-0042",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791856",
+      "title": "JSAPI下单_JSAPI支付|微信支付商户文档中心",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\004_Luz-Dev 微信支付与人脸安全规范调研\\raw\\sources\\bing\\003_JSAPI下单_JSAPI支付 微信支付商户文档中心"
+      ],
+      "excerpt": "JSAPI下单 更新时间：2026.10.11 以 Markdown 格式查看 | 复制给 LLM | 问 AI | 安装 Skill JSAPI支付场景(微信内置浏览器打开的网页)，商户需调用该接口在微信支付下单，生成用于调起支付的预支付交易会话标识(prepay_id)。 接口说明 支持商户：【普通商户】 请求方式：【POST】/v3/pay/transactions/jsapi 请求域名：【主域名】https://api.mch.weixin.qq.com 使用该域名将访问就近的接入点 【备域名】https://api2.mch.weixin.qq.com 使用该域名将访问异地的接入点 ",
+      "queries": [
+        "微信支付 APIv3 JSAPI下单 prepay_id site:pay.weixin.qq.com"
+      ]
+    },
+    {
+      "id": "KS-0043",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791861",
+      "title": "支付成功回调通知_JSAPI支付|微信支付商户文档中心",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\004_Luz-Dev 微信支付与人脸安全规范调研\\raw\\sources\\bing\\005_支付成功回调通知_JSAPI支付 微信支付商户文档中心"
+      ],
+      "excerpt": "支付成功回调通知 更新时间：2024.12.27 以 Markdown 格式查看 | 复制给 LLM | 问 AI | 安装 Skill 一、回调描述 用户使用普通支付（APP支付/H5支付/JSAPI支付/Native支付/小程序支付）功能，当用户成功支付订单后，微信支付会通过POST的请求方式，向商户预先设置的回调地址(APP支付/H5支付/JSAPI支付/Native支付/小程序支付下单接口传入的notify_url)发送回调通知，让商户知晓用户已完成支付。 注意： 商户侧对微信支付回调IP有防火墙策略限制的，需要对微信回调IP段开通白名单，否则会导致收不到回调(微信支付回调被商户防火墙",
+      "queries": [
+        "微信支付 JSAPI 支付成功回调通知 验签 解密 AEAD_AES_256_GCM site:pay.weixin.qq.com"
+      ]
+    },
+    {
+      "id": "KS-0044",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012071382",
+      "title": "如何解密回调报文和平台证书_通用规则|微信支付商户文档中心",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\004_Luz-Dev 微信支付与人脸安全规范调研\\raw\\sources\\bing\\006_如何解密回调报文和平台证书_通用规则 微信支付商户文档中心"
+      ],
+      "excerpt": "如何解密回调报文和平台证书 更新时间：2024.11.29 以 Markdown 格式查看 | 复制给 LLM | 问 AI | 安装 Skill 为了保证安全性，微信支付在回调通知和平台证书下载接口中，对关键信息进行了AES-256-GCM加密，商户收到报文后，要解密出明文，APIv3密钥是解密时使用的对称密钥。本章节详细介绍了加密报文的格式，以及如何进行解密。 我们提供了微信支付API v3官方SDK（目前包含Java、PHP、Go三种语言版本），使用官方 SDK 调用微信支付接口，无需关心签名生成和验证，接入更方便。 1. 加密报文格式 AES-GCM是一种NIST标准的认证加密算法， ",
+      "queries": [
+        "微信支付 JSAPI 支付成功回调通知 验签 解密 AEAD_AES_256_GCM site:pay.weixin.qq.com"
+      ]
+    },
+    {
+      "id": "KS-0045",
+      "url": "https://pay.weixin.qq.com/doc/v2/merchant/4011987538",
+      "title": "查询订单_产品文档（V2）|微信支付商户文档中心",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\004_Luz-Dev 微信支付与人脸安全规范调研\\raw\\sources\\bing\\008_查询订单_产品文档（V2） 微信支付商户文档中心"
+      ],
+      "excerpt": "查询订单 更新时间：2026.04.24 以 Markdown 格式查看 | 复制给 LLM | 问 AI | 安装 Skill 接口提供所有微信支付订单的查询，商户可以通过查询订单接口主动查询订单状态，完成下一步的业务逻辑。 注意： 需要调用查询接口的情况： 当商户后台、网络、服务器等出现异常，商户系统最终未接收到支付通知； 调用支付接口后，返回系统错误或未知交易状态情况； 调用付款码支付API，返回USERPAYING的状态； 调用关单或撤销接口API之前，需确认支付状态； 接口说明 适用对象：直连商户 请求URL： https://api.mch.weixin.qq.com/pay/or",
+      "queries": [
+        "微信支付 商户订单号查询订单 trade_state site:pay.weixin.qq.com"
+      ]
+    },
+    {
+      "id": "KS-0046",
+      "url": "https://pay.weixin.qq.com/doc/v2/merchant/4011935215",
+      "title": "查询订单_产品文档（V2）|微信支付商户文档中心",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\004_Luz-Dev 微信支付与人脸安全规范调研\\raw\\sources\\bing\\009_查询订单_产品文档（V2） 微信支付商户文档中心"
+      ],
+      "excerpt": "查询订单 更新时间：2024.12.18 以 Markdown 格式查看 | 复制给 LLM | 问 AI | 安装 Skill 应用场景 该接口提供所有微信支付订单的查询，商户可以通过查询订单接口主动查询订单状态，完成下一步的业务逻辑。 需要调用查询接口的情况： ◆ 当商户后台、网络、服务器等出现异常； ◆ 调用支付接口后，返回系统错误或未知交易状态情况； ◆ 调用付款码支付API，返回USERPAYING的状态； ◆ 调用关单或撤销接口API之前，需确认支付状态； 接口链接 URL地址：https://api.mch.weixin.qq.com/pay/orderquery URL地址：h",
+      "queries": [
+        "微信支付 商户订单号查询订单 trade_state site:pay.weixin.qq.com"
+      ]
+    },
+    {
+      "id": "KS-0047",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791860",
+      "title": "关闭订单_JSAPI支付|微信支付商户文档中心",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\004_Luz-Dev 微信支付与人脸安全规范调研\\raw\\sources\\bing\\011_关闭订单_JSAPI支付 微信支付商户文档中心"
+      ],
+      "excerpt": "关闭订单 更新时间：2024.12.11 以 Markdown 格式查看 | 复制给 LLM | 问 AI | 安装 Skill 未支付状态的订单，可在无需支付时调用此接口关闭订单。常见关单情况包括： 用户在商户系统提交取消订单请求，商户需执行关单操作。 订单超时未支付（超出商户系统设定的可支付时间或下单时的time_expire支付截止时间），商户需进行关单处理。 接口说明 支持商户：【普通商户】 请求方式：【POST】/v3/pay/transactions/out-trade-no/{out_trade_no}/close 请求域名：【主域名】https://api.mch.weixin",
+      "queries": [
+        "微信支付 JSAPI 关闭订单 site:pay.weixin.qq.com"
+      ]
+    },
+    {
+      "id": "KS-0048",
+      "url": "https://pay.weixin.qq.com/doc/v3/partner/4012739019",
+      "title": "关闭订单_JSAPI支付|微信支付合作伙伴文档中心",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\004_Luz-Dev 微信支付与人脸安全规范调研\\raw\\sources\\bing\\012_关闭订单_JSAPI支付 微信支付合作伙伴文档中心"
+      ],
+      "excerpt": "关闭订单 更新时间：2025.01.16 以 Markdown 格式查看 | 复制给 LLM | 问 AI | 安装 Skill 未支付状态的订单，可在无需支付时调用此接口关闭订单。常见关单情况包括： 用户在服务商系统提交取消订单请求，服务商需执行关单操作。 订单超时未支付（超出服务商系统设定的可支付时间或下单时的time_expire支付截止时间），服务商需进行关单处理。 接口说明 支持商户：【普通服务商】【平台商户】 请求方式：【POST】/v3/pay/partner/transactions/out-trade-no/{out_trade_no}/close 请求域名：【主域名】htt",
+      "queries": [
+        "微信支付 JSAPI 关闭订单 site:pay.weixin.qq.com"
+      ]
+    },
+    {
+      "id": "KS-0049",
+      "url": "https://blog.csdn.net/weixin_29306261/article/details/164485191",
+      "title": "订单系统设计：从状态机、幂等到支付回调与掉单补偿的完整实践-CSDN博客",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\004_Luz-Dev 微信支付与人脸安全规范调研\\raw\\sources\\csdn\\002_订单系统设计：从状态机、幂等到支付回调与掉单补偿的完整实践-CSDN博客"
+      ],
+      "excerpt": "订单系统设计：从状态机、幂等到支付回调与掉单补偿的完整实践 CHM单 墨衍会员 · AI 创作全网分发 码龄10年 关注 VIP免费 原创 最新推荐文章于 2026-09-11 14:07:40 发布 294 阅读 AI 写同款 · GEO 优化 › 电商跨平台订单状态治理与补偿机制实践 订单状态机是电商交易系统的核心组件，负责管理订单从创建到完成的整个生命周期。其核心原理是通过状态转换确保业务逻辑的正确执行，涉及支付、库存、物流等多个关键系统。在跨平台对接场景下，由于各电商平台接口特性差异（如京东的物流状态依赖、拼多多的无幂等保证），状态同步面临最终一致性挑战。通过分层补偿机制（实时处理+延",
+      "queries": [
+        "微信支付 回调 幂等 掉单 主动查单 对账"
+      ]
+    },
+    {
+      "id": "KS-0050",
+      "url": "https://blog.csdn.net/weixin_34059951/article/details/89835207",
+      "title": "三渠道App支付集成实践：统一下单、回调幂等与掉单补偿-CSDN博客",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\004_Luz-Dev 微信支付与人脸安全规范调研\\raw\\sources\\csdn\\003_三渠道App支付集成实践：统一下单、回调幂等与掉单补偿-CSDN博客"
+      ],
+      "excerpt": "三渠道App支付集成实践：统一下单、回调幂等与掉单补偿 weixin_34059951 墨衍会员 · AI 创作全网分发 码龄11年 关注 原创 2026-10-22 13:00:11 482 阅读 AI 写同款 · GEO 优化 › ponytail：用技能包给Agent输出扎个马尾辫，整理出清晰要点 大语言模型虽智能，但输出往往冗长散乱，直接用于工程报告或日常总结时效率不高。为解决这类问题，社区提出了Agent技能包机制，将特定行为封装为可复用的轻量模块，通过一行命令即可安装进Agent运行时。ponytail正是这样一个聚焦输出整理的技能包，它不改变模型推理能力，而是像后处理滤镜一样，将",
+      "queries": [
+        "微信支付 回调 幂等 掉单 主动查单 对账"
+      ]
+    },
+    {
+      "id": "KS-0051",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791857",
+      "title": "JSAPI调起支付_JSAPI支付|微信支付商户文档中心",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\005_Luz-Dev 官方文档直读\\raw\\sources\\links\\002_JSAPI调起支付_JSAPI支付 微信支付商户文档中心"
+      ],
+      "excerpt": "JSAPI调起支付 更新时间：2025.02.26 以 Markdown 格式查看 | 复制给 LLM | 问 AI | 安装 Skill 商户通过JSAPI/小程序下单接口获取到发起支付的必要参数prepay_id后，再通过微信浏览器内置对象方法(WeixinJSBridge)调起微信支付收银台。 接口说明 支持商户：【普通商户】 字段说明 请求参数 此API签名无后台接口交互，需要将列表中的数据签名 appId 必填 string(32) 填写下单时传入的appid，且必需与当前实际调起支付的公众号appid一致，否则无法调起支付。 timeStamp 必填 string(32) Unix",
+      "queries": []
+    },
+    {
+      "id": "KS-0052",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012365342",
+      "title": "总述-APIv3如何签名和验签_通用规则|微信支付商户文档中心",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\005_Luz-Dev 官方文档直读\\raw\\sources\\links\\005_总述-APIv3如何签名和验签_通用规则 微信支付商户文档中心"
+      ],
+      "excerpt": "总述-APIv3如何签名和验签 更新时间：2024.11.21 以 Markdown 格式查看 | 复制给 LLM | 问 AI | 安装 Skill 概述 在微信支付APIv3的所有请求应答场景、接口回调场景、调起支付场景，开发者都需要进行签名验签。 1. 什么时候需要签名？如何签名？ 以下2种场景需要构造签名 1.1 请求微信支付接口 商户调用微信支付接口的时候需要用到商户API证书（申请商户API证书）构造请求签名，且根据请求参数类型的不同，签名方式有所差异，请参考一下的操作指引说明 （1）请求参数里带Path参数（路径参数），如何计算签名 （2）请求参数里带Body参数(包体参数），如",
+      "queries": []
+    },
+    {
+      "id": "KS-0053",
+      "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/PrivacyAuthorize.html",
+      "title": "微信开放文档 / 小程序-开发-指南 / 健康运营指引 / 用户隐私保护 / 小程序隐私协议开发指南",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "privacy"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\005_Luz-Dev 官方文档直读\\raw\\sources\\links\\015_微信开放文档 小程序-开发-指南 健康运营指引 用户隐私保护 小程序隐私协议开发指南"
+      ],
+      "excerpt": "一、功能介绍 涉及处理用户个人信息的小程序开发者，需通过弹窗等明显方式提示用户阅读隐私政策等收集使用规则。 为规范开发者的用户个人信息处理行为，保障用户合法权益，微信要求开发者主动同步微信当前用户已阅读并同意小程序的隐私政策等收集使用规则，方可调用微信提供的隐私接口。 特别注意： 2023.08.22 更新： 以下指南中涉及的 getPrivacySetting、onNeedPrivacyAuthorization、requirePrivacyAuthorize 等接口目前可以正常接入调试。调试说明： 1）在 2023年9月15日之前，在 app.json 中配置 __usePrivacyCh",
+      "queries": []
+    },
+    {
+      "id": "KS-0054",
+      "url": "https://www.cac.gov.cn/2025-03/21/c_1744174262156096.htm",
+      "title": "人脸识别技术应用安全管理办法_中央网络安全和信息化委员会办公室",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "face"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\007_Luz-Dev 人脸法规与退款\\raw\\sources\\google\\002_人脸识别技术应用安全管理办法_中央网络安全和信息化委员会办公室"
+      ],
+      "excerpt": "2026年10月26日 星期一 设为首页加入收藏手机版繁體 搜索 首 页 时政要闻 网信政务 互动服务 热点专题 当前位置：首页>正文 人脸识别技术应用安全管理办法 2025年03月21日 17:00 来源： 中国网信网 【打印】【纠错】 国家互联网信息办公室 中华人民共和国公安部 令 第19号 《人脸识别技术应用安全管理办法》已经2024年9月30日国家互联网信息办公室2024年第23次室务会会议审议通过，并经公安部同意，现予公布，自2025年6月1日起施行。 国家互联网信息办公室主任 庄荣文 公安部部长 王小洪 2025年3月13日 人脸识别技术应用安全管理办法 第一条 为了规范应用人脸识",
+      "queries": [
+        "人脸识别技术应用安全管理办法 国家互联网信息办公室 公安部 全文"
+      ]
+    },
+    {
+      "id": "KS-0055",
+      "url": "https://xinwen.bjd.com.cn/content/s67dd2eafe4b068c68f115044.html",
+      "title": "全文 | 《人脸识别技术应用安全管理办法》",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "face"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\007_Luz-Dev 人脸法规与退款\\raw\\sources\\google\\003_全文 《人脸识别技术应用安全管理办法》"
+      ],
+      "excerpt": "全文 | 《人脸识别技术应用安全管理办法》 网信中国 2025-03-21 17:17 热点 进入频道 国家互联网信息办公室 中华人民共和国公安部 令 第19号 《人脸识别技术应用安全管理办法》已经2024年9月30日国家互联网信息办公室2024年第23次室务会会议审议通过，并经公安部同意，现予公布，自2025年6月1日起施行。 国家互联网信息办公室主任 庄荣文 公安部部长 王小洪 2025年3月13日 人脸识别技术应用安全管理办法 第一条 为了规范应用人脸识别技术处理人脸信息活动，保护个人信息权益，根据《中华人民共和国网络安全法》、《中华人民共和国数据安全法》、《中华人民共和国个人信息保护法",
+      "queries": [
+        "人脸识别技术应用安全管理办法 国家互联网信息办公室 公安部 全文"
+      ]
+    },
+    {
+      "id": "KS-0056",
+      "url": "https://www.cac.gov.cn/2021-08/20/c_1631050028355286.htm",
+      "title": "中华人民共和国个人信息保护法_中央网络安全和信息化委员会办公室",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "face"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\007_Luz-Dev 人脸法规与退款\\raw\\sources\\google\\006_中华人民共和国个人信息保护法_中央网络安全和信息化委员会办公室"
+      ],
+      "excerpt": "2026年10月26日 星期一 设为首页加入收藏手机版繁體 搜索 首 页 时政要闻 网信政务 互动服务 热点专题 当前位置：首页>正文 中华人民共和国个人信息保护法 2021年08月20日 21:21 来源： 中国人大网 【打印】【纠错】 中华人民共和国个人信息保护法 （2021年8月20日第十三届全国人民代表大会常务委员会第三十次会议通过） 目 录 第一章 总 则 第二章 个人信息处理规则 第一节 一般规定 第二节 敏感个人信息的处理规则 第三节 国家机关处理个人信息的特别规定 第三章 个人信息跨境提供的规则 第四章 个人在个人信息处理活动中的权利 第五章 个人信息处理者的义务 第六章 履行",
+      "queries": [
+        "中华人民共和国个人信息保护法 全文 npc.gov.cn"
+      ]
+    },
+    {
+      "id": "KS-0057",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791862",
+      "title": "退款申请_JSAPI支付|微信支付商户文档中心",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "refund"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\007_Luz-Dev 人脸法规与退款\\raw\\sources\\google\\008_退款申请_JSAPI支付 微信支付商户文档中心"
+      ],
+      "excerpt": "退款申请 更新时间：2025.01.09 以 Markdown 格式查看 | 复制给 LLM | 问 AI | 安装 Skill 在交易完成后的一年内（以支付成功时间为起点+365天计算），若因用户或商户方面导致需进行订单退款，商户可通过此接口将支付金额的全部或部分原路退还至用户。详细介绍参考：订单退款-产品介绍。 注意： 1、一笔订单最多支持50次部分退款（若需多次部分退款，请更换商户退款单号并间隔1分钟后再次调用）。 2、在申请退款失败后进行重试时，请务必使用原商户退款单号，以避免因重复退款而导致的资金损失。 3、同一商户号下，此接口调用成功的频率限制为150QPS，而调用失败报错时的频率",
+      "queries": [
+        "微信支付 申请退款 API site:pay.weixin.qq.com/doc/v3/merchant"
+      ]
+    },
+    {
+      "id": "KS-0058",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4013071031",
+      "title": "开发指引_订单退款|微信支付商户文档中心",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "refund"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\007_Luz-Dev 人脸法规与退款\\raw\\sources\\google\\009_开发指引_订单退款 微信支付商户文档中心"
+      ],
+      "excerpt": "开发指引 更新时间：2026.10.13 以 Markdown 格式查看 | 复制给 LLM | 问 AI | 安装 Skill 1、整体业务开发流程概览 若存在退款需求，商户需先调用查询订单状态接口以确认订单支付状态为已支付成功，随后调用申请退款API创建退款单后，可通过查询单笔退款信息或退款回调通知以确认最终的退款结果。若退款状态为退款异常，则需调用发起异常退款API进行退款操作。 2、详细步骤说明 2.1、查询订单状态 商户在退款之前调用微信支付订单号查询订单API或商户订单号查询订单API，确认订单支付状态，支付成功才可进行退款。 2.2、申请退款 商户调用申请退款API创建退款单，退",
+      "queries": [
+        "微信支付 申请退款 API site:pay.weixin.qq.com/doc/v3/merchant"
+      ]
+    },
+    {
+      "id": "KS-0059",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012587976",
+      "title": "退款结果通知_微信支付分|微信支付商户文档中心",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "refund"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\007_Luz-Dev 人脸法规与退款\\raw\\sources\\google\\011_退款结果通知_微信支付分 微信支付商户文档中心"
+      ],
+      "excerpt": "退款结果通知 更新时间：2024.12.10 以 Markdown 格式查看 | 复制给 LLM | 问 AI | 安装 Skill 一、回调描述 当商户调用申请退款API接口或通过商户平台申请退款后，微信支付会对订单进行退款，当退款结果出来后，微信支付会通过POST的请求方式，向商户预先设置的回调地址发送回调通知，让商户知晓这笔订单的退款结果。 回调地址设置方式： 回调地址通过【申请退款API】接口中的“notify_url”参数设置，回调地址的设置规范和回调IP列表请参考文档：回调通知注意事项。 二、回调处理步骤 1、商户接收回调通知报文 微信支付会通过POST的方式向回调地址发送回调报文",
+      "queries": [
+        "微信支付 退款结果通知 site:pay.weixin.qq.com/doc/v3/merchant"
+      ]
+    },
+    {
+      "id": "KS-0060",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4013070388",
+      "title": "退款结果通知_APP支付|微信支付商户文档中心",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "refund"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\007_Luz-Dev 人脸法规与退款\\raw\\sources\\google\\012_退款结果通知_APP支付 微信支付商户文档中心"
+      ],
+      "excerpt": "退款结果通知 更新时间：2025.01.02 以 Markdown 格式查看 | 复制给 LLM | 问 AI | 安装 Skill 一、回调描述 用户支付完成后，商户可根据需求发起退款。当退款单状态发生变更时（变更为退款成功/退款关闭/退款异常），微信支付会通过POST的请求方式，向商户预先设置的退款回调地址(申请退款传入的notfiy_url)发送回调通知，让商户知晓退款单的处理结果。 注意： 商户侧对微信支付回调IP有防火墙策略限制的，需要对微信回调IP段开通白名单，详情参考回调处理逻辑注意事项。 二、回调处理步骤 1、商户接收回调通知报文 微信支付会通过POST的方式向回调地址发送回调",
+      "queries": [
+        "微信支付 退款结果通知 site:pay.weixin.qq.com/doc/v3/merchant"
+      ]
+    },
+    {
+      "id": "KS-0061",
+      "url": "https://developers.weixin.qq.com/miniprogram/dev/platform-capabilities/cityservice/FacialRecognitionVerify.html",
+      "title": "微信人脸核身 2.0",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "face"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\007_Luz-Dev 人脸法规与退款\\raw\\sources\\google\\014_微信人脸核身 2.0"
+      ],
+      "excerpt": "微信人脸核身2.0 一、能力介绍 随着政务、医疗、教育、交通等行业实名制政策的深化落地，开发者对“实人验证”的需求日益凸显。为响应这一合规趋势，平台依托腾讯公司及微信的生物识别技术，构建了“实人验证”能力，即通过人脸识别+权威数据源比对，实现对“用户实名信息”与“本人操作”的验证（简称微信人脸核身）。 目前该能力限定主体及行业类目开放公测，提供给资质符合要求的业务方，在合适的业务场景内使用。目前仅支持持二代身份证的大陆居民。 由于微信人脸核身能力涉及到用户的敏感、隐私信息，因此该能力的小程序，需要满足一定的条件。即：小程序的主体以及类目，需要在限定的类目范围内，且与小程序的业务场景一致。开展的",
+      "queries": [
+        "微信小程序 人脸核身 wx.startFacialRecognitionVerify"
+      ]
+    },
+    {
+      "id": "KS-0062",
+      "url": "https://blog.csdn.net/weixin_29064009/article/details/159602275",
+      "title": "微信小程序人脸核身全流程避坑指南：从wx.startFacialRecognitionVerify到API工厂对接-CSDN博客",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "face"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\007_Luz-Dev 人脸法规与退款\\raw\\sources\\google\\015_微信小程序人脸核身全流程避坑指南：从wx.startFacialRecognitionVerify到API工厂对接-CSDN博客"
+      ],
+      "excerpt": "微信小程序人脸核身全流程避坑指南：从wx.startFacialRecognitionVerify到API工厂对接 鲁朗 墨衍会员 · AI 创作全网分发 码龄10年 关注 VIP免费 原创 2026-03-29 09:41:26 616 阅读 AI 写同款 · AI 选题 › 三步搞定微信刷脸认证：wx.startFacialRecognitionVerify接口实战解析 本文深入解析微信小程序 `wx.startFacialRecognitionVerify` 接口，提供两种核心业务场景（用户已实名与未实名）的完整实战方案。通过模块化代码封装、服务端二次验证及进阶优化指南，帮助开发者高效、",
+      "queries": [
+        "微信小程序 人脸核身 wx.startFacialRecognitionVerify"
+      ]
+    },
+    {
+      "id": "KS-0063",
+      "url": "https://www.gov.cn/zhengce/zhengceku/202503/content_7016075.htm",
+      "title": "人脸识别技术应用安全管理办法_国务院部门文件_中国政府网",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\006_健身房小程序与后台系统调研\\raw\\sources\\bing\\002_人脸识别技术应用安全管理办法_国务院部门文件_中国政府网"
+      ],
+      "excerpt": "首页 | 简 | 繁 | EN | 登录 | 邮箱 | 无障碍 首页 > 政策 > 国务院政策文件库 > 国务院部门文件 字号：默认 大 超大 | 打印 收藏 | 标 题： 人脸识别技术应用安全管理办法 发文机关： 国家网信办 公安部 发文字号： 第19号 来 源： 国家网信办网站 主题分类： 公安、安全、司法\\其他 公文种类： 命令（令） 成文日期： 2025年03月13日 国家互联网信息办公室 中华人民共和国公安部 令 第19号 《人脸识别技术应用安全管理办法》已经2024年9月30日国家互联网信息办公室2024年第23次室务会会议审议通过，并经公安部同意，现予公布，自2025年6月1日起",
+      "queries": [
+        "人脸识别技术应用安全管理办法 全文 国家互联网信息办公室"
+      ]
+    },
+    {
+      "id": "KS-0064",
+      "url": "https://scjgj.beijing.gov.cn/bsfw/bmfw/sfwbbm/shxfl/yfk/202204/t20220421_2684551.html",
+      "title": "北京市体育健身行业预付费服务合同（2022）_北京市市场监督管理局",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\006_健身房小程序与后台系统调研\\raw\\sources\\bing\\004_北京市体育健身行业预付费服务合同（2022）_北京市市场监督管理局"
+      ],
+      "excerpt": "北京市政务服务网 | 网站无障碍 | 访问我的专属空间 | 智能问答 | 移动版 搜本网 一网通查 首页 政务公开 办事服务 查询服务 互动交流 首页 > 办事服务 > 便民服务 > 合同示范文本 > 生活消费类 > 预付卡 北京市体育健身行业预付费服务合同（2022） 时间： 2022年 04月 21日 来源：​北京市市场监督管理局 分享： 【字体：大 中 小】 打印 收藏 BF-20222720 合同编号： 北京市体育健身行业预付费服务合同 根据《中华人民共和国民法典》等有关法律法规的规定，甲乙双方在平等、自愿、公平和诚实信用的基础上，就体育健身预付费服务的有关事宜协商订立合同如下： 第一",
+      "queries": [
+        "体育健身 预付式消费 冷静期 退费 合同示范文本 健身卡"
+      ]
+    },
+    {
+      "id": "KS-0065",
+      "url": "https://github.com/small-bears/gyms",
+      "title": "small-bears/gyms: 健身俱乐部网站  java springboot vue ssm mysql python Django 健身房管理系统(源代码+数据库+配套论文+ppt) 管理员：用户、执教教练、健身百科、课程类型、课程信息、课程报名、健身商品、商品分类、预约教练、会员卡、商品订单、充值信息、健身论坛、系统管理、我的信息 用户：当游客打开系统的网址后，php,Flask,node.js,SSM,JSP,Uniapp,hadoop,spark,hive,ThinkPhp,Flask,Koa,Express,Springcloud,ASP.Net,C#,Mysql,大数据毕业设计,基于微信小程序,Ai对话,协同过滤推荐算法,基于安卓,机器学习,深度学习,",
+      "tier": "opensource",
+      "kind": "opensource",
+      "modules": [],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\006_健身房小程序与后台系统调研\\raw\\sources\\github\\002_small-bears gyms 健身俱乐部网站 java springboot vue ssm mysql python Dj"
+      ],
+      "excerpt": "gyms Public Watch 1 (1) Fork0 (0) Star105 (105) main 1 Branch 0 Tags t T Add file Code Latest commit small-bears init: publish project cb031ab · History 4 Commits Folders and files Name Last commit message Last commit date doc init: publish project img init: publish project logs init: publish projec",
+      "queries": [
+        "健身房 小程序 会员卡 管理系统"
+      ]
+    },
+    {
+      "id": "KS-0066",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012365342.md",
+      "title": "APIv3 如何签名和验签",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "payment"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\009_Luz-Dev 05 Luz-Dev-调研审核门禁与安全规范体系 官方原文\\raw\\sources\\links\\007_pay.weixin.qq.com"
+      ],
+      "excerpt": ">更新时间：2024.11.21 ## 概述 在微信支付APIv3的所有请求应答场景、接口回调场景、调起支付场景，开发者都需要进行签名验签。 ## 1. 什么时候需要签名？如何签名？ 以下2种场景需要构造签名 ```mermaid sequenceDiagram autonumber participant p0 as 商户 participant p1 as 微信支付 p0->>p0: 使用商户API证书私钥生成签名 Note over p0: 发起请求需要构造请求签名 p0->>p1: 发送业务请求 p1->>p1: 使用商户API证书公钥验证签名 p1->>p1: 使用微信支付私钥或者平",
+      "queries": []
+    },
+    {
+      "id": "KS-0067",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791904.md",
+      "title": "小程序支付 · 查询单笔退款",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "refund"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\009_Luz-Dev 05 Luz-Dev-调研审核门禁与安全规范体系 官方原文\\raw\\sources\\links\\010_pay.weixin.qq.com"
+      ],
+      "excerpt": ">更新时间：2025.01.09 提交退款申请后，推荐每间隔1分钟调用该接口查询一次退款状态，若超过5分钟仍是退款处理中状态，建议开始逐步衰减查询频率(比如之后间隔5分钟、10分钟、20分钟、30分钟……查询一次)。 1. 退款有一定延时，零钱支付的订单退款一般5分钟内到账，银行卡支付的订单退款一般1-3个工作日到账。 2. 同一商户号查询退款频率限制为300qps，如返回FREQUENCY\\_LIMITED频率限制报错可间隔1分钟再重试查询。 ## 接口说明 支持商户：【普通商户】 请求方式：【GET】 `/v3/refund/domestic/refunds/{out_refund_no}",
+      "queries": []
+    },
+    {
+      "id": "KS-0068",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791905.md",
+      "title": "小程序支付 · 发起异常退款",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "refund"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\009_Luz-Dev 05 Luz-Dev-调研审核门禁与安全规范体系 官方原文\\raw\\sources\\links\\011_pay.weixin.qq.com"
+      ],
+      "excerpt": ">更新时间：2024.12.30 提交退款申请后，[退款结果通知](https://pay.weixin.qq.com/doc/v3/merchant/4013071196.md)或[查询退款](https://pay.weixin.qq.com/doc/v3/merchant/4013071041.md)确认状态为退款异常，可调用此接口发起异常退款处理。支持退款至用户、退款至交易商户银行账户两种处理方式。 注意： 1. 退款至用户时，仅支持以下银行的借记卡：招行、交通银行、农行、建行、工商、中行、平安、浦发、中信、光大、民生、兴业、广发、邮储、宁波银行。 2. 请求频率限制：150qps，即",
+      "queries": []
+    },
+    {
+      "id": "KS-0069",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791907.md",
+      "title": "小程序支付 · 申请交易账单",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "reconcile"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\009_Luz-Dev 05 Luz-Dev-调研审核门禁与安全规范体系 官方原文\\raw\\sources\\links\\013_pay.weixin.qq.com"
+      ],
+      "excerpt": ">更新时间：2025.01.10 微信支付在每日10点后生成昨日交易账单文件，商户可通过接口获取账单下载链接。账单包含交易金额、时间及营销信息，利于订单核对、退款审查及银行到账确认。详细介绍参考：[下载账单-产品介绍](https://pay.weixin.qq.com/doc/v3/merchant/4013071215.md)。 注意： - 仅支付成功的订单包含在账单内。 - 账单金额单位为人民币“元”。 - 此接口仅可下载三个月内的账单。 ## 接口说明 支持商户：【普通商户】 请求方式：【GET】 `/v3/bill/tradebill` 请求域名：【主域名】https://api.m",
+      "queries": []
+    },
+    {
+      "id": "KS-0070",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791908.md",
+      "title": "小程序支付 · 申请资金账单",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "reconcile"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\009_Luz-Dev 05 Luz-Dev-调研审核门禁与安全规范体系 官方原文\\raw\\sources\\links\\014_pay.weixin.qq.com"
+      ],
+      "excerpt": ">更新时间：2025.01.09 ## 下载接口说明 微信支付按天提供商户各账户的资金流水账单文件，商户可以通过该接口获取账单文件的下载地址。账单文件详细记录了账户资金操作的相关信息，包括业务单号、收支金额及记账时间等，以便商户进行核对与确认。详细介绍参考：[下载账单-产品介绍](https://pay.weixin.qq.com/doc/v3/merchant/4013071215.md)。 注意： - 资金账单中的数据反映的是商户微信账户资金变动情况； - 当日账单将在次日上午9点开始生成，建议商户在次日上午10点以后获取； - 资金账单中所有涉及金额的字段均以“元”为单位。 - 以商户号",
+      "queries": []
+    },
+    {
+      "id": "KS-0071",
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791909.md",
+      "title": "小程序支付 · 下载账单",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "reconcile"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\009_Luz-Dev 05 Luz-Dev-调研审核门禁与安全规范体系 官方原文\\raw\\sources\\links\\015_pay.weixin.qq.com"
+      ],
+      "excerpt": ">更新时间：2024.12.11 ## 一、下载账单描述 当商户调用[申请交易账单](https://pay.weixin.qq.com/doc/v3/merchant/4013071227.md)/[申请资金账单](https://pay.weixin.qq.com/doc/v3/merchant/4013071235.md)接口，获取到下载账单链接download\\_url后，需按照[V3接口规则生成签名](https://pay.weixin.qq.com/doc/v3/merchant/4012365337.md)，然后请求下载账单链接download\\_url获取对应的账单文件。 账",
+      "queries": []
+    },
+    {
+      "id": "KS-0072",
+      "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/ability/network.html",
+      "title": "基础能力 / 网络 / 使用说明",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "login"
+      ],
+      "firstReadAt": "2026-10-26T16:49:05+08:00",
+      "checkedAt": "2026-10-26T16:49:05+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\009_Luz-Dev 05 Luz-Dev-调研审核门禁与安全规范体系 官方原文\\raw\\sources\\links\\017_基础能力 网络 使用说明"
+      ],
+      "excerpt": "基础能力 /网络 /使用说明 网络 在小程序/小游戏中使用网络相关的 API 时，需要注意下列问题，请开发者提前了解。 1. 服务器域名配置 每个微信小程序需要事先设置通讯域名，小程序只可以跟指定的域名进行网络通信。包括普通 HTTPS 请求（wx.request）、上传文件（wx.uploadFile）、下载文件（wx.downloadFile) 和 WebSocket 通信（wx.connectSocket）。 从基础库 2.4.0 开始，网络接口允许与局域网 IP 通信，但要注意 不允许与本机 IP 通信。 从 2.7.0 开始，提供了 UDP 通信（wx.createUDPSocket",
+      "queries": []
+    },
+    {
+      "id": "KS-0073",
+      "url": "https://docs.docker.com/compose/how-tos/production",
+      "title": "Use Compose in production | Docker Docs",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-26T16:51:07+08:00",
+      "checkedAt": "2026-10-26T17:03:34+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\016_Luz-Dev 07 Luz-Dev-开发到上线全流程、前端接入与调研知识库 官方原文\\raw\\sources\\links\\001_Use Compose in production Docker Docs"
+      ],
+      "excerpt": "Home / Manuals / Docker Compose / How-tos / Use Compose in production Use Compose in production Ask Gordon Copy Markdown View Markdown When you define your app …",
+      "queries": []
+    },
+    {
+      "id": "KS-0074",
+      "url": "https://nginx.org/en/docs/http/configuring_https_servers.html",
+      "title": "Configuring HTTPS servers",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-26T16:51:07+08:00",
+      "checkedAt": "2026-10-26T17:03:34+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\016_Luz-Dev 07 Luz-Dev-开发到上线全流程、前端接入与调研知识库 官方原文\\raw\\sources\\links\\002_Configuring HTTPS servers"
+      ],
+      "excerpt": "Join us for the quarterly NGINX Community Call on November 4th to connect and discuss NGINX development. english русский news about download security documentat…",
+      "queries": []
+    },
+    {
+      "id": "KS-0075",
+      "url": "https://choosealicense.com/licenses",
+      "title": "Licenses | Choose a License",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "license"
+      ],
+      "firstReadAt": "2026-10-26T16:51:07+08:00",
+      "checkedAt": "2026-10-26T17:03:34+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\016_Luz-Dev 07 Luz-Dev-开发到上线全流程、前端接入与调研知识库 官方原文\\raw\\sources\\links\\003_Licenses Choose a License"
+      ],
+      "excerpt": "Home 本页面也提供中文版本。 English ▾ Licenses Open source licenses grant permission for anybody to use, modify, and share licensed software for any purpose, subject to co…",
+      "queries": []
+    },
+    {
+      "id": "KS-0076",
+      "url": "https://juejin.cn/post/7130453321143287844",
+      "title": "OpenAPI 自动生成接口请求代码OpenAPI在前端工程化中的实践 [TOC] 前言 OpenAPI简介 定义 Op - 掘金",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "design-integration"
+      ],
+      "firstReadAt": "2026-10-26T16:51:07+08:00",
+      "checkedAt": "2026-10-26T17:03:34+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\017_Luz-Dev 07 Luz-Dev-开发到上线全流程、前端接入与调研知识库 检索\\raw\\sources\\juejin\\003_OpenAPI 自动生成接口请求代码OpenAPI在前端工程化中的实践 [TOC] 前言 OpenAPI简介 定义 Op - 掘"
+      ],
+      "excerpt": "OpenAPI 自动生成接口请求代码 citrus 2022-08-11 8,709 阅读5分钟 OpenAPI 自动生成接口请求代码 前言 OpenAPI简介 小问题，为什么Java同事只写了一些注解，我们就能看到了swagger文档的定义了呢？答案其实很简单就是OpenAPI规范。 定义 OpenAPI规范又名Sw…",
+      "queries": [
+        "OpenAPI 生成 前端 接口 类型 TypeScript 小程序"
+      ]
+    },
+    {
+      "id": "KS-0077",
+      "url": "https://blog.csdn.net/weixin_29324877/article/details/162591015",
+      "title": "微信小程序双Token无感刷新：3步封装请求类，解决401并发与队列管理-CSDN博客",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "design-integration"
+      ],
+      "firstReadAt": "2026-10-26T16:51:07+08:00",
+      "checkedAt": "2026-10-26T17:03:34+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\017_Luz-Dev 07 Luz-Dev-开发到上线全流程、前端接入与调研知识库 检索\\raw\\sources\\csdn\\002_微信小程序双Token无感刷新：3步封装请求类，解决401并发与队列管理-CSDN博客"
+      ],
+      "excerpt": "微信小程序双Token无感刷新：3步封装请求类，解决401并发与队列管理 沂樾 墨衍会员 · AI 创作全网分发 码龄9年 关注 原创 2026-07-04 11:07:30 272 阅读 AI 写同款 · GEO 优化 › 【微信小程序】 token 无感刷新 ⌈本文是作者本人学习过程中的笔记总结，若文中有不正确或需…",
+      "queries": [
+        "小程序 前端 接口 封装 token 刷新 错误处理"
+      ]
+    },
+    {
+      "id": "KS-0078",
+      "url": "https://blog.csdn.net/hjh15827475896/article/details/110098433",
+      "title": "小程序token过期后， 实现用户无感知的刷新token_微信小程序token过期怎么办-CSDN博客",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "design-integration"
+      ],
+      "firstReadAt": "2026-10-26T16:51:07+08:00",
+      "checkedAt": "2026-10-26T17:03:34+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\017_Luz-Dev 07 Luz-Dev-开发到上线全流程、前端接入与调研知识库 检索\\raw\\sources\\csdn\\003_小程序token过期后， 实现用户无感知的刷新token_微信小程序token过期怎么办-CSDN博客"
+      ],
+      "excerpt": "小程序token过期后， 实现用户无感知的刷新token A黄俊辉A 墨衍会员 · AI 创作全网分发 码龄10年 关注 原创 2022-05-30 17:30:51 1.5w 阅读 AI 写同款 · GEO 优化 › 【微信小程序】 token 无感刷新 ⌈本文是作者本人学习过程中的笔记总结，若文中有不正确或需要补充…",
+      "queries": [
+        "小程序 前端 接口 封装 token 刷新 错误处理"
+      ]
+    },
+    {
+      "id": "KS-0079",
+      "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/quickstart/release.html",
+      "title": "起步 / 小程序协同工作和发布",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-26T16:51:07+08:00",
+      "checkedAt": "2026-10-26T17:03:34+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\017_Luz-Dev 07 Luz-Dev-开发到上线全流程、前端接入与调研知识库 检索\\raw\\sources\\bing\\002_起步 小程序协同工作和发布"
+      ],
+      "excerpt": "起步 /小程序协同工作和发布 小程序协同工作和发布 在中大型的公司里，人员的分工非常仔细，一般会有不同岗位角色的员工同时参与同一个小程序项目。为此，小程序平台设计了不同的权限管理使得项目管理者可以更加高效管理整个团队的协同工作。 以往在开发完网页之后，需要把网页的代码和资源放在服务器上，让用户通过互联网来访问。在小程序…",
+      "queries": [
+        "微信小程序 发布上线 流程 体验版 审核 版本回退 site:developers.weixin.qq.com"
+      ]
+    },
+    {
+      "id": "KS-0080",
+      "url": "http://www.hunan.gov.cn/zqt/zcsd/202308/t20230809_29456035.html",
+      "title": "工业和信息化部关于开展移动互联网应用程序备案工作的通知 -政企通-湖南省人民政府门户网站",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "compliance"
+      ],
+      "firstReadAt": "2026-10-26T16:51:07+08:00",
+      "checkedAt": "2026-10-26T17:03:34+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\017_Luz-Dev 07 Luz-Dev-开发到上线全流程、前端接入与调研知识库 检索\\raw\\sources\\google\\002_工业和信息化部关于开展移动互联网应用程序备案工作的通知 -政企通-湖南省人民政府门户网站"
+      ],
+      "excerpt": "专栏首页 政策速递 政策解读 惠企政策填报 政策匹配 项目信息 企业诉求 口袋书 专栏首页 > 政策速递 工业和信息化部关于开展移动互联网应用程序备案工作的通知 层级：国家级 发文系统：工信 发文日期：2023-07-21 所在行业：制造业 信息来源：工信部网站 发布时间：2023-08-09 工业和信息化部 关于开展…",
+      "queries": [
+        "工业和信息化部 关于开展移动互联网应用程序备案工作的通知 小程序"
+      ]
+    },
+    {
+      "id": "KS-0081",
+      "url": "https://qizibao.com/newsinfo/9227633.html",
+      "title": "小程序、APP 是否也要办理增值电信业务经营许可证？备案与许可一文说清-企咨宝",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "compliance"
+      ],
+      "firstReadAt": "2026-10-26T16:51:07+08:00",
+      "checkedAt": "2026-10-26T17:03:34+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\017_Luz-Dev 07 Luz-Dev-开发到上线全流程、前端接入与调研知识库 检索\\raw\\sources\\google\\006_小程序、APP 是否也要办理增值电信业务经营许可证？备案与许可一文说清-企咨宝"
+      ],
+      "excerpt": "首页 增值电信 知识产权 网络文化 食药器械 广电出版 企业认证 行业资讯 联系我们 끠 搜索 登录 注册 小程序、APP 是否也要办理增值电信业务经营许可证？备案与许可一文说清 增值电信业务经营许可证 · 系列解读 ⑩ 小程序、APP 是否也要办理增值电信业务经营许可证？ 备案与许可一文说清 一句话记住：备案看「身份…",
+      "queries": [
+        "增值电信业务经营许可证 ICP经营许可证 EDI 什么情况需要 电商 小程序"
+      ]
+    },
+    {
+      "id": "KS-0082",
+      "url": "http://www.mps.gov.cn/n6557558/c7369310/content.html",
+      "title": "贯彻落实网络安全等级保护制度和关键信息基础设施安全保护制度的指导意见-公安部网站",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "compliance"
+      ],
+      "firstReadAt": "2026-10-26T16:51:07+08:00",
+      "checkedAt": "2026-10-26T17:03:34+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\017_Luz-Dev 07 Luz-Dev-开发到上线全流程、前端接入与调研知识库 检索\\raw\\sources\\google\\008_贯彻落实网络安全等级保护制度和关键信息基础设施安全保护制度的指导意见-公安部网站"
+      ],
+      "excerpt": "首 页 机构设置 警务信息 办事服务 警民互动 当前位置： 首页 > 政策文件 > 正文 贯彻落实网络安全等级保护制度和关键信息基础设施安全保护制度的指导意见 时间： 2020年09月22日 来源：公安部网络安全保卫局 字体： 大 中 小 分享到: 贯彻落实网络安全等级保护制度 和关键信息基础设施安全保护制度的指导意见…",
+      "queries": [
+        "网络安全等级保护 定级 备案 二级 三级 要求 公安"
+      ]
+    },
+    {
+      "id": "KS-0083",
+      "url": "https://zhuanlan.zhihu.com/p/2032436939408799280",
+      "title": "2026最新干货 | 网络安全等级保护备案（等保备案）办理指南",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "compliance"
+      ],
+      "firstReadAt": "2026-10-26T16:51:07+08:00",
+      "checkedAt": "2026-10-26T17:03:34+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\017_Luz-Dev 07 Luz-Dev-开发到上线全流程、前端接入与调研知识库 检索\\raw\\sources\\google\\009_2026最新干货 网络安全等级保护备案（等保备案）办理指南"
+      ],
+      "excerpt": "2026最新干货 网络安全等级保护备案（等保备案）办理指南 众森企服​ 已认证机构号 收录于 · 众森企服-资质办理 ​ 目录 收起 一、 什么是等保？为什么非做不可？ 二、我的系统需要备案吗？——一分钟快速自查 三、 2026最新等保办理全流程与“避坑指南” 第一步：确定定级对象 第二步：初步确定等级（核心） 第三步…",
+      "queries": [
+        "网络安全等级保护 定级 备案 二级 三级 要求 公安"
+      ]
+    },
+    {
+      "id": "KS-0084",
+      "url": "https://top10.owasp.org/2025",
+      "title": "OWASP Top 10:2025",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "web-security"
+      ],
+      "firstReadAt": "2026-10-28T09:18:12+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\004_无人健身房硬件选型调研\\raw\\352_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\353_OWASP Top 10 2025"
+      ],
+      "excerpt": "OWASP Top 10:2025 Welcome to the OWASP Top 10:2025 Release. The OWASP Top 10 is a standard awareness document for developers and web application security. It re…",
+      "queries": []
+    },
+    {
+      "id": "KS-0085",
+      "url": "https://api-security.owasp.org/editions/2023/en/0x11-t10",
+      "title": "OWASP Top 10 API Security Risks – 2023 - OWASP API Security Top 10",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "web-security"
+      ],
+      "firstReadAt": "2026-10-28T09:18:12+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\004_无人健身房硬件选型调研\\raw\\352_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\354_OWASP Top 10 API Security Risks – 2023 - OWASP API Security Top"
+      ],
+      "excerpt": "OWASP Top 10 API Security Risks – 2023 Risk Description API1:2023 - Broken Object Level Authorization APIs tend to expose endpoints that handle object identifie…",
+      "queries": []
+    },
+    {
+      "id": "KS-0086",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html",
+      "title": "REST Security - OWASP Cheat Sheet Series",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "web-security"
+      ],
+      "firstReadAt": "2026-10-28T09:18:12+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\004_无人健身房硬件选型调研\\raw\\352_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\355_REST Security - OWASP Cheat Sheet Series"
+      ],
+      "excerpt": "REST Security Cheat Sheet¶ Introduction¶ REST (or REpresentational State Transfer) is an architectural style first described in Roy Fielding's Ph.D. dissertatio…",
+      "queries": []
+    },
+    {
+      "id": "KS-0087",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html",
+      "title": "Input Validation - OWASP Cheat Sheet Series",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "web-security"
+      ],
+      "firstReadAt": "2026-10-28T09:18:12+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\004_无人健身房硬件选型调研\\raw\\352_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\356_Input Validation - OWASP Cheat Sheet Series"
+      ],
+      "excerpt": "Input Validation Cheat Sheet¶ Introduction¶ Input validation checks whether data meets an application's requirements before the application uses it. It reduces …",
+      "queries": []
+    },
+    {
+      "id": "KS-0088",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html",
+      "title": "Cross-Site Request Forgery Prevention - OWASP Cheat Sheet Series",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "web-security"
+      ],
+      "firstReadAt": "2026-10-28T09:18:12+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\004_无人健身房硬件选型调研\\raw\\352_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\357_Cross-Site Request Forgery Prevention - OWASP Cheat Sheet Series"
+      ],
+      "excerpt": "Cross-Site Request Forgery Prevention Cheat Sheet¶ Introduction¶ A Cross-Site Request Forgery (CSRF) attack occurs when a malicious web site, email, blog, insta…",
+      "queries": []
+    },
+    {
+      "id": "KS-0089",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html",
+      "title": "Server Side Request Forgery Prevention - OWASP Cheat Sheet Series",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "web-security"
+      ],
+      "firstReadAt": "2026-10-28T09:18:12+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\004_无人健身房硬件选型调研\\raw\\352_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\358_Server Side Request Forgery Prevention - OWASP Cheat Sheet Serie"
+      ],
+      "excerpt": "Server-Side Request Forgery Prevention Cheat Sheet¶ Introduction¶ The objective of the cheat sheet is to provide advice regarding the protection against Server …",
+      "queries": []
+    },
+    {
+      "id": "KS-0090",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html",
+      "title": "Session Management - OWASP Cheat Sheet Series",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "admin-security"
+      ],
+      "firstReadAt": "2026-10-28T09:18:12+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\004_无人健身房硬件选型调研\\raw\\352_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\360_Session Management - OWASP Cheat Sheet Series"
+      ],
+      "excerpt": "Session Management Cheat Sheet¶ Introduction¶ Web Authentication, Session Management, and Access Control: A web session is a sequence of network HTTP request an…",
+      "queries": []
+    },
+    {
+      "id": "KS-0091",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html",
+      "title": "Multifactor Authentication - OWASP Cheat Sheet Series",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "admin-security"
+      ],
+      "firstReadAt": "2026-10-28T09:18:12+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\004_无人健身房硬件选型调研\\raw\\352_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\361_Multifactor Authentication - OWASP Cheat Sheet Series"
+      ],
+      "excerpt": "Multifactor Authentication Cheat Sheet¶ Introduction¶ Multifactor Authentication (MFA) requires evidence from at least two distinct authentication factors: some…",
+      "queries": []
+    },
+    {
+      "id": "KS-0092",
+      "url": "https://ssl-config.mozilla.org/",
+      "title": "Mozilla SSL Configuration Generator",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "http-hardening"
+      ],
+      "firstReadAt": "2026-10-28T09:18:12+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\004_无人健身房硬件选型调研\\raw\\352_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\362_Mozilla SSL Configuration Generator"
+      ],
+      "excerpt": "moz://a SSL Configuration Generator Mozilla SSL Config Generator has moved to TLSRef Configurator Please click TLSRef Configurator if not automatically redirect…",
+      "queries": []
+    },
+    {
+      "id": "KS-0093",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Headers_Cheat_Sheet.html",
+      "title": "HTTP Headers - OWASP Cheat Sheet Series",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "http-hardening"
+      ],
+      "firstReadAt": "2026-10-28T09:18:12+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\004_无人健身房硬件选型调研\\raw\\352_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\363_HTTP Headers - OWASP Cheat Sheet Series"
+      ],
+      "excerpt": "HTTP Security Response Headers Cheat Sheet¶ Introduction¶ HTTP Headers are a great booster for web security with easy implementation. Proper HTTP response heade…",
+      "queries": []
+    },
+    {
+      "id": "KS-0094",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html",
+      "title": "Transport Layer Security - OWASP Cheat Sheet Series",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "http-hardening"
+      ],
+      "firstReadAt": "2026-10-28T09:18:12+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\004_无人健身房硬件选型调研\\raw\\352_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\364_Transport Layer Security - OWASP Cheat Sheet Series"
+      ],
+      "excerpt": "Transport Layer Security Cheat Sheet¶ Introduction¶ This cheat sheet provides guidance on implementing transport layer protection for applications using Transpo…",
+      "queries": []
+    },
+    {
+      "id": "KS-0095",
+      "url": "https://nginx.org/en/docs/http/ngx_http_limit_req_module.html",
+      "title": "Module ngx_http_limit_req_module",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "http-hardening"
+      ],
+      "firstReadAt": "2026-10-28T09:18:12+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\004_无人健身房硬件选型调研\\raw\\352_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\366_Module ngx_http_limit_req_module"
+      ],
+      "excerpt": "Join us for the quarterly NGINX Community Call on November 4th to connect and discuss NGINX development. english русский news about download security documentat…",
+      "queries": []
+    },
+    {
+      "id": "KS-0096",
+      "url": "https://docs.docker.com/engine/security",
+      "title": "Docker Engine security | Docker Docs",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "container-deploy"
+      ],
+      "firstReadAt": "2026-10-28T09:18:12+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\004_无人健身房硬件选型调研\\raw\\352_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\367_Docker Engine security Docker Docs"
+      ],
+      "excerpt": "Home / Manuals / Docker Engine / Security Docker Engine security Ask Gordon Copy Markdown View Markdown There are four major areas to consider when reviewing Do…",
+      "queries": []
+    },
+    {
+      "id": "KS-0097",
+      "url": "https://docs.docker.com/build/building/best-practices",
+      "title": "Building best practices | Docker Docs",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "container-deploy"
+      ],
+      "firstReadAt": "2026-10-28T09:18:12+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\004_无人健身房硬件选型调研\\raw\\352_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\368_Building best practices Docker Docs"
+      ],
+      "excerpt": "Home / Manuals / Docker Build / Building / Best practices Building best practices Ask Gordon Copy Markdown View Markdown Use multi-stage builds Multi-stage buil…",
+      "queries": []
+    },
+    {
+      "id": "KS-0098",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html",
+      "title": "Docker Security - OWASP Cheat Sheet Series",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "container-deploy"
+      ],
+      "firstReadAt": "2026-10-28T09:18:12+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\004_无人健身房硬件选型调研\\raw\\352_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\369_Docker Security - OWASP Cheat Sheet Series"
+      ],
+      "excerpt": "Docker Security Cheat Sheet¶ Introduction¶ Docker is the most popular containerization technology. When used correctly, it can enhance security compared to runn…",
+      "queries": []
+    },
+    {
+      "id": "KS-0099",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/CI_CD_Security_Cheat_Sheet.html",
+      "title": "CI CD Security - OWASP Cheat Sheet Series",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "container-deploy"
+      ],
+      "firstReadAt": "2026-10-28T09:18:12+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\004_无人健身房硬件选型调研\\raw\\352_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\371_CI CD Security - OWASP Cheat Sheet Series"
+      ],
+      "excerpt": "CI/CD Security Cheat Sheet¶ Introduction¶ CI/CD pipelines and processes facilitate efficient, repeatable software builds and deployments; as such, they occupy a…",
+      "queries": []
+    },
+    {
+      "id": "KS-0100",
+      "url": "https://prometheus.io/docs/practices/alerting",
+      "title": "Alerting | Prometheus",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "observability"
+      ],
+      "firstReadAt": "2026-10-28T09:18:12+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\004_无人健身房硬件选型调研\\raw\\352_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\373_Alerting Prometheus"
+      ],
+      "excerpt": "Introduction Overview First steps Comparison to alternatives FAQ Roadmap Design documents Media Glossary Long-term support Concepts Data model Metric types Jobs…",
+      "queries": []
+    },
+    {
+      "id": "KS-0101",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html",
+      "title": "Logging - OWASP Cheat Sheet Series",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "observability"
+      ],
+      "firstReadAt": "2026-10-28T09:18:12+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\004_无人健身房硬件选型调研\\raw\\352_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\376_Logging - OWASP Cheat Sheet Series"
+      ],
+      "excerpt": "Logging Cheat Sheet¶ Introduction¶ This cheat sheet is focused on providing developers with concentrated guidance on building application logging mechanisms, es…",
+      "queries": []
+    },
+    {
+      "id": "KS-0102",
+      "url": "https://opentelemetry.io/docs/concepts",
+      "title": "OpenTelemetry Concepts | OpenTelemetry",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "observability"
+      ],
+      "firstReadAt": "2026-10-28T09:18:12+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\004_无人健身房硬件选型调研\\raw\\352_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\378_OpenTelemetry Concepts OpenTelemetry"
+      ],
+      "excerpt": "Docs Concepts OpenTelemetry Concepts Key concepts in OpenTelemetry This section covers data sources and key components of the OpenTelemetry project, which can h…",
+      "queries": []
+    },
+    {
+      "id": "KS-0103",
+      "url": "https://www.postgresql.org/docs/current/continuous-archiving.html",
+      "title": "PostgreSQL: Documentation: 18: 25.3. Continuous Archiving and Point-in-Time Recovery (PITR)",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "backup-dr"
+      ],
+      "firstReadAt": "2026-10-28T09:18:12+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\004_无人健身房硬件选型调研\\raw\\352_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\380_PostgreSQL Documentation 18 25.3. Continuous Archiving and Point"
+      ],
+      "excerpt": "Home About Download Documentation Community Developers Support Donate Your account October 15, 2026: PostgreSQL 19 RC 1 Released! Documentation → PostgreSQL 18 …",
+      "queries": []
+    },
+    {
+      "id": "KS-0104",
+      "url": "https://www.postgresql.org/docs/current/backup-dump.html",
+      "title": "PostgreSQL: Documentation: 18: 25.1. SQL Dump",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "backup-dr"
+      ],
+      "firstReadAt": "2026-10-28T09:18:12+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\004_无人健身房硬件选型调研\\raw\\352_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\383_PostgreSQL Documentation 18 25.1. SQL Dump"
+      ],
+      "excerpt": "Home About Download Documentation Community Developers Support Donate Your account October 15, 2026: PostgreSQL 19 RC 1 Released! Documentation → PostgreSQL 18 …",
+      "queries": []
+    },
+    {
+      "id": "KS-0105",
+      "url": "https://redis.io/docs/latest/operate/oss_and_stack/management/persistence",
+      "title": "Redis persistence | Docs",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "backup-dr"
+      ],
+      "firstReadAt": "2026-10-28T09:18:12+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\004_无人健身房硬件选型调研\\raw\\352_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\385_Redis persistence Docs"
+      ],
+      "excerpt": "Develop with Redis Libraries and tools Redis products Redis Software Redis Cloud Redis for Kubernetes Redis Open Source Install and upgrade Manage Redis Adminis…",
+      "queries": []
+    },
+    {
+      "id": "KS-0106",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html",
+      "title": "Secrets Management - OWASP Cheat Sheet Series",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "secrets-supply-chain"
+      ],
+      "firstReadAt": "2026-10-28T09:18:12+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\004_无人健身房硬件选型调研\\raw\\352_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\388_Secrets Management - OWASP Cheat Sheet Series"
+      ],
+      "excerpt": "Secrets Management Cheat Sheet¶ 1 Introduction¶ Secrets are being used everywhere nowadays, especially with the popularity of the DevOps movement. Application P…",
+      "queries": []
+    },
+    {
+      "id": "KS-0107",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Vulnerable_Dependency_Management_Cheat_Sheet.html",
+      "title": "Vulnerable Dependency Management - OWASP Cheat Sheet Series",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "secrets-supply-chain"
+      ],
+      "firstReadAt": "2026-10-28T09:18:12+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\004_无人健身房硬件选型调研\\raw\\352_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\391_Vulnerable Dependency Management - OWASP Cheat Sheet Series"
+      ],
+      "excerpt": "Vulnerable Dependency Management Cheat Sheet¶ Introduction¶ The objective of the cheat sheet is to provide a proposal of approach regarding the handling of vuln…",
+      "queries": []
+    },
+    {
+      "id": "KS-0108",
+      "url": "https://www.gov.cn/",
+      "title": "中国政府网_中央人民政府门户网站",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "data-protection"
+      ],
+      "firstReadAt": "2026-10-28T09:49:23+08:00",
+      "checkedAt": "2026-10-28T09:49:23+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\005_Luz-Dev 01 无人健身房系统后端技术方案\\raw\\475_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\476_中国政府网_中央人民政府门户网站"
+      ],
+      "excerpt": "首页 简 繁 EN 登录 邮箱 无障碍 “我将无我，不负人民”的时代答卷 “我将无我，不负人民”，从中能读懂大党大国领袖不忘初心、牢记使命的情怀担当，持之以恒推进全面从严治党的战略远见 更多 >> 纪念中国工农红军长征胜利90周年大会隆重举行 习近平发表重要讲话 习近平在内蒙古乌兰察布考察 2026年前9个月全国规模以…",
+      "queries": []
+    },
+    {
+      "id": "KS-0109",
+      "url": "https://wiki.ubuntu.com/SSH/OpenSSH/Configuring",
+      "title": "SSH/OpenSSH/Configuring - Ubuntu Wiki",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "host-security"
+      ],
+      "firstReadAt": "2026-10-28T09:49:23+08:00",
+      "checkedAt": "2026-10-28T09:51:38+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\005_Luz-Dev 01 无人健身房系统后端技术方案\\raw\\475_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\478_SSH OpenSSH Configuring - Ubuntu Wiki"
+      ],
+      "excerpt": "SSH/OpenSSH/Configuring Page Discussion Tools Contents Beginning Creating the page Search for this page in the wiki archives Migrating what you find Notes < SSH…",
+      "queries": []
+    },
+    {
+      "id": "KS-0110",
+      "url": "https://ubuntu.com/server/docs/how-to/security/firewalls",
+      "title": "Firewall - Ubuntu Server documentation",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "host-security"
+      ],
+      "firstReadAt": "2026-10-28T09:49:23+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\005_Luz-Dev 01 无人健身房系统后端技术方案\\raw\\475_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\480_Firewall - Ubuntu Server documentation"
+      ],
+      "excerpt": "Firewall The Linux kernel includes the netfilter subsystem, which is used to manipulate or decide the fate of network traffic headed into or through your server…",
+      "queries": []
+    },
+    {
+      "id": "KS-0111",
+      "url": "https://cloud.tencent.com/document/product/213/112610",
+      "title": "云服务器 安全组概述_腾讯云",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "host-security"
+      ],
+      "firstReadAt": "2026-10-28T09:49:23+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\005_Luz-Dev 01 无人健身房系统后端技术方案\\raw\\475_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\482_云服务器 安全组概述_腾讯云"
+      ],
+      "excerpt": "腾讯云 大模型 最新活动 产品 解决方案 定价 企业中心 云市场 更多 CodeBuddy 中国站 文档 备案 控制台 登录 免费注册 云服务器 新手指引 动态与公告 产品简介 购买指南 快速入门 操作指南 操作指南总览 使用限制总览 便捷功能 实例 镜像 服务器迁移 维修任务 云硬盘 网络 安全 安全组 安全组概述 …",
+      "queries": []
+    },
+    {
+      "id": "KS-0112",
+      "url": "http://www.npc.gov.cn/npc/c2/c30834/202108/t20210820_313088.html",
+      "title": "中华人民共和国个人信息保护法_中国人大网",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "data-protection"
+      ],
+      "firstReadAt": "2026-10-28T09:51:38+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\005_Luz-Dev 01 无人健身房系统后端技术方案\\raw\\485_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\487_中华人民共和国个人信息保护法_中国人大网"
+      ],
+      "excerpt": "当前位置：首页 中华人民共和国个人信息保护法 （2021年8月20日第十三届全国人民代表大会常务委员会第三十次会议通过） 来源： 中国人大网 浏览字号： 大 中 小 2021年08月20日 16:53 目 录 第一章 总 则 第二章 个人信息处理规则 第一节 一般规定 第二节 敏感个人信息的处理规则 第三节 国家机关处…",
+      "queries": []
+    },
+    {
+      "id": "KS-0113",
+      "url": "https://www.cac.gov.cn/2024-09/30/c_1729214014936453.htm",
+      "title": "中央网络安全和信息化委员会办公室",
+      "tier": "standard",
+      "kind": "law",
+      "modules": [
+        "data-protection"
+      ],
+      "firstReadAt": "2026-10-28T09:51:38+08:00",
+      "checkedAt": "2026-10-28T09:51:38+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\005_Luz-Dev 01 无人健身房系统后端技术方案\\raw\\485_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\488_中央网络安全和信息化委员会办公室"
+      ],
+      "excerpt": "2026年10月28日 星期三 设为首页加入收藏手机版繁體 搜索 高级检索 首 页 时政要闻 网信政务 互动服务 热点专题 中国共产党第二十届中央委员会第五次全体会议在北京开始举行 中央委员会总书记习近平代表中央政治局向全会作工作报告，并就《中共中央关于持之以恒推进全面从严治党若干重大问题的决定（讨论稿）》向全会作了说…",
+      "queries": []
+    },
+    {
+      "id": "KS-0114",
+      "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/open-ability/subscribe-message.html",
+      "title": "微信开放文档 / 小程序-开发-指南 / 开放能力 / 消息 / 订阅消息 / 小程序订阅消息（用户通过弹窗订阅）开发指南",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "notification"
+      ],
+      "firstReadAt": "2026-10-28T09:54:39+08:00",
+      "checkedAt": "2026-10-28T09:54:39+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\005_Luz-Dev 01 无人健身房系统后端技术方案\\raw\\498_Luz-Dev 01 无人健身房系统后端技术方案 官方原文\\raw\\sources\\links\\raw\\499_微信开放文档 小程序-开发-指南 开放能力 消息 订阅消息 小程序订阅消息（用户通过弹窗订阅）开发指南"
+      ],
+      "excerpt": "使用说明 步骤一：获取模板 ID 在微信公众平台手动配置获取模板 ID： 登录 https://mp.weixin.qq.com 获取模板，如果没有合适的模板，可以申请添加新模板，审核通过后可使用。 步骤二：获取下发权限 一次性订阅消息、长期订阅消息，详见接口 wx.requestSubscribeMessage 设备…",
+      "queries": []
+    }
+  ]
+}

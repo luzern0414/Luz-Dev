@@ -1,0 +1,390 @@
+{
+  "id": "wallet",
+  "order": 55,
+  "name": "储值钱包",
+  "modules": [
+    "recharge"
+  ],
+  "summary": "会员按储值方案充值，本金与赠送分账记录；消费按比例扣减本金与赠送，退款只退本金；所有变动写只追加流水。",
+  "features": [
+    {
+      "name": "储值方案",
+      "description": "充多少送多少，按门店范围上架；首次储值需同意预付卡条款。"
+    },
+    {
+      "name": "充值入账",
+      "description": "储值走统一订单与支付，支付成功后本金与赠送分别入账。"
+    },
+    {
+      "name": "余额支付",
+      "description": "下单时可选余额支付，按本金与赠送余额比例扣减。"
+    },
+    {
+      "name": "余额退还",
+      "description": "会员申请退还余额时只退剩余本金，赠送作废，按退款流程审核。"
+    },
+    {
+      "name": "流水",
+      "description": "每笔变化记录本金、赠送的变化量与变化后余额。"
+    }
+  ],
+  "flows": [
+    {
+      "name": "充值",
+      "steps": [
+        "储值页选择方案，调用 `POST /api/v1/app/wallet/recharge` 创建 biz_type=recharge 的订单并支付。",
+        "消费 payment.succeeded：条件更新钱包 principal_cents += 实付，bonus_cents += 赠送；写两条流水（recharge、bonus），以订单为关联单据。"
+      ]
+    },
+    {
+      "name": "余额支付扣款",
+      "steps": [
+        "计算本次扣减：本金部分 = 金额 × 本金余额 ÷ 总余额（向下取整），其余从赠送扣。",
+        "条件更新：principal_cents >= 本金部分 AND bonus_cents >= 赠送部分，version 加一；更新 0 行返回 BALANCE_INSUFFICIENT。",
+        "写 pay 流水，订单明细记录本金与赠送各自金额，以便退款时只退本金部分。"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "page": "储值页",
+      "field": "plan_id",
+      "label": "储值方案",
+      "type": "单选卡片",
+      "required": true,
+      "rule": "只显示当前门店可用的方案。"
+    },
+    {
+      "page": "储值页",
+      "field": "prepaid_consent",
+      "label": "预付卡条款",
+      "type": "勾选框",
+      "required": true,
+      "rule": "首次储值必须勾选。"
+    },
+    {
+      "page": "储值方案编辑页（后台）",
+      "field": "pay_cents",
+      "label": "充值金额",
+      "type": "金额",
+      "required": true,
+      "rule": "100–500000 元区间内。"
+    },
+    {
+      "page": "储值方案编辑页（后台）",
+      "field": "bonus_cents",
+      "label": "赠送金额",
+      "type": "金额",
+      "required": false,
+      "rule": "不超过充值金额的 50%。"
+    }
+  ],
+  "apis": [
+    {
+      "method": "GET",
+      "path": "/api/v1/app/wallet",
+      "caller": "小程序",
+      "purpose": "钱包余额",
+      "request": "无",
+      "response": "principal_cents，bonus_cents，total_cents",
+      "errors": "—"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/app/wallet/ledger",
+      "caller": "小程序",
+      "purpose": "钱包流水",
+      "request": "cursor，limit",
+      "response": "流水：时间、类型、本金变化、赠送变化、余额",
+      "errors": "—"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/app/recharge-plans",
+      "caller": "小程序",
+      "purpose": "储值方案",
+      "request": "store_id",
+      "response": "方案列表：pay_cents，bonus_cents，tag",
+      "errors": "—"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/app/wallet/recharge",
+      "caller": "小程序",
+      "purpose": "创建储值订单",
+      "request": "Idempotency-Key，plan_id，store_id，agreed_terms[]",
+      "response": "order_no，payable_cents，expire_at",
+      "errors": "CONSENT_REQUIRED，PLAN_UNAVAILABLE"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/wallets/{member_id}/adjust",
+      "caller": "后台",
+      "purpose": "调整余额",
+      "request": "principal_change_cents，bonus_change_cents，reason",
+      "response": "调整后余额",
+      "errors": "FORBIDDEN，BALANCE_NEGATIVE"
+    }
+  ],
+  "results": [
+    {
+      "case": "充值成功",
+      "page": "支付结果页",
+      "display": "显示到账本金与赠送金额、当前总余额，按钮「查看钱包」。"
+    },
+    {
+      "case": "余额不足",
+      "page": "订单确认页",
+      "display": "余额支付选项置灰并显示差额，可改用微信支付或先充值。"
+    },
+    {
+      "case": "查看钱包",
+      "page": "我的钱包页",
+      "display": "总余额、本金与赠送分列、流水列表与「申请退还余额」入口。"
+    }
+  ],
+  "writes": [
+    {
+      "when": "充值成功",
+      "table": "wallets、wallet_ledger",
+      "content": "本金与赠送入账；两条流水。"
+    },
+    {
+      "when": "余额支付",
+      "table": "wallets、wallet_ledger、order_items",
+      "content": "扣减；pay 流水；明细记录本金与赠送分摊。"
+    },
+    {
+      "when": "退款",
+      "table": "wallets、wallet_ledger",
+      "content": "退回本金（refund）。"
+    },
+    {
+      "when": "后台调整",
+      "table": "wallets、wallet_ledger、audit_logs",
+      "content": "调整与原因。"
+    }
+  ],
+  "tables": [
+    {
+      "name": "wallets",
+      "label": "钱包",
+      "purpose": "会员余额",
+      "fields": [
+        {
+          "name": "member_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "会员，唯一"
+        },
+        {
+          "name": "principal_cents",
+          "type": "BIGINT",
+          "required": true,
+          "default": "0",
+          "comment": "本金余额"
+        },
+        {
+          "name": "bonus_cents",
+          "type": "BIGINT",
+          "required": true,
+          "default": "0",
+          "comment": "赠送余额"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "active",
+          "comment": "active、frozen"
+        },
+        {
+          "name": "version",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "并发更新版本"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(member_id)",
+        "CHECK(principal_cents >= 0 AND bonus_cents >= 0)"
+      ]
+    },
+    {
+      "name": "wallet_ledger",
+      "label": "钱包流水",
+      "purpose": "余额变化，只追加",
+      "fields": [
+        {
+          "name": "wallet_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "钱包"
+        },
+        {
+          "name": "member_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "会员"
+        },
+        {
+          "name": "type",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "recharge、bonus、pay、refund、bonus_void、adjust"
+        },
+        {
+          "name": "principal_change_cents",
+          "type": "BIGINT",
+          "required": true,
+          "default": "0",
+          "comment": "本金变化"
+        },
+        {
+          "name": "bonus_change_cents",
+          "type": "BIGINT",
+          "required": true,
+          "default": "0",
+          "comment": "赠送变化"
+        },
+        {
+          "name": "principal_after_cents",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "变化后本金"
+        },
+        {
+          "name": "bonus_after_cents",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "变化后赠送"
+        },
+        {
+          "name": "ref_type",
+          "type": "VARCHAR(32)",
+          "required": true,
+          "default": "—",
+          "comment": "关联单据类型"
+        },
+        {
+          "name": "ref_id",
+          "type": "VARCHAR(64)",
+          "required": true,
+          "default": "—",
+          "comment": "关联单据编号"
+        },
+        {
+          "name": "remark",
+          "type": "VARCHAR(200)",
+          "required": false,
+          "default": "—",
+          "comment": "备注"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(ref_type, ref_id, type)",
+        "INDEX(member_id, created_at DESC)"
+      ]
+    },
+    {
+      "name": "recharge_plans",
+      "label": "储值方案",
+      "purpose": "可售储值档位",
+      "fields": [
+        {
+          "name": "name",
+          "type": "VARCHAR(40)",
+          "required": true,
+          "default": "—",
+          "comment": "方案名称"
+        },
+        {
+          "name": "pay_cents",
+          "type": "INTEGER",
+          "required": true,
+          "default": "—",
+          "comment": "充值金额"
+        },
+        {
+          "name": "bonus_cents",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "赠送金额"
+        },
+        {
+          "name": "store_scope",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "all",
+          "comment": "all、list"
+        },
+        {
+          "name": "store_ids",
+          "type": "BIGINT[]",
+          "required": false,
+          "default": "—",
+          "comment": "适用门店"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "off_sale",
+          "comment": "on_sale、off_sale"
+        },
+        {
+          "name": "sort",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "排序"
+        }
+      ],
+      "indexes": [
+        "INDEX(status, sort)"
+      ]
+    }
+  ],
+  "states": [
+    {
+      "entity": "钱包",
+      "from": "active",
+      "event": "风控冻结",
+      "to": "frozen",
+      "condition": "冻结期间不可支付与退还"
+    },
+    {
+      "entity": "钱包",
+      "from": "frozen",
+      "event": "解除冻结",
+      "to": "active",
+      "condition": "—"
+    }
+  ],
+  "exceptions": [
+    {
+      "case": "并发扣款",
+      "handling": "条件更新 + version，不会扣成负数。"
+    },
+    {
+      "case": "同一支付事件重复入账",
+      "handling": "流水唯一约束（ref_type、ref_id、type）。"
+    },
+    {
+      "case": "退还余额时有赠送",
+      "handling": "赠送部分写 bonus_void 流水清零，不退现金。"
+    },
+    {
+      "case": "单张预付卡金额与发卡规模",
+      "handling": "按预付卡相关规定设置单卡上限与资金管理，规则写入预付卡条款。"
+    }
+  ]
+}

@@ -1,0 +1,419 @@
+{
+  "id": "payment",
+  "order": 45,
+  "name": "支付",
+  "modules": [
+    "payment",
+    "reconcile"
+  ],
+  "summary": "微信支付 JSAPI 下单与调起、支付结果通知验签解密、主动查单兜底、余额支付，以及每日账单对账。",
+  "features": [
+    {
+      "name": "调起支付",
+      "description": "服务端下单取得 prepay_id 并签名，前端用返回的参数调用 wx.requestPayment。"
+    },
+    {
+      "name": "支付结果通知",
+      "description": "验签、解密、核对商户号与金额后在一个事务内更新支付单与订单，5 秒内应答。"
+    },
+    {
+      "name": "主动查单",
+      "description": "前端返回、支付中超时、关单前都向微信查单，以查单结果为准。"
+    },
+    {
+      "name": "余额支付",
+      "description": "钱包余额足够时可选余额支付，同事务扣款并完成订单。"
+    },
+    {
+      "name": "对账",
+      "description": "每日下载交易账单，与支付单逐笔核对，差异告警。"
+    }
+  ],
+  "flows": [
+    {
+      "name": "发起支付",
+      "steps": [
+        "订单页调用 `POST /api/v1/app/orders/{order_no}/pay`，channel=wechat。",
+        "校验订单为 pending_payment 且未过期；已有同金额且未过期的 prepay_id 时直接复用。",
+        "否则创建 payments（payment_no 作为商户订单号），调用 JSAPI 下单：金额、openid、通知地址、time_expire=订单 expire_at。",
+        "用商户私钥对 appId、timeStamp、nonceStr、package 签名，返回 wx.requestPayment 所需参数。"
+      ]
+    },
+    {
+      "name": "小程序端结果处理",
+      "steps": [
+        "wx.requestPayment 成功只代表用户完成操作，前端跳转支付结果页。",
+        "支付结果页轮询 `GET /api/v1/app/payments/{payment_no}`（1 秒一次，最多 10 次）；服务端仍为 paying 时主动查单一次。"
+      ]
+    },
+    {
+      "name": "支付结果通知",
+      "steps": [
+        "微信调用 `POST /api/v1/payments/notify/wechat`；用平台公钥验签，时间戳与当前时间相差超过 5 分钟拒绝。",
+        "用 APIv3 密钥 AES-GCM 解密 resource，核对 mchid、appid、out_trade_no 存在且金额等于支付单金额。",
+        "processed_events 去重后在一个事务内：payments→succeeded（transaction_id、success_at），订单→paid，写 payment.succeeded 事件。",
+        "应答 204；处理失败应答 500 让微信重试。"
+      ]
+    },
+    {
+      "name": "余额支付",
+      "steps": [
+        "channel=wallet 时，同一事务内扣减钱包（见储值钱包），创建 succeeded 的支付单，订单→paid，写 payment.succeeded。"
+      ]
+    },
+    {
+      "name": "对账",
+      "steps": [
+        "任务每日 10:00 下载前一日交易账单与退款账单。",
+        "逐笔比对 transaction_id、金额、状态；微信有本地无、金额不同、状态不同分别记差异并告警财务。"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "page": "订单确认页、订单详情页",
+      "field": "channel",
+      "label": "支付方式",
+      "type": "单选",
+      "required": true,
+      "rule": "微信支付；余额足够时可选余额支付。"
+    }
+  ],
+  "apis": [
+    {
+      "method": "POST",
+      "path": "/api/v1/app/orders/{order_no}/pay",
+      "caller": "小程序",
+      "purpose": "发起支付",
+      "request": "Idempotency-Key，channel（wechat、wallet）",
+      "response": "wechat：payment_no，timeStamp，nonceStr，package，signType，paySign；wallet：payment_no，status=succeeded",
+      "errors": "ORDER_EXPIRED，ORDER_PAID，BALANCE_INSUFFICIENT，UPSTREAM_BUSY"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/app/payments/{payment_no}",
+      "caller": "小程序",
+      "purpose": "查询支付结果",
+      "request": "无",
+      "response": "status（paying、succeeded、failed、closed），order_no，biz_result（如会员卡信息）",
+      "errors": "NOT_FOUND"
+    },
+    {
+      "method": "CALLBACK",
+      "path": "/api/v1/payments/notify/wechat",
+      "caller": "微信支付",
+      "purpose": "支付结果通知",
+      "request": "微信签名请求头与加密的 resource",
+      "response": "204 空响应；失败 500 与错误信息",
+      "errors": "SIGNATURE_INVALID"
+    },
+    {
+      "method": "TASK",
+      "path": "payment.query_pending",
+      "caller": "任务进程",
+      "purpose": "查询支付中的单",
+      "request": "paying 超过 1 分钟的支付单",
+      "response": "更新为 succeeded 或 closed",
+      "errors": "—"
+    },
+    {
+      "method": "TASK",
+      "path": "payment.reconcile",
+      "caller": "任务进程",
+      "purpose": "对账",
+      "request": "前一日账单",
+      "response": "reconcile_records",
+      "errors": "—"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/reconcile-records",
+      "caller": "后台",
+      "purpose": "对账结果",
+      "request": "from，to，status",
+      "response": "每日对账汇总与差异",
+      "errors": "FORBIDDEN"
+    }
+  ],
+  "results": [
+    {
+      "case": "支付成功",
+      "page": "支付结果页",
+      "display": "显示「支付成功」、实付金额、获得的权益（卡名称与有效期、储值到账金额或预约时间），按钮「查看详情」「返回首页」；此时请求订阅到期与预约提醒。"
+    },
+    {
+      "case": "结果确认中",
+      "page": "支付结果页",
+      "display": "显示「支付结果确认中」并自动刷新；10 秒后仍未确认，提示稍后在订单详情查看，不提示失败。"
+    },
+    {
+      "case": "用户取消或支付失败",
+      "page": "订单详情页",
+      "display": "保留待支付状态与倒计时，按钮「继续支付」。"
+    },
+    {
+      "case": "订单已超时",
+      "page": "订单详情页",
+      "display": "显示已关闭，按钮「重新购买」。"
+    }
+  ],
+  "writes": [
+    {
+      "when": "发起微信支付",
+      "table": "payments",
+      "content": "payment_no、order_id、amount_cents、channel、status=paying、prepay_id、prepay_expires_at。"
+    },
+    {
+      "when": "支付结果通知或查单成功",
+      "table": "payments",
+      "content": "status=succeeded、transaction_id、payer_openid、success_at。"
+    },
+    {
+      "when": "支付结果通知或查单成功",
+      "table": "orders",
+      "content": "status=paid、paid_cents、paid_at。"
+    },
+    {
+      "when": "支付结果通知或查单成功",
+      "table": "processed_events、outbox_events",
+      "content": "通知去重记录；payment.succeeded 事件。"
+    },
+    {
+      "when": "每日对账",
+      "table": "reconcile_records",
+      "content": "日期、笔数、金额、差异数与差异明细。"
+    }
+  ],
+  "tables": [
+    {
+      "name": "payments",
+      "label": "支付单",
+      "purpose": "每次支付尝试",
+      "fields": [
+        {
+          "name": "payment_no",
+          "type": "VARCHAR(32)",
+          "required": true,
+          "default": "—",
+          "comment": "商户订单号（out_trade_no），唯一"
+        },
+        {
+          "name": "order_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "订单"
+        },
+        {
+          "name": "member_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "会员"
+        },
+        {
+          "name": "channel",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "wechat_jsapi、wallet"
+        },
+        {
+          "name": "amount_cents",
+          "type": "INTEGER",
+          "required": true,
+          "default": "—",
+          "comment": "支付金额"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "created",
+          "comment": "created、paying、succeeded、failed、closed"
+        },
+        {
+          "name": "prepay_id",
+          "type": "VARCHAR(64)",
+          "required": false,
+          "default": "—",
+          "comment": "预支付标识"
+        },
+        {
+          "name": "prepay_expires_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "预支付有效期"
+        },
+        {
+          "name": "transaction_id",
+          "type": "VARCHAR(32)",
+          "required": false,
+          "default": "—",
+          "comment": "微信支付订单号"
+        },
+        {
+          "name": "payer_openid",
+          "type": "VARCHAR(64)",
+          "required": false,
+          "default": "—",
+          "comment": "付款人 openid"
+        },
+        {
+          "name": "success_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "支付成功时间"
+        },
+        {
+          "name": "notify_payload",
+          "type": "JSONB",
+          "required": false,
+          "default": "—",
+          "comment": "解密后的通知关键字段"
+        },
+        {
+          "name": "last_query_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "最近一次查单时间"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(payment_no)",
+        "UNIQUE(transaction_id) WHERE transaction_id IS NOT NULL",
+        "UNIQUE(order_id) WHERE status = 'succeeded'",
+        "INDEX(status, created_at)"
+      ]
+    },
+    {
+      "name": "reconcile_records",
+      "label": "对账记录",
+      "purpose": "每日账单核对结果",
+      "fields": [
+        {
+          "name": "bill_date",
+          "type": "DATE",
+          "required": true,
+          "default": "—",
+          "comment": "账单日期"
+        },
+        {
+          "name": "bill_type",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "trade、refund"
+        },
+        {
+          "name": "total_count",
+          "type": "INTEGER",
+          "required": true,
+          "default": "—",
+          "comment": "账单笔数"
+        },
+        {
+          "name": "total_cents",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "账单金额"
+        },
+        {
+          "name": "diff_count",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "差异笔数"
+        },
+        {
+          "name": "diffs",
+          "type": "JSONB",
+          "required": false,
+          "default": "—",
+          "comment": "差异明细"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "matched、diff、failed"
+        },
+        {
+          "name": "handled_by",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "差异处理人"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(bill_date, bill_type)"
+      ]
+    }
+  ],
+  "states": [
+    {
+      "entity": "支付单",
+      "from": "created",
+      "event": "下单成功",
+      "to": "paying",
+      "condition": "—"
+    },
+    {
+      "entity": "支付单",
+      "from": "paying",
+      "event": "通知或查单为成功",
+      "to": "succeeded",
+      "condition": "—"
+    },
+    {
+      "entity": "支付单",
+      "from": "paying",
+      "event": "查单为关闭或已撤销",
+      "to": "closed",
+      "condition": "—"
+    },
+    {
+      "entity": "支付单",
+      "from": "paying",
+      "event": "查单为支付失败",
+      "to": "failed",
+      "condition": "—"
+    }
+  ],
+  "exceptions": [
+    {
+      "case": "通知重复送达",
+      "handling": "processed_events 唯一约束；已成功的支付单直接应答成功。"
+    },
+    {
+      "case": "验签失败或时间戳过期",
+      "handling": "应答 401，不处理，记录安全日志。"
+    },
+    {
+      "case": "通知金额与支付单不一致",
+      "handling": "不改状态，写告警（PAY_AMOUNT_MISMATCH）由财务处理，应答成功以免重复通知。"
+    },
+    {
+      "case": "长时间收不到通知",
+      "handling": "任务查单兜底；前端轮询时也会触发查单。"
+    },
+    {
+      "case": "订单已关闭后到账",
+      "handling": "支付单记为 succeeded，订单保持 closed，自动发起全额退款。"
+    },
+    {
+      "case": "用户多次点击支付",
+      "handling": "复用未过期的 prepay_id，不重复下单；同一订单同时只允许一个 paying 支付单。"
+    },
+    {
+      "case": "商户证书或平台公钥轮换",
+      "handling": "同时加载新旧公钥按序号选择；私钥只在服务端环境变量或密钥服务中。"
+    }
+  ]
+}

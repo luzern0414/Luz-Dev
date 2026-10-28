@@ -1,0 +1,442 @@
+{
+  "id": "booking",
+  "order": 70,
+  "name": "课程预约",
+  "modules": [
+    "reservation"
+  ],
+  "summary": "门店发布团课或私教时段，会员用卡或付费预约；名额条件扣减、同一时段不重复预约；截止前可取消，开课后未签到记为爽约。",
+  "features": [
+    {
+      "name": "排课",
+      "description": "按门店发布时段：课程名称、教练、开始与结束时间、名额、价格（卡内含为 0）、取消截止时间。"
+    },
+    {
+      "name": "预约",
+      "description": "用有效卡预约（可扣次）或单独付费预约；名额满时不可预约。"
+    },
+    {
+      "name": "取消",
+      "description": "截止时间前取消释放名额并退回次数；截止后不可取消。"
+    },
+    {
+      "name": "签到",
+      "description": "开课前 30 分钟到开课后 15 分钟内入场即自动签到，也可扫码签到。"
+    },
+    {
+      "name": "爽约限制",
+      "description": "30 天内爽约 3 次，暂停预约 7 天。"
+    },
+    {
+      "name": "课前提醒",
+      "description": "开课前 2 小时发送提醒。"
+    }
+  ],
+  "flows": [
+    {
+      "name": "预约",
+      "steps": [
+        "会员在课程表页选择时段，调用 `POST /api/v1/app/slots/{id}/bookings`。",
+        "校验时段开放、未开始、会员未被暂停预约、持有可用卡（或选择付费）。",
+        "条件更新时段 booked_count = booked_count + 1 WHERE booked_count < capacity；失败返回 SLOT_FULL。",
+        "插入 bookings（booked）；（时段、会员）在有效状态下唯一，重复预约返回 ALREADY_BOOKED。",
+        "卡内含课程扣次时写次数流水；付费课程创建 biz_type=booking 订单，支付成功后才确认，超时关闭释放名额。"
+      ]
+    },
+    {
+      "name": "取消",
+      "steps": [
+        "截止时间前调用取消，bookings→cancelled，booked_count 减一，退回次数。"
+      ]
+    },
+    {
+      "name": "爽约处理",
+      "steps": [
+        "任务在开课后 15 分钟把仍为 booked 的预约改为 no_show；统计 30 天内次数，达到 3 次写入暂停预约截止时间。"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "page": "课程表页",
+      "field": "store_id、date",
+      "label": "门店与日期",
+      "type": "切换",
+      "required": true,
+      "rule": "可查看未来 7 天。"
+    },
+    {
+      "page": "预约确认弹窗",
+      "field": "member_card_id",
+      "label": "使用的会员卡",
+      "type": "选择",
+      "required": false,
+      "rule": "只列可用于该课程的卡；不选则付费预约。"
+    },
+    {
+      "page": "排课页（后台）",
+      "field": "capacity",
+      "label": "名额",
+      "type": "数字",
+      "required": true,
+      "rule": "1–100。"
+    },
+    {
+      "page": "排课页（后台）",
+      "field": "cancel_deadline_minutes",
+      "label": "取消截止",
+      "type": "数字",
+      "required": true,
+      "rule": "开课前多少分钟截止取消，默认 120。"
+    }
+  ],
+  "apis": [
+    {
+      "method": "GET",
+      "path": "/api/v1/app/slots",
+      "caller": "小程序",
+      "purpose": "课程表",
+      "request": "store_id，date",
+      "response": "时段列表：课程、教练、时间、剩余名额、我的预约状态",
+      "errors": "—"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/app/slots/{id}/bookings",
+      "caller": "小程序",
+      "purpose": "预约",
+      "request": "Idempotency-Key，member_card_id（可选）",
+      "response": "booking_no，status（booked 或 pending_payment），order_no（付费时）",
+      "errors": "SLOT_FULL，ALREADY_BOOKED，BOOKING_SUSPENDED，SLOT_STARTED"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/app/bookings/{booking_no}/cancel",
+      "caller": "小程序",
+      "purpose": "取消预约",
+      "request": "无",
+      "response": "status=cancelled，returned_times",
+      "errors": "CANCEL_DEADLINE_PASSED"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/app/me/bookings",
+      "caller": "小程序",
+      "purpose": "我的预约",
+      "request": "status，cursor",
+      "response": "预约列表",
+      "errors": "—"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/slots",
+      "caller": "后台",
+      "purpose": "发布时段",
+      "request": "store_id，title，coach_name，starts_at，ends_at，capacity，price_cents，cancel_deadline_minutes",
+      "response": "slot_id",
+      "errors": "VALIDATION_FAILED"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/slots/{id}/cancel",
+      "caller": "后台",
+      "purpose": "取消整节课",
+      "request": "reason",
+      "response": "受影响预约数",
+      "errors": "STATE_CONFLICT"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/bookings/{booking_no}/check-in",
+      "caller": "后台",
+      "purpose": "手动签到",
+      "request": "无",
+      "response": "status=checked_in",
+      "errors": "STATE_CONFLICT"
+    }
+  ],
+  "results": [
+    {
+      "case": "预约成功",
+      "page": "预约成功页",
+      "display": "显示课程、时间、门店地址，按钮「添加提醒」（请求订阅）与「查看我的预约」。"
+    },
+    {
+      "case": "名额已满",
+      "page": "课程表页",
+      "display": "该时段显示「已约满」。"
+    },
+    {
+      "case": "取消成功",
+      "page": "我的预约页",
+      "display": "显示已取消与退回的次数。"
+    },
+    {
+      "case": "门店取消整节课",
+      "page": "通知与我的预约页",
+      "display": "显示课程取消原因，次数或费用已退回。"
+    }
+  ],
+  "writes": [
+    {
+      "when": "预约",
+      "table": "booking_slots、bookings",
+      "content": "booked_count 加一；预约记录。"
+    },
+    {
+      "when": "用卡预约或取消",
+      "table": "card_usage_ledger",
+      "content": "扣次或退回。"
+    },
+    {
+      "when": "签到与爽约",
+      "table": "bookings、members",
+      "content": "checked_in 或 no_show；暂停预约截止时间写在 booking_suspensions。"
+    },
+    {
+      "when": "爽约达到上限",
+      "table": "booking_suspensions",
+      "content": "会员、截止时间、原因。"
+    }
+  ],
+  "tables": [
+    {
+      "name": "booking_slots",
+      "label": "课程时段",
+      "purpose": "可预约的课程时段",
+      "fields": [
+        {
+          "name": "store_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "门店"
+        },
+        {
+          "name": "kind",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "group_class、private"
+        },
+        {
+          "name": "title",
+          "type": "VARCHAR(40)",
+          "required": true,
+          "default": "—",
+          "comment": "课程名称"
+        },
+        {
+          "name": "coach_name",
+          "type": "VARCHAR(40)",
+          "required": false,
+          "default": "—",
+          "comment": "教练"
+        },
+        {
+          "name": "starts_at",
+          "type": "TIMESTAMPTZ",
+          "required": true,
+          "default": "—",
+          "comment": "开始时间"
+        },
+        {
+          "name": "ends_at",
+          "type": "TIMESTAMPTZ",
+          "required": true,
+          "default": "—",
+          "comment": "结束时间"
+        },
+        {
+          "name": "capacity",
+          "type": "INTEGER",
+          "required": true,
+          "default": "—",
+          "comment": "名额"
+        },
+        {
+          "name": "booked_count",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "已预约"
+        },
+        {
+          "name": "price_cents",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "单独付费价格，0 表示卡内含"
+        },
+        {
+          "name": "cancel_deadline_minutes",
+          "type": "INTEGER",
+          "required": true,
+          "default": "120",
+          "comment": "开课前多少分钟截止取消"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "open",
+          "comment": "open、cancelled、finished"
+        }
+      ],
+      "indexes": [
+        "INDEX(store_id, starts_at)",
+        "CHECK(booked_count >= 0 AND booked_count <= capacity)"
+      ]
+    },
+    {
+      "name": "bookings",
+      "label": "预约",
+      "purpose": "会员的预约记录",
+      "fields": [
+        {
+          "name": "booking_no",
+          "type": "VARCHAR(32)",
+          "required": true,
+          "default": "—",
+          "comment": "预约编号"
+        },
+        {
+          "name": "slot_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "时段"
+        },
+        {
+          "name": "member_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "会员"
+        },
+        {
+          "name": "member_card_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "使用的会员卡"
+        },
+        {
+          "name": "order_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "付费预约订单"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "pending_payment、booked、cancelled、checked_in、no_show"
+        },
+        {
+          "name": "cancelled_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "取消时间"
+        },
+        {
+          "name": "checked_in_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "签到时间"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(booking_no)",
+        "UNIQUE(slot_id, member_id) WHERE status IN ('pending_payment','booked','checked_in')",
+        "INDEX(member_id, created_at DESC)"
+      ]
+    },
+    {
+      "name": "booking_suspensions",
+      "label": "预约暂停",
+      "purpose": "爽约导致的暂停预约",
+      "fields": [
+        {
+          "name": "member_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "会员"
+        },
+        {
+          "name": "until_at",
+          "type": "TIMESTAMPTZ",
+          "required": true,
+          "default": "—",
+          "comment": "暂停截止时间"
+        },
+        {
+          "name": "reason",
+          "type": "VARCHAR(100)",
+          "required": true,
+          "default": "—",
+          "comment": "原因"
+        }
+      ],
+      "indexes": [
+        "INDEX(member_id, until_at)"
+      ]
+    }
+  ],
+  "states": [
+    {
+      "entity": "预约",
+      "from": "pending_payment",
+      "event": "支付成功",
+      "to": "booked",
+      "condition": "—"
+    },
+    {
+      "entity": "预约",
+      "from": "pending_payment",
+      "event": "订单关闭",
+      "to": "cancelled",
+      "condition": "释放名额"
+    },
+    {
+      "entity": "预约",
+      "from": "booked",
+      "event": "截止前取消",
+      "to": "cancelled",
+      "condition": "释放名额并退回次数"
+    },
+    {
+      "entity": "预约",
+      "from": "booked",
+      "event": "入场或扫码签到",
+      "to": "checked_in",
+      "condition": "—"
+    },
+    {
+      "entity": "预约",
+      "from": "booked",
+      "event": "开课 15 分钟后未签到",
+      "to": "no_show",
+      "condition": "—"
+    }
+  ],
+  "exceptions": [
+    {
+      "case": "最后一个名额被同时抢",
+      "handling": "名额条件更新，只有一人成功。"
+    },
+    {
+      "case": "同一会员时间重叠的两节课",
+      "handling": "预约时检查该会员同时间段已有预约，返回 TIME_CONFLICT。"
+    },
+    {
+      "case": "门店取消课程",
+      "handling": "批量取消预约、退回次数或原路退款，并通知会员。"
+    }
+  ]
+}

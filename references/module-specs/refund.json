@@ -1,0 +1,499 @@
+{
+  "id": "refund",
+  "order": 50,
+  "name": "退款与售后",
+  "modules": [
+    "refund",
+    "after-sales"
+  ],
+  "summary": "会员提交退款或退卡申请，系统按规则计算可退金额，后台审核后原路退款；累计退款不超过实付，退款结果以通知与查询为准。",
+  "features": [
+    {
+      "name": "退款试算",
+      "description": "按卡种退卡规则计算：未使用全额退，已使用按剩余次数或天数折算并扣手续费；展示计算过程。"
+    },
+    {
+      "name": "退款申请",
+      "description": "会员选择原因提交，退卡期间会员卡暂停使用。"
+    },
+    {
+      "name": "后台审核",
+      "description": "审批人可调整退款金额（不超过可退上限）并填写意见；驳回需写原因。"
+    },
+    {
+      "name": "原路退款",
+      "description": "微信支付部分原路退回，余额支付部分退回钱包本金；赠送部分不退。"
+    },
+    {
+      "name": "退款查询与通知",
+      "description": "退款结果通知与定时查询双保险，到账后通知会员。"
+    }
+  ],
+  "flows": [
+    {
+      "name": "申请退款",
+      "steps": [
+        "订单详情页点击申请退款，调用 `POST /api/v1/app/orders/{order_no}/refund-preview` 获取可退金额与计算明细。",
+        "会员选择原因并提交 `POST /api/v1/app/after-sales`。",
+        "服务端校验：订单已支付、无进行中的申请、在可退期限内；创建申请（submitted），关联会员卡改为 refunding。"
+      ]
+    },
+    {
+      "name": "审核与退款",
+      "steps": [
+        "后台审核通过时再次计算可退上限，approved_cents 不得超过上限与（实付 − 累计已退）。",
+        "同一事务：申请→approved，订单 refunded_cents 预占（条件更新 refunded_cents + x <= paid_cents），订单→refunding，创建 refunds（processing，固定 refund_no）。",
+        "事务提交后调用微信退款接口；网络失败用同一 refund_no 重试，不会重复退款。",
+        "会员卡→refunded 并写次数流水；按规则退回优惠券（未过期则恢复为可用）。"
+      ]
+    },
+    {
+      "name": "退款结果",
+      "steps": [
+        "微信调用 `POST /api/v1/payments/notify/wechat/refund`，验签解密后核对 out_refund_no 与金额。",
+        "退款成功：refunds→succeeded，申请→completed，订单按累计退款改为 partially_refunded 或 refunded，通知会员。",
+        "退款异常（如账户余额不足）：refunds→abnormal，告警财务；处理后可重新发起。"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "page": "退款申请页",
+      "field": "reason_code",
+      "label": "退款原因",
+      "type": "单选",
+      "required": true,
+      "rule": "搬家或转店、身体原因、服务不满意、其他。"
+    },
+    {
+      "page": "退款申请页",
+      "field": "reason_text",
+      "label": "补充说明",
+      "type": "文本",
+      "required": false,
+      "rule": "不超过 200 字。"
+    },
+    {
+      "page": "退款申请页",
+      "field": "evidence_file_ids",
+      "label": "凭证图片",
+      "type": "图片上传",
+      "required": false,
+      "rule": "最多 3 张。"
+    },
+    {
+      "page": "退款审核页（后台）",
+      "field": "approved_cents",
+      "label": "同意退款金额",
+      "type": "金额",
+      "required": true,
+      "rule": "不超过页面显示的可退上限。"
+    },
+    {
+      "page": "退款审核页（后台）",
+      "field": "review_note",
+      "label": "审核意见",
+      "type": "文本",
+      "required": true,
+      "rule": "驳回时必填，会展示给会员。"
+    }
+  ],
+  "apis": [
+    {
+      "method": "POST",
+      "path": "/api/v1/app/orders/{order_no}/refund-preview",
+      "caller": "小程序",
+      "purpose": "可退金额试算",
+      "request": "无",
+      "response": "refundable_cents，breakdown[]（已用次数或天数、折算金额、手续费），channel_split（微信、余额），rules_text",
+      "errors": "NOT_REFUNDABLE（附原因）"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/app/after-sales",
+      "caller": "小程序",
+      "purpose": "提交退款申请",
+      "request": "Idempotency-Key，order_no，reason_code，reason_text，evidence_file_ids[]",
+      "response": "request_no，status=submitted，apply_cents",
+      "errors": "REFUND_IN_PROGRESS，NOT_REFUNDABLE"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/app/after-sales/{request_no}",
+      "caller": "小程序",
+      "purpose": "退款进度",
+      "request": "无",
+      "response": "状态、各步骤时间、金额、驳回原因、到账渠道",
+      "errors": "NOT_FOUND"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/app/after-sales/{request_no}/cancel",
+      "caller": "小程序",
+      "purpose": "撤销申请",
+      "request": "无",
+      "response": "status=cancelled",
+      "errors": "NOT_CANCELLABLE（已审核）"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/after-sales",
+      "caller": "后台",
+      "purpose": "退款申请列表",
+      "request": "store_id，status，from，to，cursor",
+      "response": "申请列表",
+      "errors": "FORBIDDEN"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/after-sales/{request_no}/approve",
+      "caller": "后台",
+      "purpose": "审核通过",
+      "request": "approved_cents，review_note",
+      "response": "status=approved，refund_no",
+      "errors": "AMOUNT_EXCEEDS_LIMIT，STATE_CONFLICT"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/after-sales/{request_no}/reject",
+      "caller": "后台",
+      "purpose": "驳回",
+      "request": "review_note",
+      "response": "status=rejected",
+      "errors": "STATE_CONFLICT"
+    },
+    {
+      "method": "CALLBACK",
+      "path": "/api/v1/payments/notify/wechat/refund",
+      "caller": "微信支付",
+      "purpose": "退款结果通知",
+      "request": "微信签名请求头与加密的 resource",
+      "response": "204",
+      "errors": "SIGNATURE_INVALID"
+    },
+    {
+      "method": "TASK",
+      "path": "refund.query_processing",
+      "caller": "任务进程",
+      "purpose": "查询退款中的单",
+      "request": "processing 超过 5 分钟的退款",
+      "response": "更新为 succeeded 或 abnormal",
+      "errors": "—"
+    }
+  ],
+  "results": [
+    {
+      "case": "提交申请",
+      "page": "退款进度页",
+      "display": "步骤条：已提交 → 审核中 → 退款中 → 已到账；显示预计退款金额与原路退回说明。"
+    },
+    {
+      "case": "申请被驳回",
+      "page": "退款进度页",
+      "display": "显示驳回原因；会员卡恢复使用；可重新申请一次。"
+    },
+    {
+      "case": "退款成功",
+      "page": "退款进度页与通知",
+      "display": "显示到账金额与渠道（微信零钱或银行卡、钱包余额），订单状态更新。"
+    }
+  ],
+  "writes": [
+    {
+      "when": "提交申请",
+      "table": "after_sales_requests、member_cards",
+      "content": "申请记录；会员卡 status=refunding。"
+    },
+    {
+      "when": "审核通过",
+      "table": "after_sales_requests、orders、refunds",
+      "content": "approved_cents；订单 refunded_cents 与 refunding；退款单 processing。"
+    },
+    {
+      "when": "审核通过",
+      "table": "card_usage_ledger、coupons",
+      "content": "退卡流水；按规则退回优惠券。"
+    },
+    {
+      "when": "退款成功",
+      "table": "refunds、after_sales_requests、orders、order_items",
+      "content": "succeeded、completed、累计退款与退款状态、明细已退金额。"
+    },
+    {
+      "when": "余额支付部分退款",
+      "table": "wallet_ledger、wallets",
+      "content": "退回本金。"
+    },
+    {
+      "when": "审核与异常处理",
+      "table": "audit_logs",
+      "content": "审批人、金额、意见。"
+    }
+  ],
+  "tables": [
+    {
+      "name": "after_sales_requests",
+      "label": "退款申请",
+      "purpose": "会员的退款或退卡申请",
+      "fields": [
+        {
+          "name": "request_no",
+          "type": "VARCHAR(32)",
+          "required": true,
+          "default": "—",
+          "comment": "申请编号"
+        },
+        {
+          "name": "order_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "订单"
+        },
+        {
+          "name": "member_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "会员"
+        },
+        {
+          "name": "type",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "card_refund、order_refund"
+        },
+        {
+          "name": "reason_code",
+          "type": "VARCHAR(32)",
+          "required": true,
+          "default": "—",
+          "comment": "原因编码"
+        },
+        {
+          "name": "reason_text",
+          "type": "VARCHAR(200)",
+          "required": false,
+          "default": "—",
+          "comment": "补充说明"
+        },
+        {
+          "name": "evidence_file_ids",
+          "type": "BIGINT[]",
+          "required": false,
+          "default": "—",
+          "comment": "凭证图片"
+        },
+        {
+          "name": "apply_cents",
+          "type": "INTEGER",
+          "required": true,
+          "default": "—",
+          "comment": "申请时试算金额"
+        },
+        {
+          "name": "approved_cents",
+          "type": "INTEGER",
+          "required": false,
+          "default": "—",
+          "comment": "审核同意金额"
+        },
+        {
+          "name": "calc_detail",
+          "type": "JSONB",
+          "required": true,
+          "default": "—",
+          "comment": "试算明细（已用、折算、手续费）"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "submitted",
+          "comment": "submitted、approved、rejected、completed、cancelled"
+        },
+        {
+          "name": "reviewer_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "审批人"
+        },
+        {
+          "name": "review_note",
+          "type": "VARCHAR(200)",
+          "required": false,
+          "default": "—",
+          "comment": "审核意见"
+        },
+        {
+          "name": "reviewed_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "审核时间"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(request_no)",
+        "UNIQUE(order_id) WHERE status IN ('submitted','approved')",
+        "INDEX(status, created_at)"
+      ]
+    },
+    {
+      "name": "refunds",
+      "label": "退款单",
+      "purpose": "向支付渠道发起的退款",
+      "fields": [
+        {
+          "name": "refund_no",
+          "type": "VARCHAR(32)",
+          "required": true,
+          "default": "—",
+          "comment": "商户退款单号（out_refund_no），唯一"
+        },
+        {
+          "name": "order_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "订单"
+        },
+        {
+          "name": "payment_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "原支付单"
+        },
+        {
+          "name": "after_sales_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "退款申请；迟到支付自动退款为空"
+        },
+        {
+          "name": "channel",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "wechat_jsapi、wallet"
+        },
+        {
+          "name": "amount_cents",
+          "type": "INTEGER",
+          "required": true,
+          "default": "—",
+          "comment": "退款金额"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "processing",
+          "comment": "processing、succeeded、abnormal、closed"
+        },
+        {
+          "name": "wechat_refund_id",
+          "type": "VARCHAR(32)",
+          "required": false,
+          "default": "—",
+          "comment": "微信退款单号"
+        },
+        {
+          "name": "received_account",
+          "type": "VARCHAR(64)",
+          "required": false,
+          "default": "—",
+          "comment": "入账账户描述"
+        },
+        {
+          "name": "success_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "退款成功时间"
+        },
+        {
+          "name": "fail_reason",
+          "type": "VARCHAR(200)",
+          "required": false,
+          "default": "—",
+          "comment": "异常原因"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(refund_no)",
+        "INDEX(status, created_at)"
+      ]
+    }
+  ],
+  "states": [
+    {
+      "entity": "退款申请",
+      "from": "submitted",
+      "event": "后台通过",
+      "to": "approved",
+      "condition": "—"
+    },
+    {
+      "entity": "退款申请",
+      "from": "submitted",
+      "event": "后台驳回",
+      "to": "rejected",
+      "condition": "会员卡恢复原状态"
+    },
+    {
+      "entity": "退款申请",
+      "from": "submitted",
+      "event": "会员撤销",
+      "to": "cancelled",
+      "condition": "—"
+    },
+    {
+      "entity": "退款申请",
+      "from": "approved",
+      "event": "退款成功",
+      "to": "completed",
+      "condition": "—"
+    },
+    {
+      "entity": "退款单",
+      "from": "processing",
+      "event": "通知或查询成功",
+      "to": "succeeded",
+      "condition": "—"
+    },
+    {
+      "entity": "退款单",
+      "from": "processing",
+      "event": "渠道返回异常",
+      "to": "abnormal",
+      "condition": "财务处理后可重新发起"
+    }
+  ],
+  "exceptions": [
+    {
+      "case": "超额退款",
+      "handling": "订单 refunded_cents 条件更新 + CHECK 约束；明细行同样限制，任何一层超出即回滚。"
+    },
+    {
+      "case": "重复调用微信退款",
+      "handling": "使用同一 refund_no，微信侧幂等。"
+    },
+    {
+      "case": "商户账户余额不足或原卡已注销",
+      "handling": "退款单 abnormal，告警财务；可改为人工转账并记录凭证。"
+    },
+    {
+      "case": "超过原路退款期限（支付后 1 年）",
+      "handling": "提示联系客服，走人工转账流程并审计。"
+    },
+    {
+      "case": "退卡期间尝试入场",
+      "handling": "会员卡为 refunding，入场判定返回 CARD_REFUNDING。"
+    }
+  ]
+}

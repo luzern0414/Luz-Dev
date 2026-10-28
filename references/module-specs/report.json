@@ -1,0 +1,321 @@
+{
+  "id": "report",
+  "order": 95,
+  "name": "报表与导出",
+  "modules": [
+    "report"
+  ],
+  "summary": "按门店与日期汇总客流、会员、营收与退款；当日数据实时计算，历史数据每日固化；导出异步执行并脱敏。",
+  "features": [
+    {
+      "name": "经营日报",
+      "description": "入场人次、到店人数、新增会员、售卡数量与金额、储值、退款、峰值在场人数、平均停留时长。"
+    },
+    {
+      "name": "实时看板",
+      "description": "当前在场人数、今日入场、今日营收、设备在线率、未处理告警。"
+    },
+    {
+      "name": "导出",
+      "description": "订单、会员、流水导出为文件，异步生成，手机号脱敏，链接 24 小时有效，写审计。"
+    }
+  ],
+  "flows": [
+    {
+      "name": "日报固化",
+      "steps": [
+        "任务每日 02:00 按门店时区计算前一日指标，写入 store_daily_stats（同一门店同一天覆盖写）。",
+        "跨日补传的进出事件或迟到的退款会触发对应日期重算。"
+      ]
+    },
+    {
+      "name": "导出",
+      "steps": [
+        "后台提交导出条件，创建导出任务，立即返回任务编号。",
+        "任务进程分批读取（每批 1000 行）写文件，完成后生成短时下载地址并通知申请人。"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "page": "报表页（后台）",
+      "field": "store_ids",
+      "label": "门店",
+      "type": "多选",
+      "required": false,
+      "rule": "默认当前账号可管理的全部门店。"
+    },
+    {
+      "page": "报表页（后台）",
+      "field": "date_range",
+      "label": "日期范围",
+      "type": "日期区间",
+      "required": true,
+      "rule": "最长 366 天。"
+    },
+    {
+      "page": "导出弹窗（后台）",
+      "field": "kind",
+      "label": "导出内容",
+      "type": "单选",
+      "required": true,
+      "rule": "orders、members、wallet_ledger、access_events。"
+    }
+  ],
+  "apis": [
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/reports/daily",
+      "caller": "后台",
+      "purpose": "经营日报",
+      "request": "store_ids，from，to",
+      "response": "按日指标列表与合计",
+      "errors": "RANGE_TOO_LARGE"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/reports/realtime",
+      "caller": "后台",
+      "purpose": "实时看板",
+      "request": "store_ids",
+      "response": "在场人数、今日入场、今日营收、设备在线率、告警数",
+      "errors": "—"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/exports",
+      "caller": "后台",
+      "purpose": "创建导出",
+      "request": "kind，filters",
+      "response": "export_id，status",
+      "errors": "FORBIDDEN"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/exports/{id}",
+      "caller": "后台",
+      "purpose": "导出结果",
+      "request": "无",
+      "response": "status，row_count，download_url（完成后）",
+      "errors": "NOT_FOUND"
+    },
+    {
+      "method": "TASK",
+      "path": "report.daily",
+      "caller": "任务进程",
+      "purpose": "固化前一日指标",
+      "request": "门店列表",
+      "response": "store_daily_stats",
+      "errors": "—"
+    }
+  ],
+  "results": [
+    {
+      "case": "查看报表",
+      "page": "报表页",
+      "display": "指标卡与按日趋势表，可切换门店与日期范围。"
+    },
+    {
+      "case": "导出完成",
+      "page": "导出记录页",
+      "display": "显示行数与下载按钮，过期后需重新导出。"
+    }
+  ],
+  "writes": [
+    {
+      "when": "每日任务",
+      "table": "store_daily_stats",
+      "content": "前一日各项指标。"
+    },
+    {
+      "when": "创建导出",
+      "table": "export_jobs、audit_logs",
+      "content": "导出条件、申请人、状态。"
+    }
+  ],
+  "tables": [
+    {
+      "name": "store_daily_stats",
+      "label": "门店日报",
+      "purpose": "固化的每日经营指标",
+      "fields": [
+        {
+          "name": "store_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "门店"
+        },
+        {
+          "name": "stat_date",
+          "type": "DATE",
+          "required": true,
+          "default": "—",
+          "comment": "统计日期（门店时区）"
+        },
+        {
+          "name": "entries",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "入场人次"
+        },
+        {
+          "name": "unique_visitors",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "到店人数"
+        },
+        {
+          "name": "new_members",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "新增会员"
+        },
+        {
+          "name": "paid_orders",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "支付成功订单数"
+        },
+        {
+          "name": "revenue_cents",
+          "type": "BIGINT",
+          "required": true,
+          "default": "0",
+          "comment": "实收金额"
+        },
+        {
+          "name": "refund_cents",
+          "type": "BIGINT",
+          "required": true,
+          "default": "0",
+          "comment": "退款金额"
+        },
+        {
+          "name": "recharge_cents",
+          "type": "BIGINT",
+          "required": true,
+          "default": "0",
+          "comment": "储值本金"
+        },
+        {
+          "name": "peak_occupancy",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "峰值在场人数"
+        },
+        {
+          "name": "avg_stay_minutes",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "平均停留分钟数"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(store_id, stat_date)"
+      ]
+    },
+    {
+      "name": "export_jobs",
+      "label": "导出任务",
+      "purpose": "异步导出记录",
+      "fields": [
+        {
+          "name": "admin_user_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "申请人"
+        },
+        {
+          "name": "kind",
+          "type": "VARCHAR(32)",
+          "required": true,
+          "default": "—",
+          "comment": "导出内容"
+        },
+        {
+          "name": "filters",
+          "type": "JSONB",
+          "required": true,
+          "default": "—",
+          "comment": "导出条件"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "pending",
+          "comment": "pending、running、done、failed"
+        },
+        {
+          "name": "row_count",
+          "type": "INTEGER",
+          "required": false,
+          "default": "—",
+          "comment": "行数"
+        },
+        {
+          "name": "file_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "生成的文件"
+        },
+        {
+          "name": "expires_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "下载截止时间"
+        }
+      ],
+      "indexes": [
+        "INDEX(admin_user_id, created_at DESC)"
+      ]
+    }
+  ],
+  "states": [
+    {
+      "entity": "导出任务",
+      "from": "pending",
+      "event": "开始执行",
+      "to": "running",
+      "condition": "—"
+    },
+    {
+      "entity": "导出任务",
+      "from": "running",
+      "event": "完成",
+      "to": "done",
+      "condition": "—"
+    },
+    {
+      "entity": "导出任务",
+      "from": "running",
+      "event": "出错",
+      "to": "failed",
+      "condition": "可重新提交"
+    }
+  ],
+  "exceptions": [
+    {
+      "case": "报表口径",
+      "handling": "营收按支付成功时间计，退款按退款成功时间计，两者分列，不互相抵扣历史日期。"
+    },
+    {
+      "case": "导出数据量过大",
+      "handling": "单次最多 20 万行，超过时提示缩小范围。"
+    },
+    {
+      "case": "导出含个人信息",
+      "handling": "手机号等字段脱敏；需要明文时须单独权限并记录用途。"
+    }
+  ]
+}

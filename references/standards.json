@@ -1,0 +1,5025 @@
+{
+  "schemaVersion": "1.0",
+  "updatedAt": "2026-10-26",
+  "title": "Luz Dev 安全与功能规范",
+  "description": "Luz Dev 交付小程序、管理后台、移动 App、后端与智能体时必须遵守的工程规范。MUST 规则进入每份实施方案的核对表，必须纳入方案或写明不适用原因；SHOULD 规则不处理时给出警告。规则的依据写在 sources 中，涉及外部平台的规则必须带官方来源与核对日期。",
+  "levels": {
+    "MUST": "必须满足；未纳入方案或未说明不适用原因时，方案不能提交审核。",
+    "SHOULD": "建议满足；不做时写明原因，否则提交审核时给出警告。"
+  },
+  "platforms": {
+    "all": "所有项目",
+    "miniprogram": "微信小程序",
+    "admin": "管理后台",
+    "mobile": "移动 App",
+    "backend": "后端服务",
+    "agent": "智能体"
+  },
+  "modules": [
+    {
+      "id": "login",
+      "name": "小程序登录与手机号"
+    },
+    {
+      "id": "auth",
+      "name": "账号认证（密码、短信、MFA）"
+    },
+    {
+      "id": "payment",
+      "name": "微信支付",
+      "catalog": "payment",
+      "backend": "backend/09-wechat-pay",
+      "pattern": "backend/09-wechat-pay/MODULE.md"
+    },
+    {
+      "id": "refund",
+      "name": "退款",
+      "catalog": "payment",
+      "backend": "backend/09-wechat-pay",
+      "pattern": "backend/09-wechat-pay/MODULE.md"
+    },
+    {
+      "id": "reconcile",
+      "name": "对账",
+      "catalog": "payment",
+      "pattern": "backend/09-wechat-pay/MODULE.md"
+    },
+    {
+      "id": "order",
+      "name": "订单",
+      "catalog": "order",
+      "backend": "backend/08-order",
+      "pattern": "references/patterns/order.md"
+    },
+    {
+      "id": "inventory",
+      "name": "库存与名额",
+      "catalog": "inventory",
+      "backend": "backend/07-inventory",
+      "pattern": "references/patterns/inventory.md"
+    },
+    {
+      "id": "coupon",
+      "name": "优惠券",
+      "catalog": "coupon",
+      "backend": "backend/16-coupon",
+      "pattern": "references/patterns/coupon.md"
+    },
+    {
+      "id": "membership",
+      "name": "会员与积分",
+      "catalog": "membership",
+      "backend": "backend/14-membership",
+      "pattern": "references/patterns/accounts.md"
+    },
+    {
+      "id": "recharge",
+      "name": "储值与预付卡",
+      "backend": "backend/15-recharge",
+      "pattern": "references/patterns/accounts.md"
+    },
+    {
+      "id": "face",
+      "name": "人脸采集与识别"
+    },
+    {
+      "id": "upload",
+      "name": "文件上传与用户内容",
+      "backend": "backend/21-media"
+    },
+    {
+      "id": "notification",
+      "name": "订阅消息与通知",
+      "backend": "backend/20-notification"
+    },
+    {
+      "id": "privacy",
+      "name": "隐私协议与个人信息"
+    },
+    {
+      "id": "admin-rbac",
+      "name": "后台权限与审计",
+      "backend": "backend/22-admin-rbac"
+    },
+    {
+      "id": "reservation",
+      "name": "预约与排期",
+      "catalog": "reservation",
+      "backend": "backend/13-reservation",
+      "pattern": "references/patterns/reservation.md"
+    },
+    {
+      "id": "geo",
+      "name": "定位与地图",
+      "backend": "backend/06-geo"
+    },
+    {
+      "id": "lottery",
+      "name": "抽奖",
+      "catalog": "lottery",
+      "backend": "backend/18-lottery",
+      "pattern": "references/patterns/inventory.md"
+    },
+    {
+      "id": "agent",
+      "name": "智能体",
+      "backend": "agent/"
+    },
+    {
+      "id": "catalog",
+      "name": "商品、SKU 与价格",
+      "backend": "backend/03-catalog",
+      "pattern": "references/patterns/catalog-cart.md"
+    },
+    {
+      "id": "cart",
+      "name": "购物车",
+      "backend": "backend/04-cart",
+      "pattern": "references/patterns/catalog-cart.md"
+    },
+    {
+      "id": "store",
+      "name": "门店与多租户",
+      "backend": "backend/02-store",
+      "pattern": "references/patterns/multi-store.md"
+    },
+    {
+      "id": "after-sales",
+      "name": "售后与退款申请",
+      "backend": "backend/10-after-sales",
+      "pattern": "references/patterns/after-sales.md"
+    },
+    {
+      "id": "delivery",
+      "name": "配送与履约",
+      "backend": "backend/11-delivery"
+    },
+    {
+      "id": "queue",
+      "name": "排队叫号",
+      "backend": "backend/12-queue"
+    },
+    {
+      "id": "campaign",
+      "name": "营销活动（满减、折扣、限时）",
+      "backend": "backend/17-campaign",
+      "pattern": "references/patterns/pricing.md"
+    },
+    {
+      "id": "review",
+      "name": "评价",
+      "backend": "backend/19-review"
+    },
+    {
+      "id": "report",
+      "name": "报表与统计",
+      "backend": "backend/24-report"
+    },
+    {
+      "id": "jobs",
+      "name": "定时任务与延迟任务",
+      "backend": "backend/25-jobs",
+      "pattern": "references/patterns/jobs.md"
+    },
+    {
+      "id": "settings",
+      "name": "系统与门店配置",
+      "backend": "backend/23-app-settings"
+    },
+    {
+      "id": "seckill",
+      "name": "高并发抢购与热点库存",
+      "pattern": "references/patterns/seckill.md"
+    },
+    {
+      "id": "consistency",
+      "name": "一致性：幂等、事务消息与补偿",
+      "pattern": "references/patterns/consistency.md"
+    },
+    {
+      "id": "cache",
+      "name": "缓存与一致性",
+      "pattern": "references/patterns/cache.md"
+    },
+    {
+      "id": "design-integration",
+      "name": "接入 Luz Design 前端",
+      "pattern": "references/design-integration.md"
+    },
+    {
+      "id": "deploy",
+      "name": "运维、部署与上线",
+      "pattern": "references/operations.md"
+    },
+    {
+      "id": "compliance",
+      "name": "商业资质与备案",
+      "pattern": "references/compliance.md"
+    },
+    {
+      "id": "legal",
+      "name": "用户协议与隐私政策",
+      "pattern": "references/legal-documents.md"
+    },
+    {
+      "id": "license",
+      "name": "开源与第三方许可",
+      "pattern": "references/compliance.md"
+    },
+    {
+      "id": "access-control",
+      "name": "门禁入场与在场管理",
+      "pattern": "references/patterns/access-control.md"
+    },
+    {
+      "id": "iot",
+      "name": "物联网设备接入",
+      "pattern": "references/patterns/access-control.md"
+    }
+  ],
+  "domains": [
+    {
+      "id": "process",
+      "name": "交付与验证"
+    },
+    {
+      "id": "auth",
+      "name": "认证与会话"
+    },
+    {
+      "id": "authz",
+      "name": "授权与数据隔离"
+    },
+    {
+      "id": "input",
+      "name": "输入、输出与错误"
+    },
+    {
+      "id": "money",
+      "name": "金额与资金"
+    },
+    {
+      "id": "order",
+      "name": "订单、库存与状态机"
+    },
+    {
+      "id": "booking",
+      "name": "预约与名额"
+    },
+    {
+      "id": "iot",
+      "name": "门禁与设备"
+    },
+    {
+      "id": "pay",
+      "name": "微信支付"
+    },
+    {
+      "id": "refund",
+      "name": "退款与对账"
+    },
+    {
+      "id": "mkt",
+      "name": "优惠券与营销"
+    },
+    {
+      "id": "member",
+      "name": "会员、积分与储值"
+    },
+    {
+      "id": "pii",
+      "name": "个人信息与隐私"
+    },
+    {
+      "id": "face",
+      "name": "人脸与生物识别"
+    },
+    {
+      "id": "file",
+      "name": "文件与内容安全"
+    },
+    {
+      "id": "secret",
+      "name": "密钥与配置"
+    },
+    {
+      "id": "resil",
+      "name": "外部调用与韧性"
+    },
+    {
+      "id": "abuse",
+      "name": "限流与防刷"
+    },
+    {
+      "id": "obs",
+      "name": "日志、审计与监控"
+    },
+    {
+      "id": "jobs",
+      "name": "定时任务与缓存"
+    },
+    {
+      "id": "data",
+      "name": "数据库、迁移与备份"
+    },
+    {
+      "id": "mp",
+      "name": "微信小程序端"
+    },
+    {
+      "id": "admin",
+      "name": "管理后台"
+    },
+    {
+      "id": "ui",
+      "name": "前端体验与真实数据"
+    },
+    {
+      "id": "agent",
+      "name": "智能体"
+    },
+    {
+      "id": "integration",
+      "name": "前端接入"
+    },
+    {
+      "id": "compliance",
+      "name": "资质、备案与许可"
+    },
+    {
+      "id": "legal",
+      "name": "用户协议与同意"
+    },
+    {
+      "id": "release",
+      "name": "发布与运维"
+    },
+    {
+      "id": "ops",
+      "name": "运维与上线"
+    }
+  ],
+  "rules": [
+    {
+      "id": "PROC-001",
+      "domain": "process",
+      "level": "MUST",
+      "platforms": [
+        "all"
+      ],
+      "modules": [],
+      "title": "正式页面只展示后端返回的真实数据",
+      "rule": "正式业务页面的列表、统计、金额、状态和用户信息全部来自后端接口与数据库；不得写死业务数据、伪造成功状态或用模拟数据掩盖接口缺失。",
+      "why": "模拟数据会让未完成的链路看起来可用，上线后才暴露数据不一致。",
+      "do": [
+        "测试数据只放在隔离环境，可识别、可清理",
+        "接口缺失时页面显示明确的不可用状态"
+      ],
+      "dont": [
+        "在页面里写死示例订单或统计",
+        "接口失败时显示假的成功提示"
+      ],
+      "verify": [
+        "刷新、重新登录、换设备后页面与数据库一致",
+        "代码检索没有正式页面引用 mock 数据"
+      ],
+      "sources": [
+        {
+          "title": "开发规范 · 三、1 真实数据驱动",
+          "url": "file:///D:/Codes/开发规范.txt"
+        }
+      ]
+    },
+    {
+      "id": "PROC-002",
+      "domain": "process",
+      "level": "MUST",
+      "platforms": [
+        "all"
+      ],
+      "modules": [],
+      "title": "区分已编写、已运行、已测试通过、已上线验证",
+      "rule": "交付报告与方案核对表必须区分四种状态；没有真实执行的功能不得标记为测试通过，无法访问的环境写明验证范围与未完成事项。",
+      "why": "把“写完了”说成“验证过”是交付事故最常见的来源。",
+      "do": [
+        "核对表 done 状态附命令、结果、时间或截图位置",
+        "无法验证的内容列为遗留事项"
+      ],
+      "dont": [
+        "用“应该可以”代替实际测试",
+        "只凭单元测试宣称端到端可用"
+      ],
+      "verify": [
+        "tech_plan.py check --stage delivery 通过",
+        "每条 done 记录都有证据"
+      ],
+      "sources": [
+        {
+          "title": "开发规范 · 九、逐项测试与真实验收",
+          "url": "file:///D:/Codes/开发规范.txt"
+        }
+      ]
+    },
+    {
+      "id": "PROC-003",
+      "domain": "process",
+      "level": "MUST",
+      "platforms": [
+        "all"
+      ],
+      "modules": [],
+      "title": "每个功能逐项走通真实链路",
+      "rule": "每个功能依次验证：进入页面、请求接口、后端校验身份与权限、读写数据库、返回结果、前端展示最新结果、刷新或重新登录后持久化、异常时给出可恢复提示。",
+      "why": "页面能打开不代表业务能完成；前后端各自正确也可能拼接出错。",
+      "do": [
+        "每个按钮都有真实接口与结果反馈",
+        "检查数据库实际变化"
+      ],
+      "dont": [
+        "只验证接口返回 200",
+        "保留没有功能的按钮或空链接"
+      ],
+      "verify": [
+        "端到端用例覆盖核心流程",
+        "测试记录包含数据库核对"
+      ],
+      "sources": [
+        {
+          "title": "开发规范 · 五、前后端及小程序完整打通",
+          "url": "file:///D:/Codes/开发规范.txt"
+        }
+      ]
+    },
+    {
+      "id": "PROC-004",
+      "domain": "process",
+      "level": "MUST",
+      "platforms": [
+        "all"
+      ],
+      "modules": [],
+      "title": "交付 /config 与 README",
+      "rule": "验收后在项目根目录 /config 记录各环境配置项、用途、获取方式与验证方法，并更新 README（简介、技术栈、目录、启动、迁移、联调、测试、部署、排障、遗留问题）；秘密只记录位置不记录值。",
+      "why": "没有配置与运行文档的系统无法交接和运维。",
+      "do": [
+        "开发、测试、生产配置分开",
+        "提供带必填项检查的配置模板"
+      ],
+      "dont": [
+        "把真实密码、私钥、令牌写进仓库或文档",
+        "记录未经验证的地址"
+      ],
+      "verify": [
+        "新成员按 README 能从零启动",
+        "仓库秘密扫描无命中"
+      ],
+      "sources": [
+        {
+          "title": "开发规范 · 十一、配置、安全与文档交付",
+          "url": "file:///D:/Codes/开发规范.txt"
+        }
+      ]
+    },
+    {
+      "id": "PROC-005",
+      "domain": "process",
+      "level": "SHOULD",
+      "platforms": [
+        "all"
+      ],
+      "modules": [],
+      "title": "引入依赖前评估许可证、维护度与安全",
+      "rule": "新依赖或外部服务说明选择原因、替代方案、许可证、维护活跃度和已知漏洞；网上示例代码不能直接作为生产代码。",
+      "why": "无人维护或许可证不合适的依赖会成为长期负担。",
+      "do": [
+        "在方案选型表写明依赖与理由",
+        "锁定版本并运行依赖漏洞扫描"
+      ],
+      "dont": [
+        "复制博客代码不加测试直接上线"
+      ],
+      "verify": [
+        "依赖清单与锁文件存在",
+        "漏洞扫描报告无高危未处理项"
+      ],
+      "sources": [
+        {
+          "title": "开发规范 · 八、持续调研与技术方案选择",
+          "url": "file:///D:/Codes/开发规范.txt"
+        }
+      ]
+    },
+    {
+      "id": "AUTH-001",
+      "domain": "auth",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [],
+      "title": "接口默认需要认证，公开接口逐个登记",
+      "rule": "所有接口默认要求有效的登录凭证；不需要登录的接口（健康检查、渠道回调、公开内容）在路由层显式登记并单独评审。",
+      "why": "默认放行会让新增接口意外暴露。",
+      "do": [
+        "在框架层统一注入认证依赖",
+        "公开接口清单写入方案的接口表"
+      ],
+      "dont": [
+        "在每个处理函数里各自手写鉴权"
+      ],
+      "verify": [
+        "自动化测试遍历路由，未登记的路由无凭证访问返回 401"
+      ],
+      "sources": [
+        {
+          "title": "OWASP Authorization Cheat Sheet · Deny by default",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html"
+        }
+      ]
+    },
+    {
+      "id": "AUTH-002",
+      "domain": "auth",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [],
+      "title": "访问令牌短时有效，可撤销",
+      "rule": "访问令牌有明确过期时间；刷新令牌可撤销并轮换；登出、改密、封禁后旧令牌立即失效。",
+      "why": "长期有效且不可撤销的令牌一旦泄露无法止损。",
+      "do": [
+        "访问令牌短时效 + 刷新令牌轮换",
+        "服务端保存令牌版本或会话记录用于撤销"
+      ],
+      "dont": [
+        "把令牌放在 URL 参数中",
+        "签发不过期的令牌"
+      ],
+      "verify": [
+        "登出或改密后旧令牌请求返回 401"
+      ],
+      "sources": [
+        {
+          "title": "OWASP Session Management Cheat Sheet",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html"
+        }
+      ]
+    },
+    {
+      "id": "AUTH-003",
+      "domain": "auth",
+      "level": "MUST",
+      "platforms": [
+        "miniprogram",
+        "backend"
+      ],
+      "modules": [
+        "login"
+      ],
+      "title": "小程序登录在服务端换取身份，session_key 不下发",
+      "rule": "小程序端只把 wx.login 得到的 code 交给后端；后端调用 code2Session 换取 openid / unionid / session_key，session_key 只保存在服务端，不返回给前端、不写入日志、不作为业务登录凭证；后端签发自己的登录令牌。",
+      "why": "session_key 是解密用户数据的密钥，泄露后可伪造或解密用户信息。",
+      "do": [
+        "后端签发自有令牌并绑定 openid",
+        "code 只使用一次"
+      ],
+      "dont": [
+        "在小程序里调用 code2Session 或保存 AppSecret",
+        "把 openid 直接当作登录凭证"
+      ],
+      "verify": [
+        "前端包与接口响应中检索不到 session_key 与 AppSecret"
+      ],
+      "sources": [
+        {
+          "title": "微信开放文档 · 小程序登录",
+          "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/open-ability/login.html"
+        },
+        {
+          "title": "微信开放文档 · code2Session",
+          "url": "https://developers.weixin.qq.com/miniprogram/dev/OpenApiDoc/user-login/code2Session.html"
+        }
+      ]
+    },
+    {
+      "id": "AUTH-004",
+      "domain": "auth",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "login"
+      ],
+      "title": "access_token 由服务端统一获取和缓存",
+      "rule": "调用微信服务端接口所需的 access_token 由一个中控服务获取、缓存并在过期前刷新；多个实例共用同一份，不在各处分别刷新。",
+      "why": "多处刷新会让彼此的令牌失效，导致接口间歇失败。",
+      "do": [
+        "优先使用稳定版接口调用凭据",
+        "缓存时记录过期时间并提前刷新"
+      ],
+      "dont": [
+        "每次调用前都重新获取 access_token",
+        "把 access_token 下发到前端"
+      ],
+      "verify": [
+        "并发多实例压测期间不出现 access_token 失效错误"
+      ],
+      "sources": [
+        {
+          "title": "微信开放文档 · getStableAccessToken",
+          "url": "https://developers.weixin.qq.com/miniprogram/dev/OpenApiDoc/mp-access-token/getStableAccessToken.html"
+        }
+      ]
+    },
+    {
+      "id": "AUTH-005",
+      "domain": "auth",
+      "level": "MUST",
+      "platforms": [
+        "admin",
+        "backend"
+      ],
+      "modules": [],
+      "title": "后台密码安全存储与失败锁定",
+      "rule": "后台账号密码用 Argon2id 或 bcrypt 等慢摘要加盐存储；连续失败按账号和来源限速并锁定（界面设计 Admin 规范：5 次失败锁 15 分钟）；初始密码首次登录强制修改。",
+      "why": "弱存储与无限重试是后台被撞库的主要原因。",
+      "do": [
+        "锁定提示显示剩余时间",
+        "重置密码走一次性链接或验证码"
+      ],
+      "dont": [
+        "明文或可逆加密存储密码",
+        "错误提示区分“账号不存在”和“密码错误”"
+      ],
+      "verify": [
+        "连续 5 次错误后第 6 次被拒绝且有审计记录",
+        "数据库中只有密码摘要"
+      ],
+      "sources": [
+        {
+          "title": "OWASP Password Storage Cheat Sheet",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html"
+        },
+        {
+          "title": "界面设计 · 管理后台规范 §10 状态（锁定）",
+          "url": "file:///D:/Codes/Luz-Design/design/admin/SPEC.md"
+        }
+      ]
+    },
+    {
+      "id": "AUTH-006",
+      "domain": "auth",
+      "level": "SHOULD",
+      "platforms": [
+        "admin",
+        "backend"
+      ],
+      "modules": [],
+      "title": "高权限账号启用二次验证与会话超时",
+      "rule": "超级管理员、财务、退款审批等高权限角色启用二次验证；后台会话无操作超时（Admin 规范为 2 小时，提前 5 分钟提醒）。",
+      "why": "高权限账号被盗的损失远大于普通账号。",
+      "do": [
+        "敏感操作前重新验证身份"
+      ],
+      "dont": [
+        "让高权限账号长期保持登录"
+      ],
+      "verify": [
+        "超时后请求返回 401 并保留未保存草稿"
+      ],
+      "sources": [
+        {
+          "title": "界面设计 · 管理后台规范 §10、§15",
+          "url": "file:///D:/Codes/Luz-Design/design/admin/SPEC.md"
+        }
+      ]
+    },
+    {
+      "id": "AUTHZ-001",
+      "domain": "authz",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [],
+      "title": "服务端校验资源归属，防止越权访问",
+      "rule": "按 ID 读取或修改资源时，在查询条件中同时限定当前用户、门店或租户（例如 WHERE id = ? AND user_id = ?）；不存在与无权访问统一返回 404 或 403，不泄露对象是否存在。",
+      "why": "越权访问（IDOR）是业务系统最常见的漏洞：换一个订单号就能看到别人的订单。",
+      "do": [
+        "列表、详情、导出、统计全部带数据范围条件",
+        "测试用另一个账号访问同一资源"
+      ],
+      "dont": [
+        "只靠前端隐藏按钮控制权限",
+        "先按 ID 查出再在内存里判断归属却忘记某个分支"
+      ],
+      "verify": [
+        "每个按 ID 访问的接口都有跨账号访问测试且返回 403/404"
+      ],
+      "sources": [
+        {
+          "title": "OWASP Authorization Cheat Sheet · IDOR",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html"
+        }
+      ]
+    },
+    {
+      "id": "AUTHZ-002",
+      "domain": "authz",
+      "level": "MUST",
+      "platforms": [
+        "admin",
+        "backend"
+      ],
+      "modules": [],
+      "title": "后台权限精确到接口与数据范围",
+      "rule": "后台权限码同时控制菜单、按钮和后端接口；后端每个接口校验权限码，并按角色的数据范围（全部 / 本门店 / 本人）过滤数据。",
+      "why": "只控制菜单的权限可以被直接调接口绕过。",
+      "do": [
+        "权限码与 backend/22-admin-rbac 保持一致",
+        "权限变更写审计"
+      ],
+      "dont": [
+        "用角色名硬编码判断权限"
+      ],
+      "verify": [
+        "无权限账号直接调用接口返回 403",
+        "门店 A 的管理员查不到门店 B 的数据"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · backend/22-admin-rbac/MODULE.md",
+          "url": "file:///D:/Codes/Luz-Dev/backend/22-admin-rbac/MODULE.md"
+        }
+      ]
+    },
+    {
+      "id": "AUTHZ-003",
+      "domain": "authz",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [],
+      "title": "批量赋值只接受白名单字段",
+      "rule": "创建和更新接口用显式的输入模型，只接受允许用户修改的字段；状态、金额、归属、角色等字段只能由服务端设置。",
+      "why": "把请求体整体写进数据库会让用户改掉价格、状态或角色。",
+      "do": [
+        "为创建、更新、管理员更新分别定义输入模型"
+      ],
+      "dont": [
+        "model.update(**request.json())"
+      ],
+      "verify": [
+        "提交额外的 status/amount/role 字段不生效"
+      ],
+      "sources": [
+        {
+          "title": "OWASP Mass Assignment Cheat Sheet",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Mass_Assignment_Cheat_Sheet.html"
+        }
+      ]
+    },
+    {
+      "id": "AUTHZ-004",
+      "domain": "authz",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "admin"
+      ],
+      "modules": [
+        "store"
+      ],
+      "title": "多门店 / 多租户条件在数据访问层统一注入",
+      "rule": "每张业务表带租户 / 门店字段，查询在数据访问层统一附加数据范围条件，不在每个接口手写；业务唯一约束包含租户字段；会员、储值是否跨门店通用由商户决定并写入方案。",
+      "why": "手写条件只要漏一处就会让门店看到其他门店的会员与订单。",
+      "do": [
+        "每个接口都有跨门店访问测试"
+      ],
+      "dont": [
+        "只在前端按门店过滤"
+      ],
+      "verify": [
+        "门店 A 账号访问门店 B 数据返回 403/404"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev 模式库 · 多门店隔离",
+          "url": "file:///D:/Codes/Luz-Dev/references/patterns/multi-store.md"
+        }
+      ]
+    },
+    {
+      "id": "INPUT-001",
+      "domain": "input",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [],
+      "title": "所有输入按模型校验类型、长度与范围",
+      "rule": "路径、查询、请求体、请求头和回调数据都通过 schema 校验类型、必填、长度、范围和枚举；分页大小设上限；校验失败返回稳定错误码和字段级信息。",
+      "why": "未约束的输入会导致注入、超大请求、越界和脏数据。",
+      "do": [
+        "前后端使用同一份校验规则",
+        "请求体大小设上限"
+      ],
+      "dont": [
+        "信任前端已校验",
+        "允许 page_size 任意大"
+      ],
+      "verify": [
+        "边界值与非法值测试返回 4xx 且数据库无变化"
+      ],
+      "sources": [
+        {
+          "title": "OWASP Input Validation Cheat Sheet",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html"
+        }
+      ]
+    },
+    {
+      "id": "INPUT-002",
+      "domain": "input",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [],
+      "title": "数据库访问一律参数化",
+      "rule": "SQL 通过 ORM 或参数绑定执行；排序字段、表名等无法参数化的部分用白名单映射。",
+      "why": "字符串拼接 SQL 是注入漏洞的直接来源。",
+      "do": [
+        "排序参数映射到固定列名"
+      ],
+      "dont": [
+        "f\"SELECT ... WHERE name = '{name}'\""
+      ],
+      "verify": [
+        "代码检索无 SQL 字符串拼接",
+        "注入载荷测试无异常"
+      ],
+      "sources": [
+        {
+          "title": "OWASP SQL Injection Prevention Cheat Sheet",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html"
+        }
+      ]
+    },
+    {
+      "id": "INPUT-003",
+      "domain": "input",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "admin",
+        "miniprogram",
+        "mobile"
+      ],
+      "modules": [],
+      "title": "错误响应不暴露内部信息",
+      "rule": "错误统一为信封格式：稳定的 code、面向用户的 message、trace_id；不返回堆栈、SQL、内部地址、密钥或第三方原始报错。",
+      "why": "内部报错既泄露攻击面，也让用户看不懂。",
+      "do": [
+        "前端按错误码映射用户文案与下一步动作",
+        "500 页面提供可复制的 trace_id"
+      ],
+      "dont": [
+        "把异常 str(e) 直接返回给前端"
+      ],
+      "verify": [
+        "故意触发异常，响应中无堆栈与内部字段"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · backend/SPEC.md 错误信封",
+          "url": "file:///D:/Codes/Luz-Dev/backend/SPEC.md"
+        }
+      ]
+    },
+    {
+      "id": "INPUT-004",
+      "domain": "input",
+      "level": "MUST",
+      "platforms": [
+        "admin",
+        "miniprogram",
+        "mobile"
+      ],
+      "modules": [],
+      "title": "富文本与用户内容输出前转义或净化",
+      "rule": "用户提交的文本按纯文本渲染；确需富文本时用白名单净化库处理；后台渲染用户内容同样转义。",
+      "why": "存储型 XSS 往往在后台被管理员触发，危害最大。",
+      "do": [
+        "使用框架默认的文本绑定",
+        "富文本用白名单标签和属性"
+      ],
+      "dont": [
+        "v-html / rich-text 直接渲染用户输入"
+      ],
+      "verify": [
+        "提交 <script> 与事件属性载荷，前台与后台均不执行"
+      ],
+      "sources": [
+        {
+          "title": "OWASP Cross Site Scripting Prevention Cheat Sheet",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
+        }
+      ]
+    },
+    {
+      "id": "MONEY-001",
+      "domain": "money",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "admin",
+        "miniprogram",
+        "mobile"
+      ],
+      "modules": [],
+      "title": "金额以整数“分”存储和计算",
+      "rule": "金额字段使用整数最小货币单位（分），计算、传输、比较都用整数；只在展示时格式化为元。",
+      "why": "浮点数会产生 0.1 + 0.2 ≠ 0.3 之类的误差，对账对不上。微信支付金额同样以分为单位。",
+      "do": [
+        "字段命名带 _cents 或 _fen",
+        "前端展示统一格式化函数"
+      ],
+      "dont": [
+        "用 float/double 存金额",
+        "前端计算应付金额并提交给后端"
+      ],
+      "verify": [
+        "金额字段类型为整数",
+        "折扣与分摊的边界用例结果为整数且合计一致"
+      ],
+      "sources": [
+        {
+          "title": "微信支付 · JSAPI下单 amount.total（单位为分）",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791856"
+        }
+      ]
+    },
+    {
+      "id": "MONEY-002",
+      "domain": "money",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [],
+      "title": "应付金额只由服务端计算",
+      "rule": "订单应付金额由服务端根据商品价格快照、优惠规则、运费等计算；前端传来的金额只用于提示比对，不参与计费。",
+      "why": "信任前端金额等于允许用户自己定价。",
+      "do": [
+        "下单时保存价格与优惠快照",
+        "前后端金额不一致时返回价格已变化"
+      ],
+      "dont": [
+        "使用请求中的 total_amount 发起支付"
+      ],
+      "verify": [
+        "篡改请求金额的测试中支付金额不变"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · backend/09-wechat-pay/MODULE.md §1 步骤 2",
+          "url": "file:///D:/Codes/Luz-Dev/backend/09-wechat-pay/MODULE.md"
+        }
+      ]
+    },
+    {
+      "id": "MONEY-003",
+      "domain": "money",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [],
+      "title": "优惠分摊有确定的余数规则",
+      "rule": "整单优惠按明细比例分摊到每一行，四舍五入产生的余数按固定规则（例如归最后一行）处理，保证明细合计等于整单金额；部分退款按分摊后的行金额计算。",
+      "why": "没有分摊规则时，部分退款会多退或少退。",
+      "do": [
+        "分摊结果写入订单明细快照",
+        "为 1 分钱、多行、全额优惠写测试"
+      ],
+      "dont": [
+        "退款时重新计算优惠"
+      ],
+      "verify": [
+        "任意组合下明细合计 = 实付；累计退款不超过实付"
+      ],
+      "sources": []
+    },
+    {
+      "id": "MONEY-004",
+      "domain": "money",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [],
+      "title": "资金变动有不可变流水",
+      "rule": "余额、积分、储值、退款等任何资金类变动都写入只追加的流水（变动前、变动额、变动后、业务单号、操作人、时间），余额由流水可重算。",
+      "why": "只有最终余额而没有流水时，出现差异无法追查。",
+      "do": [
+        "流水表对业务单号 + 类型建唯一约束防重复"
+      ],
+      "dont": [
+        "直接 UPDATE 余额而不记流水",
+        "修改或删除历史流水"
+      ],
+      "verify": [
+        "抽样账户：流水累加 = 当前余额"
+      ],
+      "sources": []
+    },
+    {
+      "id": "ORDER-001",
+      "domain": "order",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "order",
+        "payment",
+        "refund",
+        "coupon",
+        "reservation",
+        "membership",
+        "recharge"
+      ],
+      "title": "状态流转用条件更新守卫",
+      "rule": "订单、支付单、退款单、券等状态变化用 UPDATE ... WHERE status = 原状态 执行，影响行数为 0 时返回稳定错误，不覆盖更新的状态；状态机在方案中列出全部合法流转。",
+      "why": "并发请求或延迟回调会把已完成的订单改回旧状态。",
+      "do": [
+        "方案中写状态 | 触发 | 守卫 | 副作用表",
+        "非法流转返回 409 与稳定错误码"
+      ],
+      "dont": [
+        "先查状态再无条件更新"
+      ],
+      "verify": [
+        "并发与乱序测试中状态只按合法路径前进"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · backend/SPEC.md 状态机",
+          "url": "file:///D:/Codes/Luz-Dev/backend/SPEC.md"
+        }
+      ]
+    },
+    {
+      "id": "ORDER-002",
+      "domain": "order",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "miniprogram",
+        "mobile",
+        "admin"
+      ],
+      "modules": [],
+      "title": "会产生后果的写请求支持幂等",
+      "rule": "下单、支付、退款、领券、核销、充值等写请求带 Idempotency-Key；服务端按“用户 + 操作 + 键”保存首次结果，重复请求返回同一结果；回调按渠道事件或业务单号幂等。",
+      "why": "网络重试、双击和回调重发都会造成重复下单、重复扣款。",
+      "do": [
+        "前端每次用户意图生成一个键，重试沿用",
+        "幂等记录与业务写入同一事务"
+      ],
+      "dont": [
+        "只靠前端禁用按钮防重复"
+      ],
+      "verify": [
+        "同一键并发提交 10 次只产生 1 条业务记录"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · backend/00-framework idempotency",
+          "url": "file:///D:/Codes/Luz-Dev/backend/00-framework/MODULE.md"
+        }
+      ]
+    },
+    {
+      "id": "ORDER-003",
+      "domain": "order",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "order",
+        "inventory",
+        "coupon",
+        "reservation"
+      ],
+      "title": "库存、名额、券用原子条件扣减并有释放路径",
+      "rule": "扣减用 UPDATE ... SET stock = stock - n WHERE stock >= n（或等价的原子操作）；下单预占的库存、名额、券在取消、超时关单时释放，支付成功后确认；释放与确认都幂等。",
+      "why": "先查后扣会超卖；没有释放路径会让资源被未支付订单永久占用。",
+      "do": [
+        "预占记录带过期时间与关联订单",
+        "定时任务处理过期预占"
+      ],
+      "dont": [
+        "在应用内存里加锁代替数据库原子操作"
+      ],
+      "verify": [
+        "并发抢购测试无超卖",
+        "超时未支付后库存恢复"
+      ],
+      "sources": []
+    },
+    {
+      "id": "ORDER-004",
+      "domain": "order",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "order",
+        "payment"
+      ],
+      "title": "待支付订单有超时关闭",
+      "rule": "订单设定支付时限；超时后先关闭微信支付订单，再取消本地订单并释放库存与券；关单前若查到已支付，按支付成功处理。",
+      "why": "用户可能在关单的同时完成支付，顺序错了会出现“钱付了订单却被取消”。",
+      "do": [
+        "下单时把 time_expire 设为与本地时限一致",
+        "关单任务幂等并可重试"
+      ],
+      "dont": [
+        "只取消本地订单不关闭渠道订单"
+      ],
+      "verify": [
+        "超时关单测试；关单与回调竞态测试"
+      ],
+      "sources": [
+        {
+          "title": "微信支付 · 关闭订单",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791860"
+        },
+        {
+          "title": "微信支付 · JSAPI下单 time_expire",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791856"
+        }
+      ]
+    },
+    {
+      "id": "ORDER-005",
+      "domain": "order",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "miniprogram",
+        "mobile",
+        "admin"
+      ],
+      "modules": [
+        "order"
+      ],
+      "title": "订单与历史记录只查询本人数据，金额来自快照",
+      "rule": "用户的订单列表、详情、历史记录按当前用户过滤，使用游标或稳定排序分页；展示的商品名称、价格、优惠来自下单时的快照，不随商品后续修改而变化。",
+      "why": "历史订单显示当前价格会造成纠纷；不加用户过滤即越权。",
+      "do": [
+        "列表接口有默认时间范围与分页上限"
+      ],
+      "dont": [
+        "详情页实时关联商品表取价格"
+      ],
+      "verify": [
+        "修改商品价格后历史订单金额不变",
+        "跨账号访问订单返回 404"
+      ],
+      "sources": []
+    },
+    {
+      "id": "ORDER-006",
+      "domain": "order",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [],
+      "title": "成功后的副作用通过 Outbox 异步可靠执行",
+      "rule": "支付成功、退款成功等事实与“待发布事件”在同一事务写入；发券、积分、通知、履约等副作用由消费者异步执行，每个消费者按事件 ID 幂等，失败有重试与死信。",
+      "why": "在回调里同步做所有事会超时，任何一步失败都可能让事实丢失或副作用重复。",
+      "do": [
+        "事件带业务单号与版本",
+        "死信有告警和人工重放入口"
+      ],
+      "dont": [
+        "在支付回调里同步调用第三方通知"
+      ],
+      "verify": [
+        "副作用失败后重试成功且只执行一次"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · backend/00-framework outbox",
+          "url": "file:///D:/Codes/Luz-Dev/backend/00-framework/MODULE.md"
+        }
+      ]
+    },
+    {
+      "id": "ORDER-007",
+      "domain": "order",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [],
+      "title": "事务里不调用外部接口",
+      "rule": "扣库存、改状态、记账的数据库事务内不调用支付、短信、地图、对象存储、大模型等外部服务；外部调用放在事务之前，或在事务提交后通过发件箱执行。",
+      "why": "外部调用慢且无法回滚，会长时间持有行锁、拖垮并发，并在外部成功、本地回滚时产生不一致。",
+      "do": [
+        "先拿到外部结果再开事务保存",
+        "提交后的副作用写发件箱"
+      ],
+      "dont": [
+        "在 with transaction: 里调用 requests.post"
+      ],
+      "verify": [
+        "代码评审：事务块内无外部客户端调用",
+        "外部依赖超时测试中数据库锁不被长时间持有"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev 模式库 · 一致性 §2",
+          "url": "file:///D:/Codes/Luz-Dev/references/patterns/consistency.md"
+        }
+      ]
+    },
+    {
+      "id": "ORDER-008",
+      "domain": "order",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "inventory",
+        "reservation",
+        "order"
+      ],
+      "title": "库存 / 名额预占有过期时间并与支付时限一致，变化写流水可对账",
+      "rule": "下单预占库存或名额，过期时间等于订单支付时限（与微信 time_expire 一致）；确认、释放都是幂等的条件更新；每次变化写只追加的流水，每日核对“初始 + 流水 = 当前值”。支付成功但预占已释放时重新扣减，失败则自动退款并告警。",
+      "why": "没有过期时间的预占会被未支付订单永久占用；没有流水就无法发现和追查库存差错。",
+      "do": [
+        "使用 inventory.reservation 的 reserve / confirm / release / expired_refs",
+        "关单任务与支付回调的竞态按“已支付优先”处理"
+      ],
+      "dont": [
+        "取消订单时直接 stock + n 而不检查预占状态"
+      ],
+      "verify": [
+        "test_reservation.py：幂等、全有或全无、超时释放、竞态、流水对账、并发不超卖"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev 模式库 · 库存与防超卖",
+          "url": "file:///D:/Codes/Luz-Dev/references/patterns/inventory.md"
+        }
+      ]
+    },
+    {
+      "id": "ORDER-009",
+      "domain": "order",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "miniprogram",
+        "mobile"
+      ],
+      "modules": [
+        "cart",
+        "catalog"
+      ],
+      "title": "购物车不保存价格，结算以服务端试算为准",
+      "rule": "购物车只保存 SKU 与数量；展示与结算时按当前价格、库存、上下架状态计算；失效条目单独显示且不能结算；改价只影响之后的订单。",
+      "why": "购物车里的旧价格会造成按旧价下单或展示与实付不一致。",
+      "do": [
+        "结算前调用试算接口，价格变化时提示用户"
+      ],
+      "dont": [
+        "把加购时的价格作为下单价格"
+      ],
+      "verify": [
+        "改价后购物车展示新价格；下架商品不能结算"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev 模式库 · 商品与购物车",
+          "url": "file:///D:/Codes/Luz-Dev/references/patterns/catalog-cart.md"
+        }
+      ]
+    },
+    {
+      "id": "RSV-001",
+      "domain": "booking",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "reservation"
+      ],
+      "title": "名额原子占位、一人一约、同一用户时间不冲突",
+      "rule": "预约用条件更新占位（booked < capacity）；时段 + 用户唯一约束保证一人一约，重复提交返回已有预约；同一用户的有效预约时间不能重叠；教练与场地排课同样检查冲突。",
+      "why": "热门课程开放预约时的并发与重复点击会导致超约。",
+      "do": [
+        "使用 booking.book"
+      ],
+      "dont": [
+        "先查已约人数再插入预约"
+      ],
+      "verify": [
+        "test_booking.py：40 并发抢 8 个名额成功 8 个；重复提交只占一个名额；时间冲突被拒"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev 模式库 · 预约名额",
+          "url": "file:///D:/Codes/Luz-Dev/references/patterns/reservation.md"
+        }
+      ]
+    },
+    {
+      "id": "RSV-002",
+      "domain": "booking",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "miniprogram",
+        "admin"
+      ],
+      "modules": [
+        "reservation"
+      ],
+      "title": "取消截止、候补递补、签到与爽约规则明确",
+      "rule": "方案写明：开课前多久不可自助取消、迟取消与爽约如何处理（扣次、限制预约）、候补递补顺序与通知、签到时间窗、刷脸签到的替代方式；取消释放名额与递补在同一事务内完成。",
+      "why": "这些规则决定用户权益与门店损失，模糊时会引发纠纷。",
+      "do": [
+        "规则作为商户配置项并在预约页展示",
+        "递补通过发件箱通知"
+      ],
+      "dont": [
+        "取消后只释放名额不处理候补"
+      ],
+      "verify": [
+        "test_booking.py：截止时间、候补递补、签到窗口、爽约任务"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev 模式库 · 预约名额",
+          "url": "file:///D:/Codes/Luz-Dev/references/patterns/reservation.md"
+        }
+      ]
+    },
+    {
+      "id": "ACC-001",
+      "domain": "iot",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "access-control"
+      ],
+      "title": "入场判定在一个事务内原子完成",
+      "rule": "入场请求在同一事务内校验并占用：会员资格（卡在有效期、适用门店与时段、次数余额、未禁用、无欠费）、门店容量（在场人数 < 容量，条件更新）、本人未在场（在场记录唯一约束）；次卡在入场时按入场请求幂等扣次。任一不满足返回明确原因，不下发开门指令。",
+      "why": "先查后改会在高峰时超员、重复扣次，或让同一账号同时多人进入。",
+      "do": [
+        "入场令牌一次有效，重复提交返回原结果"
+      ],
+      "dont": [
+        "先查资格再单独下发开门、再单独扣次"
+      ],
+      "verify": [
+        "并发入场不超过容量；同一账号未离场不能再次入场；重复请求只扣一次"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 无人值守场馆门禁与设备接入做法",
+          "url": "file:///D:/Codes/Luz-Dev/references/patterns/access-control.md"
+        }
+      ]
+    },
+    {
+      "id": "ACC-002",
+      "domain": "iot",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "miniprogram"
+      ],
+      "modules": [
+        "access-control"
+      ],
+      "title": "入场凭证短时有效、不可转发",
+      "rule": "小程序入场码为服务端签发的短时动态码（含会员、门店、过期时间与随机数的签名，30–60 秒刷新），一次使用后失效；人脸、刷卡等其他凭证同样经服务端判定；截图、转发、过期的码被拒绝。",
+      "why": "固定二维码可被截图转借，导致一人付费多人进场。",
+      "do": [
+        "签名密钥只在服务端",
+        "码与会员设备绑定"
+      ],
+      "dont": [
+        "使用固定会员号生成二维码"
+      ],
+      "verify": [
+        "过期码、重复使用的码、他人账号的码均被拒绝"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 无人值守场馆门禁与设备接入做法",
+          "url": "file:///D:/Codes/Luz-Dev/references/patterns/access-control.md"
+        }
+      ]
+    },
+    {
+      "id": "ACC-003",
+      "domain": "iot",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "admin"
+      ],
+      "modules": [
+        "access-control"
+      ],
+      "title": "离场与在场异常有明确处理",
+      "rule": "离场记录关闭在场状态；在场超过设定时长提醒并告警；未刷离场的在场记录由任务在营业规则时间后关闭并标记“异常离场”；按时长计费时以服务端时间计算，异常离场按规则计费并可申诉。",
+      "why": "缺少离场处理会让在场人数长期偏高、阻止会员再次入场或计费错误。",
+      "do": [
+        "在场人数实时统计并对后台可见"
+      ],
+      "dont": [
+        "只依赖会员手动点击离场"
+      ],
+      "verify": [
+        "超时告警、异常离场关闭、计费结果测试"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 无人值守场馆门禁与设备接入做法",
+          "url": "file:///D:/Codes/Luz-Dev/references/patterns/access-control.md"
+        }
+      ]
+    },
+    {
+      "id": "IOT-001",
+      "domain": "iot",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "iot",
+        "access-control"
+      ],
+      "title": "设备身份认证，开门指令签名、限时、防重放",
+      "rule": "每台门禁、闸机、电控、储物柜设备有独立身份与密钥（或证书），通过 TLS 连接；开门等指令带设备 ID、指令 ID、过期时间（如 10 秒）与签名，设备校验后执行并回执；指令 ID 唯一，重复或过期指令被拒绝；设备密钥可吊销与轮换。",
+      "why": "共享密钥或可重放的指令会被截获后任意开门。",
+      "do": [
+        "指令下发与回执写入指令表，可追溯"
+      ],
+      "dont": [
+        "所有设备共用一个密钥"
+      ],
+      "verify": [
+        "伪造签名、重放、过期指令测试均不开门"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 无人值守场馆门禁与设备接入做法",
+          "url": "file:///D:/Codes/Luz-Dev/references/patterns/access-control.md"
+        }
+      ]
+    },
+    {
+      "id": "IOT-002",
+      "domain": "iot",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "admin"
+      ],
+      "modules": [
+        "iot",
+        "access-control"
+      ],
+      "title": "设备心跳、离线告警与离线降级",
+      "rule": "设备定时上报心跳与状态；超时未上报标记离线并告警值班人员；网络中断时门禁按预先下发的有效会员凭证（限时离线码或本地白名单，带过期时间）放行，恢复后补传进出记录并对账；远程开门只允许有权限的值班账号，写审计。",
+      "why": "无人值守时设备离线会把会员挡在门外或把门长时间开着，且无人知道。",
+      "do": [
+        "离线期间记录本地事件，恢复后去重补传"
+      ],
+      "dont": [
+        "离线时默认常开"
+      ],
+      "verify": [
+        "断网演练：会员仍可凭有效凭证进出，恢复后记录完整"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 无人值守场馆门禁与设备接入做法",
+          "url": "file:///D:/Codes/Luz-Dev/references/patterns/access-control.md"
+        }
+      ]
+    },
+    {
+      "id": "IOT-003",
+      "domain": "iot",
+      "level": "MUST",
+      "platforms": [
+        "all"
+      ],
+      "modules": [
+        "iot",
+        "access-control"
+      ],
+      "title": "无人值守安全：求助、告警与逃生不依赖系统",
+      "rule": "提供场内求助（小程序与现场按钮）直达值班人员；长时间在场、夜间异常、设备故障触发告警并有处置记录；消防与紧急逃生由硬件与场馆措施保证（断电或火警时门可从内部打开），不依赖软件指令；监控画面的保存期限与访问权限写入方案。",
+      "why": "无人场馆的风险主要来自突发身体状况与安全事件，软件故障不能阻断逃生。",
+      "do": [
+        "值班响应时限写入运营规则"
+      ],
+      "dont": [
+        "把逃生出口做成只能扫码打开"
+      ],
+      "verify": [
+        "求助与告警端到端演练记录"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 无人值守场馆门禁与设备接入做法",
+          "url": "file:///D:/Codes/Luz-Dev/references/patterns/access-control.md"
+        }
+      ]
+    },
+    {
+      "id": "PAY-001",
+      "domain": "pay",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "miniprogram",
+        "mobile"
+      ],
+      "modules": [
+        "payment"
+      ],
+      "title": "支付结果只以服务端事实为准",
+      "rule": "订单是否已支付只依据验签通过的支付回调或主动查单结果；小程序 wx.requestPayment 返回（成功、失败或取消）后，前端进入“支付结果确认中”，由后端调用查询订单确认状态再展示结果；前端回调不写入任何业务状态。下单按钮做防抖，防止重复支付。",
+      "why": "前端回调可被篡改、可能丢失，也可能在用户实际支付成功时返回失败。",
+      "do": [
+        "前端成功回调后进入处理中页并轮询服务端",
+        "结果页从服务端状态重建（references/result-patterns.md）"
+      ],
+      "dont": [
+        "前端回调 success 后调用“标记已支付”接口"
+      ],
+      "verify": [
+        "伪造前端成功回调不能让订单变为已支付"
+      ],
+      "sources": [
+        {
+          "title": "微信支付 · 小程序支付开发指引（流程与订单状态流转）",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791911"
+        },
+        {
+          "title": "微信支付 · 支付成功回调通知 2.3 回调处理机制",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791861"
+        },
+        {
+          "title": "微信开放文档 · wx.requestPayment",
+          "url": "https://developers.weixin.qq.com/miniprogram/dev/api/payment/wx.requestPayment.html"
+        }
+      ]
+    },
+    {
+      "id": "PAY-002",
+      "domain": "pay",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "payment"
+      ],
+      "title": "下单参数在服务端生成并符合官方约束",
+      "rule": "JSAPI 下单的 out_trade_no 为 6–32 位（数字、大小写字母、_-|*）且在商户号下唯一；amount.total 为大于 0 的整数分；payer.openid 必须来自与下单 appid 相同的小程序；time_expire 与本地支付时限一致（官方限制：不早于下单后 1 分钟、不晚于 15 天；不传时 7 天后无法支付）。",
+      "why": "参数不合规会下单失败；openid 与 appid 不一致会无法调起支付。",
+      "do": [
+        "out_trade_no 在服务端生成且不可预测",
+        "description 真实描述商品（用户账单可见）"
+      ],
+      "dont": [
+        "用自增 ID 或手机号拼订单号",
+        "让前端传 openid"
+      ],
+      "verify": [
+        "下单参数单元测试覆盖长度、字符集、金额与时间边界"
+      ],
+      "sources": [
+        {
+          "title": "微信支付 · JSAPI下单",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791856"
+        }
+      ]
+    },
+    {
+      "id": "PAY-003",
+      "domain": "pay",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "payment"
+      ],
+      "title": "一个订单同一时间只有一笔待支付渠道单",
+      "rule": "同一业务订单复用未过期的待支付渠道单；prepay_id 有效期 2 小时，过期后用原下单参数重新请求下单获取新的 prepay_id；已超过 time_expire 时先关单，再用新的 out_trade_no 下单；若同一订单出现两笔支付成功，第二笔自动发起退款并告警。",
+      "why": "用户多次点击支付、多端支付会产生重复扣款。",
+      "do": [
+        "支付单表对“订单 + 待支付”加唯一约束",
+        "重复支付成功进入退款与人工核对队列"
+      ],
+      "dont": [
+        "每次点击都生成新的 out_trade_no 且不关闭旧单"
+      ],
+      "verify": [
+        "并发点击支付只得到一笔渠道单",
+        "模拟重复成功回调触发自动退款"
+      ],
+      "sources": [
+        {
+          "title": "微信支付 · 小程序支付开发指引（流程与订单状态流转）",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791911"
+        },
+        {
+          "title": "微信支付 · JSAPI下单 prepay_id 与 time_expire 注意事项",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791856"
+        }
+      ]
+    },
+    {
+      "id": "PAY-004",
+      "domain": "pay",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "miniprogram"
+      ],
+      "modules": [
+        "payment"
+      ],
+      "title": "调起支付的参数在服务端签名",
+      "rule": "小程序调起支付所需的 timeStamp、nonceStr、package（prepay_id=…）、signType、paySign 由后端用商户私钥签名后返回；前端不持有任何密钥，不自行拼接签名。",
+      "why": "签名放在前端等于公开商户私钥。",
+      "do": [
+        "支付参数接口校验订单归属和状态"
+      ],
+      "dont": [
+        "把商户私钥或 APIv3 密钥打包进小程序"
+      ],
+      "verify": [
+        "前端包检索不到私钥、APIv3 密钥与签名代码"
+      ],
+      "sources": [
+        {
+          "title": "微信支付 · JSAPI调起支付",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791857"
+        },
+        {
+          "title": "微信开放文档 · wx.requestPayment",
+          "url": "https://developers.weixin.qq.com/miniprogram/dev/api/payment/wx.requestPayment.html"
+        }
+      ]
+    },
+    {
+      "id": "PAY-005",
+      "domain": "pay",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "payment",
+        "refund"
+      ],
+      "title": "回调先验签：用原始报文和对应公钥或平台证书",
+      "rule": "回调用请求头 Wechatpay-Timestamp、Wechatpay-Nonce 与原始请求体（逐字节，不重新序列化 JSON）构造验签串，用 Wechatpay-Serial 对应的微信支付公钥（序列号形如 PUB_KEY_ID_…）或平台证书验签；序列号未知、时间戳偏差过大或验签失败时拒绝并返回 4XX/5XX。",
+      "why": "回调地址是公开的，不验签等于任何人都能把订单改成已支付。",
+      "do": [
+        "支持多个公钥/证书并存以便轮换",
+        "时间戳与本机时间偏差超过 5 分钟拒绝"
+      ],
+      "dont": [
+        "先解析 JSON 再序列化后验签",
+        "用 IP 白名单代替验签"
+      ],
+      "verify": [
+        "伪造签名、篡改报文、未知序列号、过期时间戳测试均被拒绝且订单不变"
+      ],
+      "sources": [
+        {
+          "title": "微信支付 · 支付成功回调通知 2.1 验签",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791861"
+        },
+        {
+          "title": "微信支付 · 微信支付公钥",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012153196"
+        }
+      ]
+    },
+    {
+      "id": "PAY-006",
+      "domain": "pay",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "payment",
+        "refund"
+      ],
+      "title": "正确处理签名探测流量",
+      "rule": "微信支付会偶尔发送 Wechatpay-Signature 以 WECHATPAY/SIGNTEST/ 开头的错误签名，检测商户是否真的验签；系统必须验签失败并返回失败应答，不得处理业务，也不应因此触发严重告警。",
+      "why": "对探测流量返回成功，说明系统没有验签。",
+      "do": [
+        "把探测流量单独计数，与真实验签失败区分"
+      ],
+      "dont": [
+        "对探测签名返回 200"
+      ],
+      "verify": [
+        "发送 WECHATPAY/SIGNTEST/ 签名的回调，响应为 4XX/5XX 且无业务变化"
+      ],
+      "sources": [
+        {
+          "title": "微信支付 · 支付成功回调通知（签名探测）",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791861"
+        },
+        {
+          "title": "微信支付 · 如何应对签名探测流量",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4013053249"
+        }
+      ]
+    },
+    {
+      "id": "PAY-007",
+      "domain": "pay",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "payment",
+        "refund"
+      ],
+      "title": "用 APIv3 密钥按 AEAD_AES_256_GCM 解密回调",
+      "rule": "验签通过后，用 32 字节的 APIv3 密钥、resource.nonce、resource.associated_data 对 resource.ciphertext（Base64）做 AES-256-GCM 解密；algorithm 不是 AEAD_AES_256_GCM 或解密失败时拒绝。",
+      "why": "支付结果只在密文里，解密失败不能当作成功或失败处理。",
+      "do": [
+        "APIv3 密钥长度启动时校验为 32 字节"
+      ],
+      "dont": [
+        "跳过 associated_data",
+        "把解密后的明文完整写入日志"
+      ],
+      "verify": [
+        "官方示例格式的密文解密测试；篡改密文后解密失败被拒绝"
+      ],
+      "sources": [
+        {
+          "title": "微信支付 · 如何解密回调报文",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012071382"
+        }
+      ]
+    },
+    {
+      "id": "PAY-008",
+      "domain": "pay",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "payment"
+      ],
+      "title": "解密后核对事实再推进状态",
+      "rule": "解密得到的 appid、mchid 必须等于本系统配置；out_trade_no 必须对应本地支付单；amount.total 与 currency 必须等于本地应付；trade_state 为 SUCCESS 才推进为已支付。任一不一致不改变订单，记录异常并告警人工对账。",
+      "why": "错配商户、金额被篡改或误投的通知都不能让订单变成已支付。",
+      "do": [
+        "transaction_id 建唯一约束",
+        "异常通知进入对账差异表"
+      ],
+      "dont": [
+        "只看 trade_state 就标记成功"
+      ],
+      "verify": [
+        "金额不符、appid 不符、未知单号测试均不改变订单"
+      ],
+      "sources": [
+        {
+          "title": "微信支付 · 支付成功回调通知（解密字段）",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791861"
+        }
+      ]
+    },
+    {
+      "id": "PAY-009",
+      "domain": "pay",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "payment",
+        "refund"
+      ],
+      "title": "回调 5 秒内应答，业务异步处理，重复通知持续应答成功",
+      "rule": "验签与解密后在同一事务内条件更新支付单并写入 Outbox，然后立即应答 HTTP 200 或 204（无应答体）；失败应答返回 4XX/5XX 与 {\"code\":\"FAIL\",\"message\":…}。重复到达的通知识别为已处理后继续应答成功。",
+      "why": "微信支付要求 5 秒内应答；未应答或失败会按 15s、15s、30s、3m、10m、20m、30m、30m、30m、60m、3h、3h、3h、6h、6h 最多重发 15 次。",
+      "do": [
+        "回调处理只做验签、解密、核对、条件更新、写事件",
+        "积分、通知、履约在 Outbox 消费者中执行"
+      ],
+      "dont": [
+        "在回调里同步调用外部服务",
+        "重复通知返回失败导致无限重发"
+      ],
+      "verify": [
+        "重复与并发回调只产生一次状态变化和一次事件",
+        "回调处理 P99 远低于 5 秒"
+      ],
+      "sources": [
+        {
+          "title": "微信支付 · 支付成功回调通知 2.2 应答、2.3 重发机制",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791861"
+        }
+      ]
+    },
+    {
+      "id": "PAY-010",
+      "domain": "pay",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "payment"
+      ],
+      "title": "不能只依赖回调：主动查单补偿",
+      "rule": "用户回到结果页、支付单待支付超过阈值（例如 2 分钟）、关单前，都调用查询订单接口确认状态，并交给与回调相同的事实处理逻辑；查询超时或失败时保持“确认中”，不推断为失败。",
+      "why": "官方明确要求商户系统不能仅依赖回调通知，需结合查询接口，避免遗漏或延迟。",
+      "do": [
+        "查单任务按指数退避，有最大次数",
+        "查单结果与回调共用条件更新"
+      ],
+      "dont": [
+        "查单失败就把订单标记为支付失败"
+      ],
+      "verify": [
+        "屏蔽回调后，定时查单仍能让订单变为已支付"
+      ],
+      "sources": [
+        {
+          "title": "微信支付 · 支付成功回调通知 2.3",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791861"
+        },
+        {
+          "title": "微信支付 · 小程序支付 商户订单号查询订单",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791900"
+        }
+      ]
+    },
+    {
+      "id": "PAY-011",
+      "domain": "pay",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "payment"
+      ],
+      "title": "交易状态映射到本地状态机",
+      "rule": "小程序 / JSAPI 支付的订单状态：下单后为 NOTPAY（未支付；用户支付失败时状态不变）；用户支付成功 → SUCCESS；商户 7 天内关单或超过 7 天微信自动关单 → CLOSED；支付成功后 1 年内申请退款成功 → REFUND。CLOSED、SUCCESS、REFUND 为终态。REVOKED、USERPAYING、PAYERROR 仅付款码支付返回。本地映射：SUCCESS → 已支付；NOTPAY → 待支付（继续等待或到期关单）；CLOSED → 已关闭；REFUND → 已支付并进入退款流程；未知状态保持确认中并告警。",
+      "why": "把 NOTPAY 当成失败、或忽略 REFUND，会让订单状态与资金不一致。",
+      "do": [
+        "状态映射表写进方案并有单元测试"
+      ],
+      "dont": [
+        "为小程序支付设计依赖 USERPAYING 的流程"
+      ],
+      "verify": [
+        "每个 trade_state 都有映射测试"
+      ],
+      "sources": [
+        {
+          "title": "微信支付 · 小程序支付开发指引（流程与订单状态流转）",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791911"
+        },
+        {
+          "title": "微信支付 · 支付成功回调通知 trade_state 枚举",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791861"
+        }
+      ]
+    },
+    {
+      "id": "PAY-012",
+      "domain": "pay",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "payment"
+      ],
+      "title": "调用支付接口签名、超时与重试规则明确",
+      "rule": "请求微信支付 API 使用 Authorization: WECHATPAY2-摘要-RSA2048 签名；应答也要验签；所有调用设置连接与读取超时；仅对 SYSTEM_ERROR、网络超时等可重试错误用相同参数有限重试；429 FREQUENCY_LIMITED 退避；主域名故障时可切换官方备域名 api2.mch.weixin.qq.com。",
+      "why": "无超时的调用会耗尽线程；对不可重试错误重试会造成重复操作。",
+      "do": [
+        "区分可重试与不可重试错误码",
+        "优先使用官方 SDK 或经过测试的签名实现"
+      ],
+      "dont": [
+        "对 OUT_TRADE_NO_USED、PARAM_ERROR 重试"
+      ],
+      "verify": [
+        "模拟超时、500、429 时行为符合预期"
+      ],
+      "sources": [
+        {
+          "title": "微信支付 · 签名认证（如何生成签名）",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012365342"
+        },
+        {
+          "title": "微信支付 · JSAPI下单 错误码与备域名",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791856"
+        }
+      ]
+    },
+    {
+      "id": "PAY-013",
+      "domain": "pay",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "payment"
+      ],
+      "title": "回调地址符合要求且可达",
+      "rule": "notify_url 使用公网可访问的 HTTPS 地址，按官方《notify_url 填写注意事项》配置；若服务器有防火墙，需放通微信支付回调来源；回调路由不要求用户登录，但必须验签。",
+      "why": "回调地址不可达或被防火墙拦截时，订单只能靠查单补偿。",
+      "do": [
+        "上线前用真实小额支付验证回调到达"
+      ],
+      "dont": [
+        "把测试环境回调地址带到生产"
+      ],
+      "verify": [
+        "生产环境真实支付的回调日志与订单状态"
+      ],
+      "sources": [
+        {
+          "title": "微信支付 · notify_url 填写注意事项 / 回调处理逻辑注意事项",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012075420"
+        },
+        {
+          "title": "微信支付 · 支付成功回调通知（防火墙提示）",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791861"
+        }
+      ]
+    },
+    {
+      "id": "PAY-014",
+      "domain": "pay",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "miniprogram",
+        "mobile"
+      ],
+      "modules": [
+        "payment"
+      ],
+      "title": "支付成功与失败后的逻辑完整",
+      "rule": "成功：同一事务内订单变为已支付、确认库存与券占用、写 Outbox（积分、通知、履约、会员权益）；结果页展示服务端订单号与下一步动作。失败或取消：订单保持待支付直到时限，可重新支付；到期关单并释放库存与券；结果页按 references/result-patterns.md 显示可恢复动作。未知：保持确认中，提示“请勿重复支付”，提供刷新与联系客服。",
+      "why": "只有成功路径的支付流程，会在取消、超时、未知时留下脏数据或让用户重复付款。",
+      "do": [
+        "每种结果都有前端页面与后端状态对应",
+        "重新支付复用或替换渠道单（PAY-003）"
+      ],
+      "dont": [
+        "支付失败立即取消订单并释放资源（用户可能稍后支付成功）"
+      ],
+      "verify": [
+        "成功、取消、超时、未知、重复支付五种路径端到端测试"
+      ],
+      "sources": [
+        {
+          "title": "微信支付 · 支付成功回调通知（结合查询接口）",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791861"
+        },
+        {
+          "title": "微信支付 · JSAPI下单（time_expire 到期后先关单再换单号）",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791856"
+        },
+        {
+          "title": "Luz Dev · references/result-patterns.md",
+          "url": "file:///D:/Codes/Luz-Dev/references/result-patterns.md"
+        }
+      ]
+    },
+    {
+      "id": "PAY-015",
+      "domain": "pay",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "payment",
+        "refund"
+      ],
+      "title": "支付密钥只在服务端密钥存储中",
+      "rule": "商户私钥、APIv3 密钥、微信支付公钥/证书配置从密钥服务或受限文件注入；不进仓库、不进镜像层、不进日志与错误信息；联调用的模拟密钥在生产配置中不存在。",
+      "why": "商户私钥泄露可以冒充商户调用退款等接口。",
+      "do": [
+        "启动时校验密钥存在与格式",
+        "密钥轮换有记录与演练"
+      ],
+      "dont": [
+        "在 .env 示例中写真实密钥",
+        "生产保留 LUZ_PAY_NOTIFY_SECRET 之类联调密钥"
+      ],
+      "verify": [
+        "仓库与镜像秘密扫描无命中；生产配置检查无联调密钥"
+      ],
+      "sources": [
+        {
+          "title": "微信支付 · 什么是APIv3密钥",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4013053267"
+        },
+        {
+          "title": "微信支付 · 证书密钥概览（微信支付公钥一次申请永久有效；平台证书有效期 5 年）",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4024350132"
+        }
+      ]
+    },
+    {
+      "id": "RFD-001",
+      "domain": "refund",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "admin"
+      ],
+      "modules": [
+        "refund"
+      ],
+      "title": "退款需要权限、原因和审计",
+      "rule": "退款由有退款权限的账号发起或审批，必须填写原因；大额或批量退款需要二次确认或双人审批；每次退款写审计记录（操作人、订单、金额、原因、前后状态）。",
+      "why": "退款直接造成资金流出，是内部舞弊和误操作的高发点。",
+      "do": [
+        "退款按钮显示可退金额与后果说明"
+      ],
+      "dont": [
+        "允许无原因退款或绕过审批的接口"
+      ],
+      "verify": [
+        "无权限账号调用退款接口返回 403；每笔退款有审计"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · backend/09-wechat-pay/MODULE.md §4",
+          "url": "file:///D:/Codes/Luz-Dev/backend/09-wechat-pay/MODULE.md"
+        }
+      ]
+    },
+    {
+      "id": "RFD-002",
+      "domain": "refund",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "refund"
+      ],
+      "title": "退款单号唯一、失败重试沿用原单号、累计不超过实付",
+      "rule": "每次退款生成唯一的商户退款单号（不超过 64 字节，数字、大小写字母、_-|*@），同一退款单号多次请求只退一笔；申请失败重试必须沿用原退款单号；累计退款用条件更新校验（已退 + 本次 ≤ 实付）；部分退款按分摊后的行金额计算。官方限制：支付成功后 365 天内可退款，一笔订单最多 50 次部分退款，多次部分退款需更换退款单号并间隔 1 分钟。",
+      "why": "官方文档明确提示：重试时更换退款单号会导致重复退款和资金损失。",
+      "do": [
+        "退款单号与业务退款申请一一对应并在申请前落库",
+        "超过 365 天的退款走线下或其他渠道并在后台提示"
+      ],
+      "dont": [
+        "失败重试时生成新的退款单号",
+        "并发提交多笔部分退款"
+      ],
+      "verify": [
+        "并发两笔退款合计超过实付时只有一笔成功",
+        "模拟申请超时后重试，渠道只收到同一退款单号"
+      ],
+      "sources": [
+        {
+          "title": "微信支付 · 退款申请（注意事项与 out_refund_no）",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791862"
+        },
+        {
+          "title": "微信支付 · 小程序支付 退款申请",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791903"
+        }
+      ]
+    },
+    {
+      "id": "RFD-003",
+      "domain": "refund",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "admin",
+        "miniprogram"
+      ],
+      "modules": [
+        "refund"
+      ],
+      "title": "退款受理不等于退款成功",
+      "rule": "申请退款接口返回成功只代表受理；退款单进入处理中，以退款结果回调（event_type 为 REFUND.SUCCESS / REFUND.ABNORMAL / REFUND.CLOSED）或查询单笔退款（GET /v3/refund/domestic/refunds/{out_refund_no}）确认终态。查询节奏：提交后每 1 分钟查一次，超过 5 分钟仍处理中则逐步衰减（5、10、20、30 分钟…）。退款状态：SUCCESS（成功）、CLOSED（关闭）、PROCESSING（处理中）、ABNORMAL（异常：原路退回的银行卡作废或冻结，需在商户平台手动处理或调用发起异常退款接口）。零钱支付一般 5 分钟内到账，银行卡一般 1–3 个工作日。用户界面显示“退款处理中”而不是“已退款”。",
+      "why": "退款到银行卡可能失败或延迟，提前显示成功会引发投诉。",
+      "do": [
+        "退款通知与支付回调使用同一套验签、解密、幂等逻辑",
+        "定时查询长时间处理中的退款"
+      ],
+      "dont": [
+        "申请接口返回成功就把订单标记为已退款"
+      ],
+      "verify": [
+        "模拟退款异常与关闭，订单与界面状态正确"
+      ],
+      "sources": [
+        {
+          "title": "微信支付 · 退款申请（退款状态枚举）",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791862"
+        },
+        {
+          "title": "微信支付 · 小程序支付 查询单笔退款",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791904"
+        },
+        {
+          "title": "微信支付 · 小程序支付 发起异常退款",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791905"
+        },
+        {
+          "title": "微信支付 · 小程序支付 退款结果回调通知",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791906"
+        }
+      ]
+    },
+    {
+      "id": "RFD-004",
+      "domain": "refund",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "refund",
+        "coupon",
+        "membership",
+        "inventory"
+      ],
+      "title": "退款后的回滚策略明确",
+      "rule": "方案写明退款成功后的处理：库存或名额是否回补、优惠券是否退回（过期券如何处理）、积分与成长值如何回扣（余额不足时的规则）、会员权益是否收回；每项通过 Outbox 幂等执行。",
+      "why": "没有回滚策略时，退款后用户仍保留积分和券，或被扣成负数。",
+      "do": [
+        "回滚动作写入流水"
+      ],
+      "dont": [
+        "退款时手工在数据库改积分"
+      ],
+      "verify": [
+        "全额、部分、券已过期、积分已用完四种情况测试"
+      ],
+      "sources": []
+    },
+    {
+      "id": "RFD-005",
+      "domain": "refund",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "admin"
+      ],
+      "modules": [
+        "reconcile",
+        "payment"
+      ],
+      "title": "每日对账并处理差异",
+      "rule": "每日 10 点后（微信次日 9 点开始生成前一天账单）申请交易账单（GET /v3/bill/tradebill），必要时资金账单（GET /v3/bill/fundflowbill），用返回的 download_url（有效期 5 分钟）下载并核对 SHA1 摘要；账单金额单位为“元”，转换为分后与本地支付单、退款单逐笔核对；交易账单只包含支付成功的订单，仅能下载三个月内的账单。差异（本地无、渠道无、金额不符、状态不符）写入差异表并通知财务处理；对账任务幂等，可重跑。",
+      "why": "回调丢失、重复支付、人工操作都会在对账中暴露；不对账就无法发现资金差错。",
+      "do": [
+        "对账结果在后台可查",
+        "差异处理留痕"
+      ],
+      "dont": [
+        "用本地数据生成“对账成功”报告",
+        "把账单中的“元”直接与本地“分”比较"
+      ],
+      "verify": [
+        "构造三类差异，对账任务全部识别"
+      ],
+      "sources": [
+        {
+          "title": "微信支付 · 小程序支付 申请交易账单",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791907"
+        },
+        {
+          "title": "微信支付 · 小程序支付 申请资金账单",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791908"
+        },
+        {
+          "title": "微信支付 · 小程序支付 下载账单",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791909"
+        }
+      ]
+    },
+    {
+      "id": "RFD-006",
+      "domain": "refund",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "after-sales",
+        "refund"
+      ],
+      "title": "售后按行原子占用可退数量与金额，任何顺序都不超退",
+      "rule": "订单支付成功时为每行写入可退数量与行实付；售后申请原子占用数量与金额（条件更新带旧值），驳回或撤销时按实际金额释放；本次金额 = 行实付 × 占用后数量 // 总数量 − 已占用金额。退款单号固定为售后单号。",
+      "why": "并发申请和“先申请后驳回”的顺序会让按比例计算的退款多出几分钱或整笔超退。",
+      "do": [
+        "使用 after_sales.apply / reject / cancel",
+        "退款执行通过发件箱交给支付模块"
+      ],
+      "dont": [
+        "用 SUM(已退) 先查后判断"
+      ],
+      "verify": [
+        "test_after_sales.py：随机申请与驳回 60 轮累计不超过实付、全部退完等于实付"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev 模式库 · 售后",
+          "url": "file:///D:/Codes/Luz-Dev/references/patterns/after-sales.md"
+        }
+      ]
+    },
+    {
+      "id": "MKT-001",
+      "domain": "mkt",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "coupon"
+      ],
+      "title": "领券原子扣减总量与每人限领",
+      "rule": "领券时原子扣减批次剩余数量，并用唯一约束或条件计数保证每人限领；发券幂等，同一领取请求只发一张。",
+      "why": "并发领取会超发，脚本可以绕过前端限制重复领取。",
+      "do": [
+        "领券接口限速并校验活动时间与人群"
+      ],
+      "dont": [
+        "先 count 再 insert"
+      ],
+      "verify": [
+        "并发领取不超过总量与每人上限"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · backend/16-coupon/MODULE.md",
+          "url": "file:///D:/Codes/Luz-Dev/backend/16-coupon/MODULE.md"
+        }
+      ]
+    },
+    {
+      "id": "MKT-002",
+      "domain": "mkt",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "coupon"
+      ],
+      "title": "用券在服务端校验并锁定，支付后核销",
+      "rule": "下单时服务端校验券归属、有效期、门槛、适用商品与叠加规则，并把券锁定到订单；支付成功后核销；取消或超时关单时解锁；优惠后金额不得小于 0，且不低于支付渠道最小金额 1 分。",
+      "why": "只在前端计算优惠会被篡改；不锁定会一券多用。",
+      "do": [
+        "叠加规则写成可测试的纯函数",
+        "券状态：可用 → 锁定 → 已核销 / 可用"
+      ],
+      "dont": [
+        "接受前端传来的优惠金额"
+      ],
+      "verify": [
+        "同一券并发用于两笔订单只成功一笔",
+        "关单后券恢复可用"
+      ],
+      "sources": []
+    },
+    {
+      "id": "MKT-003",
+      "domain": "mkt",
+      "level": "SHOULD",
+      "platforms": [
+        "backend",
+        "admin"
+      ],
+      "modules": [
+        "coupon",
+        "lottery"
+      ],
+      "title": "营销活动有预算、风控与审计",
+      "rule": "活动设置总预算与单用户上限；异常领取（同设备多账号、短时高频）触发限制；活动配置变更与发放记录可审计。",
+      "why": "营销资源是被刷的主要目标。",
+      "do": [
+        "预算耗尽自动停止发放"
+      ],
+      "dont": [
+        "上线没有预算上限的活动"
+      ],
+      "verify": [
+        "预算耗尽后发放请求被拒绝"
+      ],
+      "sources": []
+    },
+    {
+      "id": "MKT-004",
+      "domain": "mkt",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "admin",
+        "miniprogram",
+        "mobile"
+      ],
+      "modules": [
+        "lottery"
+      ],
+      "title": "抽奖活动事先公示规则，最高奖不超过 5 万元",
+      "rule": "抽奖前明确公布奖项种类、参与条件与方式、开奖时间与方式、奖品价值与数量或中奖概率、兑奖条件与方式、主办方联系方式，公布后不得变更或附加条件（有利于消费者的除外）；抽奖式有奖销售最高奖金额不超过 5 万元（多次中奖机会累计计算）；不得内定中奖；现场即时开奖中超过 500 元的奖项兑奖情况随时公示。",
+      "why": "《规范促销行为暂行规定》第十三条、第十六条、第十七条。",
+      "do": [
+        "活动规则版本化并在活动页展示",
+        "随机源与中奖记录可审计"
+      ],
+      "dont": [
+        "活动开始后修改概率或奖品",
+        "让内部账号参与抽奖"
+      ],
+      "verify": [
+        "配置校验：最高奖价值 ≤ 50000 元；活动开始后规则只读"
+      ],
+      "sources": [
+        {
+          "title": "规范促销行为暂行规定（国家市场监督管理总局令第 32 号）",
+          "url": "https://www.gov.cn/zhengce/zhengceku/2020-11/06/content_5557730.htm"
+        }
+      ]
+    },
+    {
+      "id": "MKT-005",
+      "domain": "mkt",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "coupon"
+      ],
+      "title": "用户券按 可用 → 锁定 → 已用 的状态机流转",
+      "rule": "下单时把券从可用锁定到订单（条件更新），支付成功核销，取消或超时解锁；退款后是否退回、过期券是否补发由商户确认并写入方案；券过期由任务批量处理。",
+      "why": "不锁定会一券多用；不解锁会让取消订单的用户失去券。",
+      "do": [
+        "券状态变化通过 StateMachine",
+        "退回策略写入方案待决问题"
+      ],
+      "dont": [
+        "支付前就把券标记为已用"
+      ],
+      "verify": [
+        "同一券并发用于两笔订单只成功一笔；取消订单后券恢复可用"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev 模式库 · 优惠券",
+          "url": "file:///D:/Codes/Luz-Dev/references/patterns/coupon.md"
+        }
+      ]
+    },
+    {
+      "id": "MBR-001",
+      "domain": "member",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "membership"
+      ],
+      "title": "积分与成长值通过流水变动",
+      "rule": "积分增减通过只追加的流水执行，带业务单号防重复；扣减使用条件更新防止为负；积分过期规则明确并由任务执行。",
+      "why": "直接改余额无法追查，重复回调会重复加积分。",
+      "do": [
+        "流水对业务单号 + 类型唯一"
+      ],
+      "dont": [
+        "在多个地方各自修改积分字段"
+      ],
+      "verify": [
+        "重复事件只加一次积分；扣减到不足时被拒绝"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · backend/14-membership/MODULE.md",
+          "url": "file:///D:/Codes/Luz-Dev/backend/14-membership/MODULE.md"
+        }
+      ]
+    },
+    {
+      "id": "MBR-002",
+      "domain": "member",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "admin"
+      ],
+      "modules": [
+        "recharge"
+      ],
+      "title": "储值卡、次卡、年卡按预付消费规则设计退费",
+      "rule": "储值余额、次卡、年卡属于预付消费：方案写明冷静期、退费计算、退费时限与原路退回规则，并核对项目所在地的预付卡管理规定与合同示范文本；余额与次数变动走流水，赠送金额、赠品与本金分开记账，退费时扣除已消费部分并按约定处理赠品。",
+      "why": "健身、美业等预付消费纠纷集中在退卡。以北京体育健身预付费合同示范文本（2022）为例：付费 7 日内未开卡可要求全额退费，商家 5 日内一次性退回，按原路径退回；因重大疾病等原因可解除合同，扣除已消费后退还余额。",
+      "do": [
+        "冷静期、转让、请假、退费规则在购买页显著展示",
+        "在方案待决问题中列出需商户确认的规则（地区不同条款不同）"
+      ],
+      "dont": [
+        "把赠送金额与本金混在一个余额字段",
+        "以“概不退款”作为默认规则"
+      ],
+      "verify": [
+        "冷静期内退费、部分消费后退费、转让三种计算测试"
+      ],
+      "sources": [
+        {
+          "title": "北京市体育健身行业预付费服务合同（2022 版示范文本）",
+          "url": "https://scjgj.beijing.gov.cn/bsfw/bmfw/sfwbbm/shxfl/yfk/202204/t20220421_2684551.html"
+        }
+      ]
+    },
+    {
+      "id": "MBR-003",
+      "domain": "member",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "recharge",
+        "membership"
+      ],
+      "title": "储值本金与赠送金分开记账，消费拆分写入流水",
+      "rule": "充值的本金与赠送金分字段记账；消费按方案确定的策略（按比例或本金优先）拆分并写入流水；订单退款按原拆分退回；退卡只退剩余本金；余额扣减为条件更新，流水与余额每日对账。",
+      "why": "本金与赠送混记会导致退卡、开票和收入统计无法核对。",
+      "do": [
+        "使用 wallet.recharge / consume / reverse / refund_card"
+      ],
+      "dont": [
+        "只记一个总余额字段"
+      ],
+      "verify": [
+        "test_wallet.py：拆分合计、并发不为负、退卡只退本金、流水等于余额"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev 模式库 · 余额、储值与积分",
+          "url": "file:///D:/Codes/Luz-Dev/references/patterns/accounts.md"
+        }
+      ]
+    },
+    {
+      "id": "PII-001",
+      "domain": "pii",
+      "level": "MUST",
+      "platforms": [
+        "all"
+      ],
+      "modules": [],
+      "title": "只收集业务必需的个人信息并告知用途",
+      "rule": "方案列出收集的每项个人信息、用途、保存期限与删除方式；不收集与功能无关的信息；隐私政策与实际收集一致。",
+      "why": "《个人信息保护法》要求处理个人信息具有明确、合理的目的，限于实现目的的最小范围，并公开处理规则。",
+      "do": [
+        "在数据模型表中标注个人信息字段"
+      ],
+      "dont": [
+        "“以后可能有用”而提前收集"
+      ],
+      "verify": [
+        "隐私政策与数据库字段清单逐项对照"
+      ],
+      "sources": [
+        {
+          "title": "中华人民共和国个人信息保护法（国家网信办全文）",
+          "url": "https://www.cac.gov.cn/2021-08/20/c_1631050028355286.htm"
+        }
+      ]
+    },
+    {
+      "id": "PII-002",
+      "domain": "pii",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "admin"
+      ],
+      "modules": [],
+      "title": "敏感字段加密存储，展示脱敏",
+      "rule": "手机号、身份证号、地址等敏感字段在展示、导出和日志中脱敏（例如 138****0000）；身份证号等高敏字段加密存储并单独授权查看；查看明文写审计。",
+      "why": "后台和日志是个人信息泄露的主要出口。",
+      "do": [
+        "脱敏规则集中实现"
+      ],
+      "dont": [
+        "在日志里打印完整手机号或身份证号"
+      ],
+      "verify": [
+        "日志与导出文件抽查无明文敏感信息"
+      ],
+      "sources": []
+    },
+    {
+      "id": "PII-003",
+      "domain": "pii",
+      "level": "MUST",
+      "platforms": [
+        "miniprogram"
+      ],
+      "modules": [],
+      "title": "小程序配置隐私保护指引并处理授权",
+      "rule": "使用位置、相册、相机、手机号等涉及隐私的接口前，在小程序后台填写用户隐私保护指引，并按官方隐私协议开发指南处理用户同意；用户拒绝时功能降级而不是卡死。",
+      "why": "未配置隐私指引时相关接口无法调用，审核也会被拒。",
+      "do": [
+        "拒绝授权后提供替代路径或说明"
+      ],
+      "dont": [
+        "启动时一次性申请全部权限"
+      ],
+      "verify": [
+        "真机首次使用与拒绝授权两条路径测试"
+      ],
+      "sources": [
+        {
+          "title": "微信开放文档 · 小程序隐私协议开发指南",
+          "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/PrivacyAuthorize.html"
+        }
+      ]
+    },
+    {
+      "id": "PII-004",
+      "domain": "pii",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "admin",
+        "miniprogram",
+        "mobile"
+      ],
+      "modules": [],
+      "title": "支持账号注销与个人信息删除",
+      "rule": "提供注销入口；处理目的已实现、停止服务、保存期限届满或用户撤回同意时主动删除个人信息；法律要求保存的交易记录停止除存储和必要安全保护以外的处理；人脸、手机号等随之删除，删除覆盖第三方（如人脸库）。",
+      "why": "《个人信息保护法》第四十七条规定了应当主动删除的情形和个人的删除请求权。",
+      "do": [
+        "删除流程覆盖备份与第三方（如人脸库）"
+      ],
+      "dont": [
+        "只把账号标记为禁用"
+      ],
+      "verify": [
+        "注销后数据库与第三方中查不到该用户个人信息"
+      ],
+      "sources": [
+        {
+          "title": "中华人民共和国个人信息保护法 第四十七条",
+          "url": "https://www.cac.gov.cn/2021-08/20/c_1631050028355286.htm"
+        }
+      ]
+    },
+    {
+      "id": "FACE-001",
+      "domain": "face",
+      "level": "MUST",
+      "platforms": [
+        "all"
+      ],
+      "modules": [
+        "face"
+      ],
+      "title": "人脸不是唯一方式，先评估必要性",
+      "rule": "方案说明使用人脸的特定目的与充分必要性；实现相同目的存在其他方式时，人脸不得作为唯一验证方式，用户不同意时提供其他合理、便捷的方式（会员码、卡片、人工核验）；不得以提升服务等理由误导、胁迫用户使用人脸。",
+      "why": "《人脸识别技术应用安全管理办法》第四条要求特定目的与充分必要性，第十条禁止在有替代方式时把人脸作为唯一验证方式，第十二条禁止误导、胁迫。",
+      "do": [
+        "替代方式在界面上同等可见"
+      ],
+      "dont": [
+        "把刷脸设为唯一入场方式"
+      ],
+      "verify": [
+        "拒绝人脸的账号能完成购买与入场"
+      ],
+      "sources": [
+        {
+          "title": "人脸识别技术应用安全管理办法（2025-06-01 施行）",
+          "url": "https://www.gov.cn/zhengce/zhengceku/202503/content_7016075.htm"
+        }
+      ]
+    },
+    {
+      "id": "FACE-002",
+      "domain": "face",
+      "level": "MUST",
+      "platforms": [
+        "all"
+      ],
+      "modules": [
+        "face"
+      ],
+      "title": "单独同意、明确告知、可撤回",
+      "rule": "采集前以显著方式、清晰易懂的语言告知：处理者名称与联系方式、目的、方式、保存期限、必要性及对个人权益的影响、行使权利的方式；取得用户自愿、明确的单独同意（不与其他条款捆绑），提供便捷的撤回方式，撤回后停止处理并删除；不满 14 周岁需父母或监护人同意并制定专门处理规则。同意记录（文案版本、时间、用户）可追溯。",
+      "why": "办法第五条（告知事项）、第六条（单独同意与撤回）、第七条（未成年人）；个人信息保护法第二十八条将生物识别与不满 14 周岁未成年人信息列为敏感个人信息，第二十九条要求单独同意，第三十一条要求监护人同意。",
+      "do": [
+        "同意文案版本化",
+        "撤回入口与采集入口同样容易找到"
+      ],
+      "dont": [
+        "默认勾选同意",
+        "把人脸同意写在用户协议里一并同意"
+      ],
+      "verify": [
+        "未同意不能进入采集；撤回后数据被删除的测试"
+      ],
+      "sources": [
+        {
+          "title": "人脸识别技术应用安全管理办法（2025-06-01 施行）",
+          "url": "https://www.gov.cn/zhengce/zhengceku/202503/content_7016075.htm"
+        },
+        {
+          "title": "中华人民共和国个人信息保护法（国家网信办全文）",
+          "url": "https://www.cac.gov.cn/2021-08/20/c_1631050028355286.htm"
+        }
+      ]
+    },
+    {
+      "id": "FACE-003",
+      "domain": "face",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "face"
+      ],
+      "title": "人脸数据最小化存储与隔离",
+      "rule": "除法律另有规定或取得单独同意外，人脸信息存储于人脸识别设备内，不通过互联网对外传输；保存期限不超过实现目的所需的最短时间；系统采取加密、安全审计、访问控制、授权管理、入侵检测与防御；业务库只保存人员 ID 与授权状态；人脸数据不进日志、截图、埋点和普通备份。",
+      "why": "办法第八条（存储于设备内、不得通过互联网对外传输、最短保存期限）、第十四条（安全措施）；人脸无法更换，一旦泄露影响终身。",
+      "do": [
+        "优先选择本地比对的门禁设备；需要云端比对时单独取得同意并在方案中写明",
+        "访问人脸数据写审计",
+        "传输使用 HTTPS"
+      ],
+      "dont": [
+        "把人脸照片放在公开可读的对象存储"
+      ],
+      "verify": [
+        "对象存储权限检查；日志检索无人脸数据"
+      ],
+      "sources": [
+        {
+          "title": "人脸识别技术应用安全管理办法（2025-06-01 施行）",
+          "url": "https://www.gov.cn/zhengce/zhengceku/202503/content_7016075.htm"
+        }
+      ]
+    },
+    {
+      "id": "FACE-004",
+      "domain": "face",
+      "level": "MUST",
+      "platforms": [
+        "all"
+      ],
+      "modules": [
+        "face"
+      ],
+      "title": "事前影响评估，存量达 10 万人时 30 个工作日内备案",
+      "rule": "处理人脸前完成个人信息保护影响评估并记录处理情况，评估报告与记录至少保存 3 年；目的、方式变化或发生重大安全事件时重新评估。人脸信息存储数量达到 10 万人之日起 30 个工作日内向所在地省级以上网信部门备案；实质变更、终止应用时 30 个工作日内办理变更或注销。",
+      "why": "办法第九条（影响评估、保存 3 年）、第十五条（10 万人备案）；个人信息保护法第五十五、五十六条（处理敏感个人信息前影响评估，报告至少保存三年）。",
+      "do": [
+        "评估报告记录目的、必要性、风险与措施",
+        "系统统计人脸存储人数并在接近阈值时提醒"
+      ],
+      "dont": [
+        "没有评估记录就上线人脸功能"
+      ],
+      "verify": [
+        "影响评估记录存在；方案引用了法规原文来源"
+      ],
+      "sources": [
+        {
+          "title": "人脸识别技术应用安全管理办法（2025-06-01 施行）",
+          "url": "https://www.gov.cn/zhengce/zhengceku/202503/content_7016075.htm"
+        },
+        {
+          "title": "中华人民共和国个人信息保护法 第五十五、五十六条",
+          "url": "https://www.cac.gov.cn/2021-08/20/c_1631050028355286.htm"
+        }
+      ]
+    },
+    {
+      "id": "FACE-005",
+      "domain": "face",
+      "level": "MUST",
+      "platforms": [
+        "miniprogram",
+        "backend"
+      ],
+      "modules": [
+        "face"
+      ],
+      "title": "人脸能力选型使用官方或有资质的服务",
+      "rule": "身份验证（一对一比对）与辨识特定个人（一对多比对）分别选型：验证身份鼓励优先使用国家人口基础信息库、国家网络身份认证公共服务等渠道或具备资质的核身服务；门禁刷脸使用设备厂商本地比对或云厂商人员库；不自研活体检测与比对算法。方案对比至少两种接入方式并写明资质要求。",
+      "why": "办法第十一条鼓励优先使用国家渠道以减少人脸收集；自研活体检测难以抵御照片、视频攻击。",
+      "do": [
+        "方案对比至少两种接入方式并说明资质要求"
+      ],
+      "dont": [
+        "用小程序拍照 + 自建比对代替活体检测"
+      ],
+      "verify": [
+        "方案选型表引用了官方接入文档"
+      ],
+      "sources": [
+        {
+          "title": "人脸识别技术应用安全管理办法（2025-06-01 施行）",
+          "url": "https://www.gov.cn/zhengce/zhengceku/202503/content_7016075.htm"
+        }
+      ]
+    },
+    {
+      "id": "FACE-006",
+      "domain": "face",
+      "level": "MUST",
+      "platforms": [
+        "all"
+      ],
+      "modules": [
+        "face"
+      ],
+      "title": "人脸设备不进入私密空间，公共区域显著提示",
+      "rule": "不得在更衣室、淋浴间、卫生间、客房等私密空间内部安装人脸识别设备；在公共区域安装时合理确定采集区域并设置显著提示标识。健身房、游泳馆等场所的方案必须标出设备点位。",
+      "why": "办法第十三条明确禁止在公共浴室、公共更衣室、公共卫生间等私密空间内部安装人脸识别设备。",
+      "do": [
+        "方案的硬件点位表标注每台设备位置与提示标识"
+      ],
+      "dont": [
+        "在更衣室入口内侧安装刷脸柜锁或门禁"
+      ],
+      "verify": [
+        "点位表评审；现场照片核对提示标识"
+      ],
+      "sources": [
+        {
+          "title": "人脸识别技术应用安全管理办法（2025-06-01 施行）",
+          "url": "https://www.gov.cn/zhengce/zhengceku/202503/content_7016075.htm"
+        }
+      ]
+    },
+    {
+      "id": "FILE-001",
+      "domain": "file",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "upload"
+      ],
+      "title": "上传文件校验类型、大小，存储与访问隔离",
+      "rule": "按白名单校验扩展名与文件内容类型，限制大小；服务端重命名为随机文件名；存放在对象存储或非执行目录；私有文件用短时签名 URL 访问；图片重新编码去除元数据。",
+      "why": "上传接口可被用来存放恶意文件、覆盖文件或耗尽存储。",
+      "do": [
+        "直传对象存储时服务端签发带限制的上传凭证"
+      ],
+      "dont": [
+        "使用用户提供的文件名作为存储路径"
+      ],
+      "verify": [
+        "上传伪装扩展名、超大文件、路径穿越文件名测试被拒绝"
+      ],
+      "sources": [
+        {
+          "title": "OWASP File Upload Cheat Sheet",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html"
+        }
+      ]
+    },
+    {
+      "id": "FILE-002",
+      "domain": "file",
+      "level": "MUST",
+      "platforms": [
+        "miniprogram",
+        "backend"
+      ],
+      "modules": [
+        "upload"
+      ],
+      "title": "用户内容在展示前通过内容安全检测",
+      "rule": "小程序中用户发布的文本、图片、音视频（昵称、评价、头像、动态）提交后调用微信内容安全接口检测；检测不通过不展示，异步检测结果回来前按待审核处理。",
+      "why": "小程序平台要求用户内容合规，违规内容会导致小程序被处罚。",
+      "do": [
+        "后台提供人工复核入口"
+      ],
+      "dont": [
+        "检测接口失败时直接放行"
+      ],
+      "verify": [
+        "违规样例文本被拦截"
+      ],
+      "sources": [
+        {
+          "title": "微信开放文档 · 内容安全 msgSecCheck",
+          "url": "https://developers.weixin.qq.com/miniprogram/dev/OpenApiDoc/sec-center/sec-check/msgSecCheck.html"
+        }
+      ]
+    },
+    {
+      "id": "SECRET-001",
+      "domain": "secret",
+      "level": "MUST",
+      "platforms": [
+        "all"
+      ],
+      "modules": [],
+      "title": "秘密不进仓库、前端包、日志和截图",
+      "rule": "AppSecret、商户私钥、APIv3 密钥、数据库密码、第三方令牌从环境变量或密钥服务注入；仓库只有示例配置；前端包不含任何服务端秘密；日志、错误、截图、埋点和提示内容可见的文件不出现秘密。",
+      "why": "秘密一旦进入 Git 历史或前端包就视为已泄露。",
+      "do": [
+        "提交前秘密扫描",
+        "按环境分离配置"
+      ],
+      "dont": [
+        "把 apikey.txt 之类文件放进项目目录"
+      ],
+      "verify": [
+        "validate 脚本秘密扫描通过；前端构建产物检索无秘密"
+      ],
+      "sources": [
+        {
+          "title": "OWASP Secrets Management Cheat Sheet",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html"
+        }
+      ]
+    },
+    {
+      "id": "SECRET-002",
+      "domain": "secret",
+      "level": "SHOULD",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [],
+      "title": "秘密可轮换且有负责人",
+      "rule": "每个秘密记录用途、负责人、存放位置和轮换方式；泄露时能在不停机的情况下轮换。",
+      "why": "无法轮换的秘密泄露后只能长时间停服。",
+      "do": [
+        "支持新旧密钥并存的过渡期"
+      ],
+      "dont": [
+        "多个系统共用一个密钥"
+      ],
+      "verify": [
+        "轮换演练记录"
+      ],
+      "sources": []
+    },
+    {
+      "id": "RESIL-001",
+      "domain": "resil",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "agent"
+      ],
+      "modules": [],
+      "title": "所有外部调用设置超时",
+      "rule": "调用微信、支付、短信、地图、对象存储、大模型等外部服务都设置连接与读取超时；超时后返回稳定错误并按业务决定降级。",
+      "why": "一个慢依赖会拖垮整个服务。",
+      "do": [
+        "超时时间写入配置并在方案中列出"
+      ],
+      "dont": [
+        "使用默认无限超时的 HTTP 客户端"
+      ],
+      "verify": [
+        "模拟依赖延迟，接口在超时时间内返回"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · backend/00-framework resilience",
+          "url": "file:///D:/Codes/Luz-Dev/backend/00-framework/MODULE.md"
+        }
+      ]
+    },
+    {
+      "id": "RESIL-002",
+      "domain": "resil",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "agent"
+      ],
+      "modules": [],
+      "title": "只对幂等操作有界重试，持续失败熔断",
+      "rule": "只重试幂等或带幂等键的操作，使用有上限的指数退避加抖动；持续失败的依赖熔断并定期探测恢复；降级结果不得伪造成功。",
+      "why": "无界重试会放大故障；对非幂等写操作重试会重复执行。",
+      "do": [
+        "区分可重试错误码"
+      ],
+      "dont": [
+        "支付下单失败后换新单号自动重试"
+      ],
+      "verify": [
+        "依赖持续失败时熔断生效，恢复后自动关闭"
+      ],
+      "sources": [
+        {
+          "title": "开发规范 · 六、异常处理、降级与熔断机制",
+          "url": "file:///D:/Codes/开发规范.txt"
+        }
+      ]
+    },
+    {
+      "id": "ABUSE-001",
+      "domain": "abuse",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [],
+      "title": "高风险接口限流",
+      "rule": "登录、发送验证码、下单、创建支付、领券、抽奖、上传、导出按用户、设备、IP 分别限流；超限返回 429 与可读提示。",
+      "why": "这些接口是被刷和被撞库的主要目标，也会产生费用。",
+      "do": [
+        "短信验证码设置频率与每日上限"
+      ],
+      "dont": [
+        "只在前端做倒计时"
+      ],
+      "verify": [
+        "超过阈值的请求返回 429"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · backend/00-framework ratelimit",
+          "url": "file:///D:/Codes/Luz-Dev/backend/00-framework/MODULE.md"
+        }
+      ]
+    },
+    {
+      "id": "OBS-001",
+      "domain": "obs",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [],
+      "title": "结构化日志带 trace_id 且脱敏",
+      "rule": "日志为结构化格式，包含 trace_id、用户 ID、接口、耗时与结果；令牌、密钥、密码、完整手机号、身份证号、人脸、支付明文不写入日志。",
+      "why": "没有 trace_id 无法排查；日志中的敏感信息会扩大泄露面。",
+      "do": [
+        "前端错误页展示 trace_id"
+      ],
+      "dont": [
+        "打印整个请求体或回调明文"
+      ],
+      "verify": [
+        "日志抽查无敏感字段"
+      ],
+      "sources": [
+        {
+          "title": "OWASP Logging Cheat Sheet",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html"
+        }
+      ]
+    },
+    {
+      "id": "OBS-002",
+      "domain": "obs",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "admin"
+      ],
+      "modules": [],
+      "title": "关键操作写审计记录",
+      "rule": "退款、改价、改权限、导出、删除、配置变更、查看敏感明文等操作写入只追加的审计记录：操作人、对象、变更前后、原因、时间、来源；后台提供只读审计页。",
+      "why": "出现资金或数据问题时需要追溯到人。",
+      "do": [
+        "审计记录与业务变更同事务写入"
+      ],
+      "dont": [
+        "允许修改或删除审计记录"
+      ],
+      "verify": [
+        "每类关键操作都有审计测试"
+      ],
+      "sources": [
+        {
+          "title": "界面设计 · 管理后台规范 §13 审计",
+          "url": "file:///D:/Codes/Luz-Design/design/admin/SPEC.md"
+        }
+      ]
+    },
+    {
+      "id": "OBS-003",
+      "domain": "obs",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "payment",
+        "refund",
+        "order"
+      ],
+      "title": "资金与订单关键指标有告警",
+      "rule": "监控并告警：回调验签失败率、支付确认中超时数量、对账差异、退款异常、Outbox 积压与死信、外部依赖错误率。",
+      "why": "资金问题越晚发现损失越大。",
+      "do": [
+        "告警写明负责人与处理手册"
+      ],
+      "dont": [
+        "只有错误日志没有告警"
+      ],
+      "verify": [
+        "故障演练触发告警"
+      ],
+      "sources": []
+    },
+    {
+      "id": "JOB-001",
+      "domain": "jobs",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [],
+      "title": "定时任务可重复执行、分批、单条隔离，外部失败不推断结果",
+      "rule": "关单、查单、退款查询、过期、对账等任务基于状态机与唯一约束实现，重复执行不重复生效；每轮限量处理，每条独立提交；查询或调用外部接口失败时保持原状态等待下轮；多实例部署时避免重复处理（行锁 SKIP LOCKED 或租约锁），正确性仍靠幂等。",
+      "why": "任务会被重试、重复调度或并发执行；一条失败拖垮整批会造成大量积压。",
+      "do": [
+        "任务函数接收 now 参数便于测试",
+        "记录每轮处理数与失败数并对积压告警"
+      ],
+      "dont": [
+        "查单超时就把订单当作未支付取消"
+      ],
+      "verify": [
+        "test_order_jobs.py：重复执行、查询失败、关单失败、已支付不取消"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev 模式库 · 定时与延迟任务",
+          "url": "file:///D:/Codes/Luz-Dev/references/patterns/jobs.md"
+        }
+      ]
+    },
+    {
+      "id": "CACHE-001",
+      "domain": "jobs",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [],
+      "title": "缓存只做加速：先写数据库再删缓存，关键判断不用缓存",
+      "rule": "采用旁路缓存：读未命中回源并设置过期时间；写时先更新数据库再删除缓存（删除失败重试）；库存精确值、余额、订单状态、权限判断以数据库为准；处理穿透（缓存空值）、击穿（互斥重建）、雪崩（过期时间加随机）。",
+      "why": "先删缓存或更新缓存在并发下会留下长期旧值；以缓存做关键判断会造成超卖或越权。",
+      "do": [
+        "所有缓存键都有过期时间"
+      ],
+      "dont": [
+        "先删缓存再写数据库"
+      ],
+      "verify": [
+        "并发读写测试无长期旧值；缓存不可用时降级到数据库"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev 模式库 · 缓存与一致性",
+          "url": "file:///D:/Codes/Luz-Dev/references/patterns/cache.md"
+        }
+      ]
+    },
+    {
+      "id": "SECKILL-001",
+      "domain": "jobs",
+      "level": "SHOULD",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "seckill"
+      ],
+      "title": "抢购按层削峰，Redis 预扣只做前置过滤",
+      "rule": "预计请求远大于库存时：入口限流与令牌、一人一单、Redis Lua 原子预扣过滤，进入数据库的请求仍执行条件扣减；数据库失败回补 Redis，Redis 异常时以数据库为准重建；活动后对账。",
+      "why": "大量请求直接打到同一库存行会拖垮数据库；只信 Redis 会在宕机或回补遗漏时超卖。",
+      "do": [
+        "压测请求数远大于库存的场景"
+      ],
+      "dont": [
+        "只用 Redis 计数而不做数据库兜底"
+      ],
+      "verify": [
+        "压测：成交数等于库存，数据库库存不为负"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev 模式库 · 高并发抢购",
+          "url": "file:///D:/Codes/Luz-Dev/references/patterns/seckill.md"
+        }
+      ]
+    },
+    {
+      "id": "DATA-001",
+      "domain": "data",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [],
+      "title": "关键约束落在数据库",
+      "rule": "唯一业务号、幂等键、渠道交易号、每人限领等约束用数据库唯一约束或检查约束实现；多表资金变更放在一个事务里。",
+      "why": "应用层检查在并发下不可靠。",
+      "do": [
+        "方案数据表写明唯一约束与索引"
+      ],
+      "dont": [
+        "只靠代码判断“是否已存在”"
+      ],
+      "verify": [
+        "并发重复写入被数据库拒绝"
+      ],
+      "sources": []
+    },
+    {
+      "id": "DATA-002",
+      "domain": "data",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [],
+      "title": "迁移可从空库与上一版本执行，并有回滚或前向修复",
+      "rule": "表结构变化通过迁移脚本管理；从空库和上一生产版本分别演练；破坏性变更分步发布；写明回滚或前向修复方式。",
+      "why": "手工改库无法复现，也无法回滚。",
+      "do": [
+        "迁移在 CI 中从空库执行"
+      ],
+      "dont": [
+        "在生产数据库手工执行 DDL"
+      ],
+      "verify": [
+        "迁移演练记录"
+      ],
+      "sources": []
+    },
+    {
+      "id": "DATA-003",
+      "domain": "data",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [],
+      "title": "定期备份并演练恢复",
+      "rule": "生产数据库定期备份，备份加密并异地保存；定期演练恢复并记录恢复时长；备份访问受限。",
+      "why": "没演练过的备份不能证明可以恢复。",
+      "do": [
+        "README 写明备份与恢复步骤"
+      ],
+      "dont": [
+        "备份与数据库放在同一台机器"
+      ],
+      "verify": [
+        "最近一次恢复演练记录"
+      ],
+      "sources": [
+        {
+          "title": "开发规范 · 十一",
+          "url": "file:///D:/Codes/开发规范.txt"
+        }
+      ]
+    },
+    {
+      "id": "DATA-004",
+      "domain": "data",
+      "level": "SHOULD",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [],
+      "title": "时间统一存储并明确业务日界线",
+      "rule": "时间以带时区的时间戳存储；展示按用户时区；营业日、对账日、优惠有效期等按明确时区（如 Asia/Shanghai）计算。",
+      "why": "时区混乱会让券提前过期、对账跨日错位。",
+      "do": [
+        "接口时间统一 RFC 3339 格式"
+      ],
+      "dont": [
+        "存无时区的本地时间"
+      ],
+      "verify": [
+        "跨日边界测试"
+      ],
+      "sources": [
+        {
+          "title": "微信支付 · rfc3339 时间格式",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791856"
+        }
+      ]
+    },
+    {
+      "id": "MP-001",
+      "domain": "mp",
+      "level": "MUST",
+      "platforms": [
+        "miniprogram"
+      ],
+      "modules": [],
+      "title": "请求统一封装：HTTPS 合法域名、超时、错误分类",
+      "rule": "所有请求经统一封装：使用在小程序后台配置的 HTTPS 合法域名，设置超时，附带令牌与 Idempotency-Key，按错误码分类处理（登录过期、无权限、校验错误、服务异常、网络断开）。",
+      "why": "分散的请求代码会遗漏错误处理和令牌刷新。",
+      "do": [
+        "网络断开与超时有重试入口"
+      ],
+      "dont": [
+        "在页面里直接 wx.request 并忽略失败"
+      ],
+      "verify": [
+        "断网、超时、401、403、500 五种情况真机测试"
+      ],
+      "sources": [
+        {
+          "title": "微信开放文档 · 网络使用说明（服务器域名配置，2026-10-26 已读）",
+          "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/ability/network.html"
+        },
+        {
+          "title": "Luz Dev · references/miniprogram.md",
+          "url": "file:///D:/Codes/Luz-Dev/references/miniprogram.md"
+        }
+      ]
+    },
+    {
+      "id": "MP-002",
+      "domain": "mp",
+      "level": "MUST",
+      "platforms": [
+        "miniprogram"
+      ],
+      "modules": [
+        "login"
+      ],
+      "title": "手机号通过官方组件获取并在服务端换取",
+      "rule": "需要手机号时使用官方手机号快速验证组件，前端拿到 code 后交给后端换取手机号；用户拒绝时提供其他方式或说明；手机号接口按官方规则计费，方案中注明。",
+      "why": "旧的加密数据解密方式依赖 session_key，安全性和可维护性差。",
+      "do": [
+        "只在确有需要的步骤请求手机号"
+      ],
+      "dont": [
+        "进入小程序就强制授权手机号"
+      ],
+      "verify": [
+        "授权与拒绝两条路径测试"
+      ],
+      "sources": [
+        {
+          "title": "微信开放文档 · 手机号快速验证组件",
+          "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/open-ability/getPhoneNumber.html"
+        }
+      ]
+    },
+    {
+      "id": "MP-003",
+      "domain": "mp",
+      "level": "SHOULD",
+      "platforms": [
+        "miniprogram"
+      ],
+      "modules": [
+        "notification"
+      ],
+      "title": "订阅消息按用户授权发送",
+      "rule": "订单、预约、退款等通知使用订阅消息；在用户操作时请求对应模板授权；发送失败不影响业务；发送记录可查。",
+      "why": "订阅消息需要用户授权，未授权发送会失败。",
+      "do": [
+        "通知通过 Outbox 异步发送"
+      ],
+      "dont": [
+        "把发送失败当作业务失败回滚"
+      ],
+      "verify": [
+        "授权与未授权情况下业务都能完成"
+      ],
+      "sources": [
+        {
+          "title": "微信开放文档 · 发送订阅消息",
+          "url": "https://developers.weixin.qq.com/miniprogram/dev/OpenApiDoc/mp-message-management/subscribe-message/sendMessage.html"
+        }
+      ]
+    },
+    {
+      "id": "MP-004",
+      "domain": "mp",
+      "level": "SHOULD",
+      "platforms": [
+        "miniprogram"
+      ],
+      "modules": [],
+      "title": "版本更新与接口兼容",
+      "rule": "启用小程序更新管理提示新版本；后端接口保持向后兼容或按版本路由，旧版本小程序在过渡期内仍可完成核心流程。",
+      "why": "用户手机上可能长期运行旧版本小程序。",
+      "do": [
+        "接口变更在方案中写明兼容期"
+      ],
+      "dont": [
+        "直接删除旧接口字段"
+      ],
+      "verify": [
+        "旧版本客户端回归测试"
+      ],
+      "sources": []
+    },
+    {
+      "id": "MP-005",
+      "domain": "mp",
+      "level": "MUST",
+      "platforms": [
+        "miniprogram"
+      ],
+      "modules": [
+        "payment"
+      ],
+      "title": "交易类小程序遵守运营规范并接入订单发货管理",
+      "rule": "在小程序内收款的交易类小程序，上线前核对《交易类小程序运营规范》并按规范接入订单发货管理功能（实物发货、虚拟商品、到店核销等按对应方式录入）；方案中写明发货信息录入时机与负责人。",
+      "why": "微信支付开发指引提示：不满足规范可能被公众平台限制使用小程序支付的权限，无法在正式环境调起支付。",
+      "do": [
+        "履约完成（核销、开课、发货）后由 Outbox 录入发货信息",
+        "上线前在小程序后台确认发货管理状态"
+      ],
+      "dont": [
+        "只在测试环境验证支付就上线"
+      ],
+      "verify": [
+        "正式环境小额支付后，发货信息录入成功"
+      ],
+      "sources": [
+        {
+          "title": "微信支付 · 小程序支付开发指引 2.2（交易类小程序要求）",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791911"
+        },
+        {
+          "title": "微信公众平台 · 交易类小程序运营规范",
+          "url": "https://developers.weixin.qq.com/miniprogram/product/jiaoyilei/yunyingguifan.html"
+        },
+        {
+          "title": "微信公众平台 · 订单发货管理功能",
+          "url": "https://developers.weixin.qq.com/miniprogram/product/jiaoyilei/fahuoguanligongneng.html"
+        }
+      ]
+    },
+    {
+      "id": "ADMIN-001",
+      "domain": "admin",
+      "level": "MUST",
+      "platforms": [
+        "admin"
+      ],
+      "modules": [],
+      "title": "危险操作说明后果并二次确认",
+      "rule": "删除、退款、批量修改、改权限等操作在确认框中写明对象、数量、金额和后果，必要时要求输入原因或对象名称确认；操作结果可在审计页查到。",
+      "why": "后台误操作的影响面大且难以恢复。",
+      "do": [
+        "按钮文案写清动作，例如“确认退款 ¥128.00”"
+      ],
+      "dont": [
+        "使用“确定要执行吗？”这类没有信息的确认"
+      ],
+      "verify": [
+        "每个危险操作都有确认与审计"
+      ],
+      "sources": [
+        {
+          "title": "界面设计 · 管理后台规范 §9 交互规范",
+          "url": "file:///D:/Codes/Luz-Design/design/admin/SPEC.md"
+        }
+      ]
+    },
+    {
+      "id": "ADMIN-002",
+      "domain": "admin",
+      "level": "MUST",
+      "platforms": [
+        "admin",
+        "backend"
+      ],
+      "modules": [],
+      "title": "导出受权限控制、脱敏、限量并审计",
+      "rule": "数据导出需要单独权限；默认脱敏；限制单次行数或改为异步任务；导出文件短期有效；每次导出写审计（条件、行数、操作人）。",
+      "why": "导出是批量泄露个人信息的最短路径。",
+      "do": [
+        "导出文件下载链接带有效期"
+      ],
+      "dont": [
+        "导出接口复用列表接口且不限量"
+      ],
+      "verify": [
+        "无导出权限账号无法导出；导出文件已脱敏"
+      ],
+      "sources": []
+    },
+    {
+      "id": "ADMIN-003",
+      "domain": "admin",
+      "level": "MUST",
+      "platforms": [
+        "admin"
+      ],
+      "modules": [],
+      "title": "防 CSRF 与点击劫持",
+      "rule": "使用 Cookie 会话时启用 SameSite 与 CSRF 令牌；设置 Content-Security-Policy 与 frame-ancestors；CORS 只允许明确的来源。",
+      "why": "后台被跨站请求伪造会执行管理员操作。",
+      "do": [
+        "安全响应头在网关统一配置"
+      ],
+      "dont": [
+        "CORS 使用 * 并允许携带凭证"
+      ],
+      "verify": [
+        "安全响应头扫描通过"
+      ],
+      "sources": [
+        {
+          "title": "OWASP CSRF Prevention Cheat Sheet",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html"
+        }
+      ]
+    },
+    {
+      "id": "UI-001",
+      "domain": "ui",
+      "level": "MUST",
+      "platforms": [
+        "miniprogram",
+        "admin",
+        "mobile"
+      ],
+      "modules": [],
+      "title": "每个动态页面覆盖全部状态",
+      "rule": "加载、空、部分、失败、离线、超时、无权限、过期、成功等状态按 界面设计交接实现，失败状态告诉用户下一步可以做什么；加载状态不能代替其他状态。",
+      "why": "只做正常状态的页面在弱网和异常下会卡死或误导。",
+      "do": [
+        "状态文案说明发生了什么和下一步"
+      ],
+      "dont": [
+        "接口失败时一直转圈"
+      ],
+      "verify": [
+        "状态矩阵逐项截图或测试"
+      ],
+      "sources": [
+        {
+          "title": "界面设计 · SKILL Non-negotiable design rules",
+          "url": "file:///D:/Codes/Luz-Design/SKILL.md"
+        }
+      ]
+    },
+    {
+      "id": "UI-002",
+      "domain": "ui",
+      "level": "MUST",
+      "platforms": [
+        "miniprogram",
+        "admin",
+        "mobile"
+      ],
+      "modules": [],
+      "title": "完成的操作有明确结果页，返回键不重复提交",
+      "rule": "支付、提交申请、异步任务完成后进入可刷新、可深链的结果页，结果从服务端状态重建；提交后的路由使用替换导航，返回键不会重新提交或重新打开过期的支付。",
+      "why": "用户在结果不明时会重复操作，造成重复下单或重复支付。",
+      "do": [
+        "按 references/result-patterns.md 选择落点"
+      ],
+      "dont": [
+        "支付成功后只弹 Toast 留在原页"
+      ],
+      "verify": [
+        "结果页刷新与返回键测试"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · references/result-patterns.md",
+          "url": "file:///D:/Codes/Luz-Dev/references/result-patterns.md"
+        }
+      ]
+    },
+    {
+      "id": "UI-003",
+      "domain": "ui",
+      "level": "SHOULD",
+      "platforms": [
+        "miniprogram",
+        "admin",
+        "mobile"
+      ],
+      "modules": [],
+      "title": "界面文案面向用户，不暴露技术细节",
+      "rule": "界面不出现字段名、接口名、错误堆栈和开发说明；按钮用动词说明动作；不重复中英文；删除没有价值的说明文字。",
+      "why": "技术文案让普通用户无法理解也无法操作。",
+      "do": [
+        "错误码映射为用户能理解的文案"
+      ],
+      "dont": [
+        "显示 “ERR_40901 status conflict”"
+      ],
+      "verify": [
+        "文案走查"
+      ],
+      "sources": [
+        {
+          "title": "开发规范 · 三、2 用户视角与文案规范",
+          "url": "file:///D:/Codes/开发规范.txt"
+        }
+      ]
+    },
+    {
+      "id": "AGENT-001",
+      "domain": "agent",
+      "level": "MUST",
+      "platforms": [
+        "agent"
+      ],
+      "modules": [
+        "agent"
+      ],
+      "title": "工具白名单、高影响操作需确认",
+      "rule": "智能体只能调用登记在白名单中的已实现工具；下单、退款、修改数据等高影响操作需要用户确认，确认可防重复；工具输入输出做校验，循环与费用有上限。",
+      "why": "模型输出不可完全预测，必须由程序限制它能做的事。",
+      "do": [
+        "工具调用写审计",
+        "事实性回答提供来源"
+      ],
+      "dont": [
+        "让模型直接拼接 SQL 或调用任意 URL"
+      ],
+      "verify": [
+        "重复确认不会重复执行写操作；越权工具调用被拒绝"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · agent/backend/SPEC.md",
+          "url": "file:///D:/Codes/Luz-Dev/agent/backend/SPEC.md"
+        }
+      ]
+    },
+    {
+      "id": "REL-001",
+      "domain": "release",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "admin",
+        "miniprogram",
+        "mobile"
+      ],
+      "modules": [],
+      "title": "上线前有回滚方案与健康检查",
+      "rule": "发布包含迁移、配置与版本说明；有健康检查与核心链路冒烟测试；写明回滚步骤与数据回滚边界；支付类功能上线前用真实小额交易验证下单、回调、查单、退款。",
+      "why": "无法回滚的发布把故障时间交给运气。",
+      "do": [
+        "灰度或分批发布",
+        "发布后观察告警指标"
+      ],
+      "dont": [
+        "直接在生产环境调试支付"
+      ],
+      "verify": [
+        "回滚演练记录；生产小额交易记录"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · references/delivery.md",
+          "url": "file:///D:/Codes/Luz-Dev/references/delivery.md"
+        }
+      ]
+    },
+    {
+      "id": "INT-001",
+      "domain": "integration",
+      "level": "MUST",
+      "platforms": [
+        "miniprogram",
+        "admin",
+        "mobile"
+      ],
+      "modules": [],
+      "title": "前端开发前，界面设计已批准且批准后未改动",
+      "rule": "前端页面开发开始前，用 design_intake.py inspect --require architecture,system_design,prototype 核验 界面设计会话：各阶段已由用户批准，文件与批准时的 摘要 一致，原型有浏览器验收截图；结果写入方案“页面与前端接入”章节。",
+      "why": "未批准或批准后被修改的设计不是可交付的依据，按它开发会返工或偏离用户确认的体验。",
+      "do": [
+        "设计更新后重新 inspect 并对比 ID 变化"
+      ],
+      "dont": [
+        "拿草稿原型直接开发"
+      ],
+      "verify": [
+        "design_intake.py inspect --require … 退出码为 0"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 接入 界面设计 前端",
+          "url": "file:///D:/Codes/Luz-Dev/references/design-integration.md"
+        }
+      ]
+    },
+    {
+      "id": "INT-002",
+      "domain": "integration",
+      "level": "MUST",
+      "platforms": [
+        "miniprogram",
+        "admin",
+        "mobile"
+      ],
+      "modules": [],
+      "title": "每个已批准操作都绑定真实接口，前端覆盖完整且无模拟数据",
+      "rule": "用 design_intake.py bind 生成绑定表：每个 A- 操作写明 api（方法 路径，必须在 OpenAPI 中存在）、navigate、local、platform 或 n/a 并说明；每个 D- 实体映射数据表、I- 集成映射后端适配器。交付前 check --frontend 通过：操作与页面覆盖 100%，正式代码不引用原型模拟数据或 mock，不出现设计中不存在的操作。",
+      "why": "原型使用模拟数据，按钮只有样子；不逐个绑定就会出现假按钮、假数据或遗漏的页面。",
+      "do": [
+        "页面与控件保留 data-page-id / data-action-id",
+        "绑定表与 OpenAPI 同步维护"
+      ],
+      "dont": [
+        "在正式页面保留原型的 DEMO 数据"
+      ],
+      "verify": [
+        "design_intake.py check <绑定表> --frontend … 退出码为 0"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 接入 界面设计 前端",
+          "url": "file:///D:/Codes/Luz-Dev/references/design-integration.md"
+        }
+      ]
+    },
+    {
+      "id": "INT-003",
+      "domain": "integration",
+      "level": "MUST",
+      "platforms": [
+        "miniprogram",
+        "admin",
+        "mobile"
+      ],
+      "modules": [],
+      "title": "改变用户可见的流程、权限或层级前先回到界面设计",
+      "rule": "实现中需要新增或改变页面、操作、权限规则、信息层级时，把平台约束与选项交给 界面设计 更新设计并重新批准，再实现；技术细节（接口字段、加载方式）可由 Luz Dev 补充。",
+      "why": "绕过设计直接改体验会让设计与产品分叉，用户批准的内容失效。",
+      "do": [
+        "在实施记录写明每处偏差与设计方的批准"
+      ],
+      "dont": [
+        "为了省事在前端加入未设计的按钮"
+      ],
+      "verify": [
+        "check 报告无“设计中不存在的操作”"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 接入 界面设计 前端",
+          "url": "file:///D:/Codes/Luz-Dev/references/design-integration.md"
+        }
+      ]
+    },
+    {
+      "id": "COMP-001",
+      "domain": "compliance",
+      "level": "MUST",
+      "platforms": [
+        "all"
+      ],
+      "modules": [],
+      "title": "方案列出资质、备案与平台审核清单并在开发初期启动",
+      "rule": "实施方案的“上线与合规”章节逐项列出：主体资质、小程序认证与类目资质、域名与小程序备案、增值电信许可、等级保护、支付商户号与 appid 绑定、特殊能力（人脸、预付卡、抽奖）要求；写明是否适用及理由、负责方、进度、证据位置和对排期的影响。适用性判断引用本次调研读到的官方原文。",
+      "why": "备案、类目审核、商户号申请都需要时间，开发完才发现缺资质会直接卡住上线。",
+      "do": [
+        "开发第一周就把需要商户办理的事项交给商户"
+      ],
+      "dont": [
+        "凭印象判断“不需要备案 / 许可证”"
+      ],
+      "verify": [
+        "方案上线与合规章节每项都有状态与证据"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 商业资质、备案与许可",
+          "url": "file:///D:/Codes/Luz-Dev/references/compliance.md"
+        }
+      ]
+    },
+    {
+      "id": "COMP-002",
+      "domain": "compliance",
+      "level": "MUST",
+      "platforms": [
+        "miniprogram"
+      ],
+      "modules": [],
+      "title": "小程序类目、主体与支付商户号一致",
+      "rule": "小程序服务类目按实际提供的服务选择并取得对应资质；小程序、微信支付商户号、备案的主体一致，商户号与 appid 已绑定并开通 JSAPI 支付权限。",
+      "why": "类目与功能不符会审核失败；appid 与商户号未绑定时下单直接报错。",
+      "do": [
+        "提交审核前对照功能清单检查类目"
+      ],
+      "dont": [
+        "用不相关的类目上线收费功能"
+      ],
+      "verify": [
+        "体验版真实小额支付成功；审核通过记录"
+      ],
+      "sources": [
+        {
+          "title": "微信支付 · JSAPI下单（APPID_MCHID_NOT_MATCH）",
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791856"
+        },
+        {
+          "title": "Luz Dev · 商业资质",
+          "url": "file:///D:/Codes/Luz-Dev/references/compliance.md"
+        }
+      ]
+    },
+    {
+      "id": "LIC-001",
+      "domain": "compliance",
+      "level": "MUST",
+      "platforms": [
+        "all"
+      ],
+      "modules": [],
+      "title": "依赖、源码与素材的许可证可商用并有记录",
+      "rule": "依赖、参考源码、字体、图片、图标与第三方服务记录许可证或授权（config/third-party-licenses.md）；默认只用 MIT、BSD、Apache-2.0 等宽松许可；引入 GPL / AGPL、需商业授权的源码或素材必须经用户确认并取得授权。",
+      "why": "AGPL 等许可证可能要求公开整个服务的源码，未授权的商业源码、字体与图片会带来侵权风险。",
+      "do": [
+        "CI 中生成依赖许可证清单"
+      ],
+      "dont": [
+        "复制开源商城代码而不核对许可证"
+      ],
+      "verify": [
+        "许可证清单存在且无未确认的强传染性或商业授权条目"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 软件与素材许可",
+          "url": "file:///D:/Codes/Luz-Dev/references/compliance.md"
+        }
+      ]
+    },
+    {
+      "id": "LEGAL-001",
+      "domain": "legal",
+      "level": "MUST",
+      "platforms": [
+        "all"
+      ],
+      "modules": [],
+      "title": "用户协议与隐私政策版本化上线，主动同意并留存记录",
+      "rule": "上线前发布用户服务协议与隐私政策（以及适用的人脸单独同意、储值卡协议、活动规则），每个版本保存完整文本与摘要；用户主动勾选同意（不得默认勾选），记录用户、文档、版本、文本摘要、时间与渠道；隐私政策内容与系统实际收集的个人信息一致。",
+      "why": "没有可追溯的同意记录就无法证明取得了授权；文本与实际收集不一致属于违规收集。",
+      "do": [
+        "使用 legal_documents 与 user_consents 表（legal-documents.md §4）"
+      ],
+      "dont": [
+        "把协议写死在前端页面里且无版本"
+      ],
+      "verify": [
+        "新用户首次登录产生同意记录；隐私政策字段清单与数据模型对照"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 用户协议与同意",
+          "url": "file:///D:/Codes/Luz-Dev/references/legal-documents.md"
+        },
+        {
+          "title": "中华人民共和国个人信息保护法",
+          "url": "https://www.cac.gov.cn/2021-08/20/c_1631050028355286.htm"
+        }
+      ]
+    },
+    {
+      "id": "LEGAL-002",
+      "domain": "legal",
+      "level": "MUST",
+      "platforms": [
+        "all"
+      ],
+      "modules": [],
+      "title": "协议实质变更重新同意，提供撤回与注销",
+      "rule": "实质性变更后用户下次进入时展示变更摘要并重新同意；未同意的不处理新增目的的数据；提供撤回同意（人脸、营销等）与账号注销入口，撤回或注销后删除相应数据并覆盖第三方。",
+      "why": "个人有撤回同意与删除的权利；静默变更协议会使原有同意失效。",
+      "do": [
+        "发布新版本只新增记录，不修改已发布文本"
+      ],
+      "dont": [
+        "在原版本上直接改文字"
+      ],
+      "verify": [
+        "发布新版本后旧用户被要求重新同意；撤回后数据被删除"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 用户协议与同意",
+          "url": "file:///D:/Codes/Luz-Dev/references/legal-documents.md"
+        }
+      ]
+    },
+    {
+      "id": "LEGAL-003",
+      "domain": "legal",
+      "level": "MUST",
+      "platforms": [
+        "all"
+      ],
+      "modules": [],
+      "title": "协议文本由商户确认，法律判断不由开发方代替",
+      "rule": "协议与规则由模板起草，上线前由商户确认，并建议律师审核；方案记录确认人与日期；涉及预付卡、抽奖、人脸等专项规则时引用本次调研读到的法规原文。",
+      "why": "协议约束的是商户与用户；开发方代替商户作法律判断会留下责任风险。",
+      "do": [
+        "在方案待决问题中列出需要商户确认的条款"
+      ],
+      "dont": [
+        "直接使用网上复制的协议上线"
+      ],
+      "verify": [
+        "方案记录商户确认"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 用户协议与同意",
+          "url": "file:///D:/Codes/Luz-Dev/references/legal-documents.md"
+        }
+      ]
+    },
+    {
+      "id": "OPS-001",
+      "domain": "ops",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [],
+      "title": "环境分离，按流程发布并留存发布记录",
+      "rule": "开发、预发、生产配置与数据分离；发布经过 CI 测试、预发迁移演练与冒烟测试、生产备份与迁移、健康检查与观察；每次发布记录版本、变更、迁移、执行人与结果，并写明回滚方式。",
+      "why": "直接在生产修改或跳过预发会把问题带给真实用户，且无法追溯。",
+      "do": [
+        "镜像按发布版本打标签",
+        "迁移先兼容后清理"
+      ],
+      "dont": [
+        "在生产服务器上手工改代码"
+      ],
+      "verify": [
+        "发布记录与回滚演练记录"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 运维与上线",
+          "url": "file:///D:/Codes/Luz-Dev/references/operations.md"
+        }
+      ]
+    },
+    {
+      "id": "OPS-002",
+      "domain": "ops",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [],
+      "title": "HTTPS、证书续期与服务器加固",
+      "rule": "对外服务只提供 HTTPS（TLS 1.2 及以上），HTTP 跳转 HTTPS，证书自动续期并在到期前 30 天告警；数据库与 Redis 不暴露公网；SSH 仅密钥登录；安全组只开放必要端口；管理后台可限制来源。",
+      "why": "小程序只能请求 HTTPS 合法域名；暴露的数据库与弱口令 SSH 是最常见的入侵入口。",
+      "do": [
+        "Nginx 配置安全响应头与请求体限制（assets/deploy/nginx.conf）"
+      ],
+      "dont": [
+        "把 PostgreSQL 5432 端口对公网开放"
+      ],
+      "verify": [
+        "端口扫描只有 80/443（及受限管理端口）；证书到期告警已配置"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 运维与上线",
+          "url": "file:///D:/Codes/Luz-Dev/references/operations.md"
+        },
+        {
+          "title": "微信开放文档 · 网络使用说明",
+          "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/ability/network.html"
+        }
+      ]
+    },
+    {
+      "id": "OPS-003",
+      "domain": "ops",
+      "level": "MUST",
+      "platforms": [
+        "all"
+      ],
+      "modules": [],
+      "title": "上线检查表全部通过并有证据",
+      "rule": "上线前逐项完成 operations.md §7 的检查（资质、协议、配置、数据、关键流程真实走通含小额支付与退款、前端绑定检查、监控告警、备份恢复、回滚、文档），证据写入方案；发布后观察告警并核对首日订单与对账。",
+      "why": "上线问题多数来自漏掉的配置与未真实走通的流程。",
+      "do": [
+        "用 assets/deploy/LAUNCH-CHECKLIST.md 记录"
+      ],
+      "dont": [
+        "只在测试环境验证就发布"
+      ],
+      "verify": [
+        "tech_plan.py check --stage delivery 通过且上线检查表已填写"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 上线检查表",
+          "url": "file:///D:/Codes/Luz-Dev/references/operations.md"
+        }
+      ]
+    },
+    {
+      "id": "OPS-004",
+      "domain": "ops",
+      "level": "SHOULD",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [],
+      "title": "按预期流量压测并设置容量余量",
+      "rule": "上线前按预期峰值（活动、开卡日）对登录、下单、支付、预约等关键接口压测，记录瓶颈与容量余量；有抢购时按 seckill.md 准备。",
+      "why": "活动日的流量峰值常是平时的数倍。",
+      "do": [
+        "压测在预发环境进行"
+      ],
+      "dont": [
+        "在生产环境直接压测支付"
+      ],
+      "verify": [
+        "压测报告"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 运维与上线",
+          "url": "file:///D:/Codes/Luz-Dev/references/operations.md"
+        }
+      ]
+    }
+  ],
+  "baselines": [
+    {
+      "id": "BL-MP-01",
+      "projectType": "miniprogram",
+      "feature": "微信登录与会话保持",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "login"
+      ],
+      "rules": [
+        "AUTH-003",
+        "AUTH-002"
+      ],
+      "acceptance": "首次进入静默登录；令牌过期自动续期；登出后需重新登录。"
+    },
+    {
+      "id": "BL-MP-02",
+      "projectType": "miniprogram",
+      "feature": "隐私保护指引与授权处理",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "privacy"
+      ],
+      "rules": [
+        "PII-003"
+      ],
+      "acceptance": "使用隐私接口前完成同意；拒绝后有替代路径。"
+    },
+    {
+      "id": "BL-MP-03",
+      "projectType": "miniprogram",
+      "feature": "手机号授权",
+      "requirement": "conditional",
+      "condition": "业务需要联系用户或账号合并",
+      "modules": [
+        "login"
+      ],
+      "rules": [
+        "MP-002"
+      ],
+      "acceptance": "授权成功绑定手机号；拒绝不影响浏览。"
+    },
+    {
+      "id": "BL-MP-04",
+      "projectType": "miniprogram",
+      "feature": "商品 / 服务浏览与详情",
+      "requirement": "required",
+      "condition": "",
+      "modules": [],
+      "rules": [
+        "PROC-001"
+      ],
+      "acceptance": "数据来自后端；下架、售罄、价格变化有提示。"
+    },
+    {
+      "id": "BL-MP-05",
+      "projectType": "miniprogram",
+      "feature": "下单与确认页（服务端计价）",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "order"
+      ],
+      "rules": [
+        "MONEY-002",
+        "ORDER-002"
+      ],
+      "acceptance": "金额由服务端返回；价格变化时提示并重新确认；重复点击只生成一个订单。"
+    },
+    {
+      "id": "BL-MP-06",
+      "projectType": "miniprogram",
+      "feature": "支付与支付结果页",
+      "requirement": "conditional",
+      "condition": "有线上收款",
+      "modules": [
+        "payment"
+      ],
+      "rules": [
+        "PAY-001",
+        "PAY-014",
+        "UI-002"
+      ],
+      "acceptance": "成功、取消、超时、未知四种结果都有页面；返回键不重复支付。"
+    },
+    {
+      "id": "BL-MP-07",
+      "projectType": "miniprogram",
+      "feature": "订单列表、详情与历史记录",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "order"
+      ],
+      "rules": [
+        "ORDER-005",
+        "AUTHZ-001"
+      ],
+      "acceptance": "分页、状态筛选、空状态；只显示本人订单；金额与下单时一致。"
+    },
+    {
+      "id": "BL-MP-08",
+      "projectType": "miniprogram",
+      "feature": "取消订单与退款申请",
+      "requirement": "conditional",
+      "condition": "有线上收款",
+      "modules": [
+        "refund"
+      ],
+      "rules": [
+        "RFD-003"
+      ],
+      "acceptance": "可取消时显示入口；退款显示处理中与结果。"
+    },
+    {
+      "id": "BL-MP-09",
+      "projectType": "miniprogram",
+      "feature": "优惠券领取与使用",
+      "requirement": "conditional",
+      "condition": "有营销需求",
+      "modules": [
+        "coupon"
+      ],
+      "rules": [
+        "MKT-001",
+        "MKT-002"
+      ],
+      "acceptance": "我的券列表；下单自动推荐可用券；不可用原因可见。"
+    },
+    {
+      "id": "BL-MP-10",
+      "projectType": "miniprogram",
+      "feature": "个人中心：资料查看与修改、账号注销",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "privacy"
+      ],
+      "rules": [
+        "PII-004"
+      ],
+      "acceptance": "可查看与修改昵称、头像、手机号等资料（修改手机号需验证）；可注销并删除个人信息。"
+    },
+    {
+      "id": "BL-MP-11",
+      "projectType": "miniprogram",
+      "feature": "订阅消息通知",
+      "requirement": "conditional",
+      "condition": "订单、预约、退款需要提醒",
+      "modules": [
+        "notification"
+      ],
+      "rules": [
+        "MP-003"
+      ],
+      "acceptance": "关键节点可收到通知；未授权不影响业务。"
+    },
+    {
+      "id": "BL-MP-12",
+      "projectType": "miniprogram",
+      "feature": "用户内容安全检测",
+      "requirement": "conditional",
+      "condition": "有用户发布的昵称、头像、评价等内容",
+      "modules": [
+        "upload"
+      ],
+      "rules": [
+        "FILE-002"
+      ],
+      "acceptance": "违规内容不展示；后台可复核。"
+    },
+    {
+      "id": "BL-MP-13",
+      "projectType": "miniprogram",
+      "feature": "网络异常、登录过期与无权限处理",
+      "requirement": "required",
+      "condition": "",
+      "modules": [],
+      "rules": [
+        "MP-001",
+        "UI-001"
+      ],
+      "acceptance": "断网、超时、401、403、500 都有可恢复提示。"
+    },
+    {
+      "id": "BL-MP-15",
+      "projectType": "miniprogram",
+      "feature": "储值卡、次卡与退费",
+      "requirement": "conditional",
+      "condition": "售卖会员卡、次卡、储值",
+      "modules": [
+        "recharge"
+      ],
+      "rules": [
+        "MBR-002"
+      ],
+      "acceptance": "购买前展示冷静期与退费规则；退费计算可核对。"
+    },
+    {
+      "id": "BL-MP-16",
+      "projectType": "miniprogram",
+      "feature": "抽奖与有奖活动",
+      "requirement": "conditional",
+      "condition": "有抽奖或有奖销售",
+      "modules": [
+        "lottery"
+      ],
+      "rules": [
+        "MKT-004"
+      ],
+      "acceptance": "活动规则事先公示且不可变更；中奖记录可查。"
+    },
+    {
+      "id": "BL-MP-14",
+      "projectType": "miniprogram",
+      "feature": "人脸采集与替代方式",
+      "requirement": "conditional",
+      "condition": "需要刷脸入场或实名核验",
+      "modules": [
+        "face"
+      ],
+      "rules": [
+        "FACE-001",
+        "FACE-002"
+      ],
+      "acceptance": "单独同意后采集；可撤回；有非人脸替代方式。"
+    },
+    {
+      "id": "BL-AD-01",
+      "projectType": "admin",
+      "feature": "登录、失败锁定与会话超时",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "auth"
+      ],
+      "rules": [
+        "AUTH-005",
+        "AUTH-006"
+      ],
+      "acceptance": "5 次失败锁定 15 分钟；无操作超时；初始密码强制修改。"
+    },
+    {
+      "id": "BL-AD-02",
+      "projectType": "admin",
+      "feature": "账号、角色与权限（含数据范围）",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "admin-rbac"
+      ],
+      "rules": [
+        "AUTHZ-002"
+      ],
+      "acceptance": "菜单、按钮、接口一致受控；门店数据隔离。"
+    },
+    {
+      "id": "BL-AD-03",
+      "projectType": "admin",
+      "feature": "操作审计日志",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "admin-rbac"
+      ],
+      "rules": [
+        "OBS-002"
+      ],
+      "acceptance": "关键操作可查；记录变更前后对比；只读。"
+    },
+    {
+      "id": "BL-AD-17",
+      "projectType": "admin",
+      "feature": "用户管理：查询、详情、禁用 / 启用、标签",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "admin-rbac"
+      ],
+      "rules": [
+        "AUTHZ-002",
+        "PII-002",
+        "OBS-002"
+      ],
+      "acceptance": "按手机号尾号、昵称、注册时间查询；手机号默认脱敏；禁用立即使登录失效；操作写审计。"
+    },
+    {
+      "id": "BL-AD-04",
+      "projectType": "admin",
+      "feature": "订单管理（查询、详情、状态处理）",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "order"
+      ],
+      "rules": [
+        "AUTHZ-001"
+      ],
+      "acceptance": "按状态、时间、手机号尾号筛选；详情含支付与操作记录。"
+    },
+    {
+      "id": "BL-AD-05",
+      "projectType": "admin",
+      "feature": "退款审批与处理",
+      "requirement": "conditional",
+      "condition": "有线上收款",
+      "modules": [
+        "refund"
+      ],
+      "rules": [
+        "RFD-001",
+        "RFD-002",
+        "RFD-003"
+      ],
+      "acceptance": "填写原因；显示可退金额；处理中与异常可追踪。"
+    },
+    {
+      "id": "BL-AD-06",
+      "projectType": "admin",
+      "feature": "商品 / 服务与价格管理",
+      "requirement": "required",
+      "condition": "",
+      "modules": [],
+      "rules": [
+        "OBS-002"
+      ],
+      "acceptance": "上下架、改价写审计；改价不影响已下单订单。"
+    },
+    {
+      "id": "BL-AD-07",
+      "projectType": "admin",
+      "feature": "会员管理（敏感信息脱敏）",
+      "requirement": "conditional",
+      "condition": "有会员体系",
+      "modules": [
+        "membership"
+      ],
+      "rules": [
+        "PII-002"
+      ],
+      "acceptance": "手机号默认脱敏；查看明文需权限并审计。"
+    },
+    {
+      "id": "BL-AD-08",
+      "projectType": "admin",
+      "feature": "营销与优惠券管理",
+      "requirement": "conditional",
+      "condition": "有营销需求",
+      "modules": [
+        "coupon"
+      ],
+      "rules": [
+        "MKT-003"
+      ],
+      "acceptance": "批次、预算、发放记录、核销统计。"
+    },
+    {
+      "id": "BL-AD-09",
+      "projectType": "admin",
+      "feature": "对账与财务报表",
+      "requirement": "conditional",
+      "condition": "有线上收款",
+      "modules": [
+        "reconcile"
+      ],
+      "rules": [
+        "RFD-005"
+      ],
+      "acceptance": "每日对账结果与差异处理可查。"
+    },
+    {
+      "id": "BL-AD-10",
+      "projectType": "admin",
+      "feature": "数据导出",
+      "requirement": "conditional",
+      "condition": "需要导出数据",
+      "modules": [],
+      "rules": [
+        "ADMIN-002"
+      ],
+      "acceptance": "需权限；脱敏；限量或异步；有审计。"
+    },
+    {
+      "id": "BL-AD-11",
+      "projectType": "admin",
+      "feature": "危险操作确认",
+      "requirement": "required",
+      "condition": "",
+      "modules": [],
+      "rules": [
+        "ADMIN-001"
+      ],
+      "acceptance": "确认框写明对象、数量、金额与后果。"
+    },
+    {
+      "id": "BL-AD-12",
+      "projectType": "admin",
+      "feature": "系统与门店配置",
+      "requirement": "required",
+      "condition": "",
+      "modules": [],
+      "rules": [
+        "OBS-002"
+      ],
+      "acceptance": "分组保存；变更写审计；敏感配置不在页面明文显示。"
+    },
+    {
+      "id": "BL-BE-13",
+      "projectType": "backend",
+      "feature": "微信登录、令牌签发与刷新",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "login"
+      ],
+      "rules": [
+        "AUTH-002",
+        "AUTH-003"
+      ],
+      "acceptance": "code 换取 openid；签发短时访问令牌与可撤销刷新令牌；登出、禁用立即失效。"
+    },
+    {
+      "id": "BL-BE-14",
+      "projectType": "backend",
+      "feature": "用户资料查询与修改、手机号绑定、账号注销",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "login",
+        "privacy"
+      ],
+      "rules": [
+        "AUTHZ-003",
+        "PII-002",
+        "PII-004"
+      ],
+      "acceptance": "只能改本人资料且字段白名单；改手机号需验证；注销删除个人信息并覆盖第三方。"
+    },
+    {
+      "id": "BL-BE-15",
+      "projectType": "backend",
+      "feature": "商品 / 服务与价格管理接口",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "catalog"
+      ],
+      "rules": [
+        "ORDER-005",
+        "ORDER-009"
+      ],
+      "acceptance": "上下架、改价写审计；改价不影响已下单订单。"
+    },
+    {
+      "id": "BL-BE-16",
+      "projectType": "backend",
+      "feature": "订单：试算、下单、取消、超时关单、历史记录",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "order"
+      ],
+      "rules": [
+        "MONEY-002",
+        "ORDER-001",
+        "ORDER-002",
+        "ORDER-004",
+        "ORDER-005"
+      ],
+      "acceptance": "服务端计价；幂等下单；状态机流转；先查单再关单；只查本人订单。"
+    },
+    {
+      "id": "BL-BE-17",
+      "projectType": "backend",
+      "feature": "支付、支付回调、查单与退款",
+      "requirement": "conditional",
+      "condition": "有线上收款",
+      "modules": [
+        "payment",
+        "refund"
+      ],
+      "rules": [
+        "PAY-001",
+        "PAY-005",
+        "PAY-009",
+        "PAY-010",
+        "RFD-002",
+        "RFD-003"
+      ],
+      "acceptance": "验签解密回调；主动查单补偿；退款单号重试不变。"
+    },
+    {
+      "id": "BL-BE-18",
+      "projectType": "backend",
+      "feature": "优惠券：发放、领取、锁定、核销、回退",
+      "requirement": "conditional",
+      "condition": "有营销需求",
+      "modules": [
+        "coupon"
+      ],
+      "rules": [
+        "MKT-001",
+        "MKT-002",
+        "MKT-005"
+      ],
+      "acceptance": "领取不超发；一券不能用于两笔订单；取消订单券恢复。"
+    },
+    {
+      "id": "BL-BE-19",
+      "projectType": "backend",
+      "feature": "会员、积分与等级",
+      "requirement": "conditional",
+      "condition": "有会员体系",
+      "modules": [
+        "membership"
+      ],
+      "rules": [
+        "MBR-001"
+      ],
+      "acceptance": "积分走流水，按业务单号幂等，退款回扣。"
+    },
+    {
+      "id": "BL-BE-20",
+      "projectType": "backend",
+      "feature": "储值、会员卡与退卡",
+      "requirement": "conditional",
+      "condition": "售卖储值或会员卡",
+      "modules": [
+        "recharge"
+      ],
+      "rules": [
+        "MBR-002",
+        "MBR-003"
+      ],
+      "acceptance": "本金与赠送分账；冷静期与退卡计算可核对。"
+    },
+    {
+      "id": "BL-BE-21",
+      "projectType": "backend",
+      "feature": "消息通知（订阅消息、短信、站内）",
+      "requirement": "conditional",
+      "condition": "需要提醒用户",
+      "modules": [
+        "notification"
+      ],
+      "rules": [
+        "ORDER-006",
+        "MP-003"
+      ],
+      "acceptance": "通过发件箱异步发送；失败重试不影响业务。"
+    },
+    {
+      "id": "BL-BE-22",
+      "projectType": "backend",
+      "feature": "文件上传与内容安全",
+      "requirement": "conditional",
+      "condition": "上传头像、图片或文件",
+      "modules": [
+        "upload"
+      ],
+      "rules": [
+        "FILE-001",
+        "FILE-002"
+      ],
+      "acceptance": "类型与大小校验；私有文件签名访问；用户内容过审。"
+    },
+    {
+      "id": "BL-BE-23",
+      "projectType": "backend",
+      "feature": "后台账号、角色权限与数据范围",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "admin-rbac"
+      ],
+      "rules": [
+        "AUTH-005",
+        "AUTHZ-002",
+        "AUTHZ-004"
+      ],
+      "acceptance": "接口按权限码校验；门店数据隔离；改权限写审计。"
+    },
+    {
+      "id": "BL-BE-24",
+      "projectType": "backend",
+      "feature": "操作审计日志",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "admin-rbac"
+      ],
+      "rules": [
+        "OBS-002"
+      ],
+      "acceptance": "退款、改价、改权限、导出、删除等写只追加审计。"
+    },
+    {
+      "id": "BL-BE-25",
+      "projectType": "backend",
+      "feature": "统计报表与数据导出",
+      "requirement": "conditional",
+      "condition": "需要经营数据",
+      "modules": [
+        "report"
+      ],
+      "rules": [
+        "ADMIN-002"
+      ],
+      "acceptance": "口径写明；导出需权限、脱敏、限量并审计。"
+    },
+    {
+      "id": "BL-BE-26",
+      "projectType": "backend",
+      "feature": "系统与门店配置、字典",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "settings"
+      ],
+      "rules": [
+        "OBS-002",
+        "CACHE-001"
+      ],
+      "acceptance": "配置变更写审计；缓存先写库后删缓存。"
+    },
+    {
+      "id": "BL-BE-27",
+      "projectType": "backend",
+      "feature": "协议版本与同意记录接口",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "legal"
+      ],
+      "rules": [
+        "LEGAL-001",
+        "LEGAL-002"
+      ],
+      "acceptance": "当前版本、待同意、提交同意（校验版本与文本指纹）、撤回。"
+    },
+    {
+      "id": "BL-BE-01",
+      "projectType": "backend",
+      "feature": "健康检查与版本信息",
+      "requirement": "required",
+      "condition": "",
+      "modules": [],
+      "rules": [
+        "REL-001"
+      ],
+      "acceptance": "健康检查区分存活与就绪；返回当前发布版本。"
+    },
+    {
+      "id": "BL-BE-02",
+      "projectType": "backend",
+      "feature": "统一错误信封与 OpenAPI 契约",
+      "requirement": "required",
+      "condition": "",
+      "modules": [],
+      "rules": [
+        "INPUT-003"
+      ],
+      "acceptance": "所有接口有 schema；错误码稳定。"
+    },
+    {
+      "id": "BL-BE-03",
+      "projectType": "backend",
+      "feature": "认证、授权与限流中间件",
+      "requirement": "required",
+      "condition": "",
+      "modules": [],
+      "rules": [
+        "AUTH-001",
+        "AUTHZ-001",
+        "ABUSE-001"
+      ],
+      "acceptance": "默认拒绝；越权测试通过；高风险接口限流。"
+    },
+    {
+      "id": "BL-BE-04",
+      "projectType": "backend",
+      "feature": "幂等与 Outbox",
+      "requirement": "required",
+      "condition": "",
+      "modules": [],
+      "rules": [
+        "ORDER-002",
+        "ORDER-006"
+      ],
+      "acceptance": "重复请求只执行一次；副作用可靠异步执行。"
+    },
+    {
+      "id": "BL-BE-05",
+      "projectType": "backend",
+      "feature": "定时任务（关单、查单、对账、过期处理）",
+      "requirement": "required",
+      "condition": "",
+      "modules": [],
+      "rules": [
+        "ORDER-004",
+        "PAY-010"
+      ],
+      "acceptance": "任务幂等、可重跑、有执行记录。"
+    },
+    {
+      "id": "BL-BE-06",
+      "projectType": "backend",
+      "feature": "数据库迁移与备份恢复",
+      "requirement": "required",
+      "condition": "",
+      "modules": [],
+      "rules": [
+        "DATA-002",
+        "DATA-003"
+      ],
+      "acceptance": "空库迁移通过；恢复演练记录。"
+    },
+    {
+      "id": "BL-BE-07",
+      "projectType": "backend",
+      "feature": "结构化日志、审计与告警",
+      "requirement": "required",
+      "condition": "",
+      "modules": [],
+      "rules": [
+        "OBS-001",
+        "OBS-002",
+        "OBS-003"
+      ],
+      "acceptance": "日志带 trace_id 且脱敏；关键告警可触发。"
+    },
+    {
+      "id": "BL-BE-08",
+      "projectType": "backend",
+      "feature": "分环境配置、/config 与 README",
+      "requirement": "required",
+      "condition": "",
+      "modules": [],
+      "rules": [
+        "PROC-004",
+        "SECRET-001"
+      ],
+      "acceptance": "开发、测试、生产配置分离；新成员可按 README 启动。"
+    },
+    {
+      "id": "BL-MO-01",
+      "projectType": "mobile",
+      "feature": "登录、令牌安全存储与会话",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "auth"
+      ],
+      "rules": [
+        "AUTH-002"
+      ],
+      "acceptance": "令牌存放在系统安全存储；登出清除。"
+    },
+    {
+      "id": "BL-MO-02",
+      "projectType": "mobile",
+      "feature": "强制更新与接口兼容",
+      "requirement": "required",
+      "condition": "",
+      "modules": [],
+      "rules": [
+        "MP-004"
+      ],
+      "acceptance": "低于最低版本时提示更新；旧版本过渡期可用。"
+    },
+    {
+      "id": "BL-MO-03",
+      "projectType": "mobile",
+      "feature": "推送与深链",
+      "requirement": "conditional",
+      "condition": "需要通知或外部跳转",
+      "modules": [
+        "notification"
+      ],
+      "rules": [],
+      "acceptance": "通知点击进入对应页面并校验登录与权限。"
+    },
+    {
+      "id": "BL-MO-04",
+      "projectType": "mobile",
+      "feature": "离线与弱网处理",
+      "requirement": "required",
+      "condition": "",
+      "modules": [],
+      "rules": [
+        "UI-001"
+      ],
+      "acceptance": "断网提示；恢复后可重试；不重复提交。"
+    },
+    {
+      "id": "BL-AG-01",
+      "projectType": "agent",
+      "feature": "工具白名单与确认",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "agent"
+      ],
+      "rules": [
+        "AGENT-001"
+      ],
+      "acceptance": "高影响操作需确认且不可重复执行。"
+    },
+    {
+      "id": "BL-AG-02",
+      "projectType": "agent",
+      "feature": "评估集与回归",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "agent"
+      ],
+      "rules": [],
+      "acceptance": "评估集记录通过率；版本变更对比回归。"
+    },
+    {
+      "id": "BL-MP-17",
+      "projectType": "miniprogram",
+      "feature": "课程 / 服务预约",
+      "requirement": "conditional",
+      "condition": "有课程、教练、场地或服务预约",
+      "modules": [
+        "reservation"
+      ],
+      "rules": [
+        "RSV-001",
+        "RSV-002"
+      ],
+      "acceptance": "可约名额实时准确；取消、候补、签到规则在预约页可见。"
+    },
+    {
+      "id": "BL-BE-09",
+      "projectType": "backend",
+      "feature": "库存 / 名额预占与过期释放",
+      "requirement": "conditional",
+      "condition": "售卖有限数量的商品、课程或名额",
+      "modules": [
+        "inventory",
+        "reservation"
+      ],
+      "rules": [
+        "ORDER-008",
+        "RSV-001"
+      ],
+      "acceptance": "并发不超卖；超时自动释放；流水可对账。"
+    },
+    {
+      "id": "BL-BE-10",
+      "projectType": "backend",
+      "feature": "售后与部分退款",
+      "requirement": "conditional",
+      "condition": "支持退款或退货",
+      "modules": [
+        "after-sales"
+      ],
+      "rules": [
+        "RFD-006",
+        "RFD-004"
+      ],
+      "acceptance": "按行可退额度控制；部分退款金额与分摊一致。"
+    },
+    {
+      "id": "BL-AD-13",
+      "projectType": "admin",
+      "feature": "售后审核与退款跟踪",
+      "requirement": "conditional",
+      "condition": "支持退款或退货",
+      "modules": [
+        "after-sales"
+      ],
+      "rules": [
+        "RFD-001",
+        "RFD-006"
+      ],
+      "acceptance": "审核、驳回原因、退款状态与重试可见；全部写审计。"
+    },
+    {
+      "id": "BL-AD-14",
+      "projectType": "admin",
+      "feature": "排课与预约管理",
+      "requirement": "conditional",
+      "condition": "有课程、教练、场地或服务预约",
+      "modules": [
+        "reservation"
+      ],
+      "rules": [
+        "RSV-002"
+      ],
+      "acceptance": "排课、容量调整、代客预约 / 取消、签到、爽约记录。"
+    },
+    {
+      "id": "BL-MP-18",
+      "projectType": "miniprogram",
+      "feature": "用户协议、隐私政策与同意记录",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "legal"
+      ],
+      "rules": [
+        "LEGAL-001",
+        "LEGAL-002",
+        "PII-003"
+      ],
+      "acceptance": "首次登录主动同意并留痕；隐私保护指引已在小程序后台填写；可撤回与注销。"
+    },
+    {
+      "id": "BL-MP-19",
+      "projectType": "miniprogram",
+      "feature": "小程序发布：类目、体验版验收、审核、发布与回退",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "deploy",
+        "compliance"
+      ],
+      "rules": [
+        "COMP-002",
+        "OPS-003"
+      ],
+      "acceptance": "类目与资质匹配；体验版走通关键流程；审核通过；回退方式已确认。"
+    },
+    {
+      "id": "BL-MP-20",
+      "projectType": "miniprogram",
+      "feature": "接入已批准的界面设计并通过覆盖检查",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "design-integration"
+      ],
+      "rules": [
+        "INT-001",
+        "INT-002",
+        "INT-003"
+      ],
+      "acceptance": "设计已批准且未改动；操作与页面覆盖 100%；无模拟数据。"
+    },
+    {
+      "id": "BL-AD-15",
+      "projectType": "admin",
+      "feature": "接入已批准的界面设计并通过覆盖检查",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "design-integration"
+      ],
+      "rules": [
+        "INT-001",
+        "INT-002"
+      ],
+      "acceptance": "后台页面与操作覆盖 100%；按钮权限与角色一致。"
+    },
+    {
+      "id": "BL-AD-16",
+      "projectType": "admin",
+      "feature": "协议版本发布与同意记录查询",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "legal"
+      ],
+      "rules": [
+        "LEGAL-001",
+        "LEGAL-002"
+      ],
+      "acceptance": "新建、发布协议版本写审计；可按用户查询同意记录。"
+    },
+    {
+      "id": "BL-BE-11",
+      "projectType": "backend",
+      "feature": "部署、HTTPS、监控告警、备份与回滚",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "deploy"
+      ],
+      "rules": [
+        "OPS-001",
+        "OPS-002",
+        "OPS-003"
+      ],
+      "acceptance": "按发布流程上线；证书与告警就绪；恢复与回滚演练有记录。"
+    },
+    {
+      "id": "BL-BE-12",
+      "projectType": "backend",
+      "feature": "资质、备案与许可证清单",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "compliance",
+        "license"
+      ],
+      "rules": [
+        "COMP-001",
+        "LIC-001"
+      ],
+      "acceptance": "每项有适用判断、负责方、进度与证据。"
+    }
+  ]
+}

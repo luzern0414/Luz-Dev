@@ -1,0 +1,293 @@
+{
+  "schema": "luz-dev-knowledge-queries/1",
+  "queries": [
+    {
+      "platform": "bing",
+      "query": "Luz-Dev-后端业务逻辑知识库与系统方案调研 技术方案 系统架构 模块设计",
+      "module": "topic",
+      "runs": 3,
+      "lastRunAt": "2026-10-26T16:51:07+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "gitee",
+      "query": "Luz-Dev-后端业务逻辑知识库与系统方案调研",
+      "module": "topic",
+      "runs": 3,
+      "lastRunAt": "2026-10-26T16:51:07+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "csdn",
+      "query": "Luz-Dev-后端业务逻辑知识库与系统方案调研 系统设计 数据库设计",
+      "module": "topic",
+      "runs": 3,
+      "lastRunAt": "2026-10-26T16:51:07+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "zhihu",
+      "query": "Luz-Dev-后端业务逻辑知识库与系统方案调研 系统 设计 经验",
+      "module": "topic",
+      "runs": 3,
+      "lastRunAt": "2026-10-26T16:51:07+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "github",
+      "query": "mall 电商 小程序 spring boot vue",
+      "module": "system",
+      "runs": 3,
+      "lastRunAt": "2026-10-26T16:51:07+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "github",
+      "query": "gym management system booking membership",
+      "module": "system",
+      "runs": 3,
+      "lastRunAt": "2026-10-26T16:51:07+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "gitee",
+      "query": "健身房 管理系统 预约 会员卡 开源",
+      "module": "system",
+      "runs": 3,
+      "lastRunAt": "2026-10-26T16:51:07+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "csdn",
+      "query": "扫码点餐 系统设计 桌台 加菜 厨房出餐",
+      "module": "system",
+      "runs": 3,
+      "lastRunAt": "2026-10-26T16:51:07+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "zhihu",
+      "query": "健身房 SaaS 系统 核心功能",
+      "module": "system",
+      "runs": 3,
+      "lastRunAt": "2026-10-26T16:51:07+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "juejin",
+      "query": "SaaS 多租户 数据隔离 权限 设计",
+      "module": "system",
+      "runs": 3,
+      "lastRunAt": "2026-10-26T16:51:07+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "cnblogs",
+      "query": "购物车 Redis 数据库 设计 结算",
+      "module": "cart",
+      "runs": 3,
+      "lastRunAt": "2026-10-26T16:51:07+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "bing",
+      "query": "规范促销行为暂行规定 抽奖式有奖销售 最高奖 site:gov.cn",
+      "module": "lottery",
+      "runs": 3,
+      "lastRunAt": "2026-10-26T16:51:07+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "github",
+      "query": "restaurant ordering system mini program",
+      "module": "system",
+      "runs": 3,
+      "lastRunAt": "2026-10-26T16:51:07+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "github",
+      "query": "Luz-Dev-后端业务逻辑知识库与系统方案调研",
+      "module": "topic",
+      "runs": 3,
+      "lastRunAt": "2026-10-26T16:51:07+08:00",
+      "outcome": "cooled"
+    },
+    {
+      "platform": "cnblogs",
+      "query": "库存扣减 防超卖 乐观锁 条件更新 对比",
+      "module": "inventory",
+      "runs": 3,
+      "lastRunAt": "2026-10-26T16:51:07+08:00",
+      "outcome": "cooled"
+    },
+    {
+      "platform": "bing",
+      "query": "单用途商业预付卡管理办法 site:gov.cn",
+      "module": "recharge",
+      "runs": 3,
+      "lastRunAt": "2026-10-26T16:51:07+08:00",
+      "outcome": "cooled"
+    },
+    {
+      "platform": "gitee",
+      "query": "商城 小程序 管理后台 开源",
+      "module": "system",
+      "runs": 3,
+      "lastRunAt": "2026-10-26T16:51:07+08:00",
+      "outcome": "cooled"
+    },
+    {
+      "platform": "csdn",
+      "query": "健身房 管理系统 设计 会员卡 次卡 课程预约 签到",
+      "module": "system",
+      "runs": 3,
+      "lastRunAt": "2026-10-26T16:51:07+08:00",
+      "outcome": "cooled"
+    },
+    {
+      "platform": "zhihu",
+      "query": "电商系统 从零设计 核心模块",
+      "module": "system",
+      "runs": 3,
+      "lastRunAt": "2026-10-26T16:51:07+08:00",
+      "outcome": "cooled"
+    },
+    {
+      "platform": "juejin",
+      "query": "外卖系统 架构 订单 配送 设计",
+      "module": "system",
+      "runs": 3,
+      "lastRunAt": "2026-10-26T16:51:07+08:00",
+      "outcome": "cooled"
+    },
+    {
+      "platform": "cnblogs",
+      "query": "接口幂等 设计 token 唯一索引 状态机",
+      "module": "consistency",
+      "runs": 3,
+      "lastRunAt": "2026-10-26T16:51:07+08:00",
+      "outcome": "cooled"
+    },
+    {
+      "platform": "bing",
+      "query": "同城配送 开放平台 订单回调 状态 达达 顺丰同城 接口文档",
+      "module": "delivery",
+      "runs": 3,
+      "lastRunAt": "2026-10-26T16:51:07+08:00",
+      "outcome": "cooled"
+    },
+    {
+      "platform": "juejin",
+      "query": "OpenAPI 生成 前端 接口 类型 TypeScript 小程序",
+      "module": "design-integration",
+      "runs": 2,
+      "lastRunAt": "2026-10-26T17:03:34+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "csdn",
+      "query": "小程序 前端 接口 封装 token 刷新 错误处理",
+      "module": "design-integration",
+      "runs": 2,
+      "lastRunAt": "2026-10-26T17:03:34+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "bing",
+      "query": "微信小程序 发布上线 流程 体验版 审核 版本回退 site:developers.weixin.qq.com",
+      "module": "deploy",
+      "runs": 2,
+      "lastRunAt": "2026-10-26T17:03:34+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "google",
+      "query": "工业和信息化部 关于开展移动互联网应用程序备案工作的通知 小程序",
+      "module": "compliance",
+      "runs": 2,
+      "lastRunAt": "2026-10-26T17:03:34+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "google",
+      "query": "增值电信业务经营许可证 ICP经营许可证 EDI 什么情况需要 电商 小程序",
+      "module": "compliance",
+      "runs": 2,
+      "lastRunAt": "2026-10-26T17:03:34+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "google",
+      "query": "网络安全等级保护 定级 备案 二级 三级 要求 公安",
+      "module": "compliance",
+      "runs": 2,
+      "lastRunAt": "2026-10-26T17:03:34+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "cnblogs",
+      "query": "PostgreSQL 备份 恢复 定时 pg_dump 异地",
+      "module": "deploy",
+      "runs": 2,
+      "lastRunAt": "2026-10-26T17:03:34+08:00",
+      "outcome": "cooled"
+    },
+    {
+      "platform": "juejin",
+      "query": "生产环境 上线检查清单 监控 告警 备份 回滚",
+      "module": "deploy",
+      "runs": 2,
+      "lastRunAt": "2026-10-26T17:03:34+08:00",
+      "outcome": "cooled"
+    },
+    {
+      "platform": "csdn",
+      "query": "Docker Compose 部署 FastAPI PostgreSQL Nginx HTTPS 生产环境",
+      "module": "deploy",
+      "runs": 2,
+      "lastRunAt": "2026-10-26T17:03:34+08:00",
+      "outcome": "cooled"
+    },
+    {
+      "platform": "bing",
+      "query": "小程序备案 ICP备案 流程 要求 site:developers.weixin.qq.com",
+      "module": "compliance",
+      "runs": 2,
+      "lastRunAt": "2026-10-26T17:03:34+08:00",
+      "outcome": "cooled"
+    },
+    {
+      "platform": "csdn",
+      "query": "小程序 用户协议 隐私政策 同意 记录 版本 弹窗 实现",
+      "module": "legal",
+      "runs": 2,
+      "lastRunAt": "2026-10-26T17:03:34+08:00",
+      "outcome": "cooled"
+    },
+    {
+      "platform": "bing",
+      "query": "小程序 服务类目 资质 审核 体育 健身 site:developers.weixin.qq.com",
+      "module": "compliance",
+      "runs": 2,
+      "lastRunAt": "2026-10-26T17:03:34+08:00",
+      "outcome": "cooled"
+    },
+    {
+      "platform": "zhihu",
+      "query": "后台系统 被攻击 漏洞 经验 教训",
+      "module": "web-security",
+      "runs": 8,
+      "lastRunAt": "2026-10-28T09:54:39+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "zhihu",
+      "query": "服务器 被入侵 挖矿 勒索 经验 教训",
+      "module": "host-security",
+      "runs": 7,
+      "lastRunAt": "2026-10-28T09:54:39+08:00",
+      "outcome": "ok"
+    }
+  ]
+}

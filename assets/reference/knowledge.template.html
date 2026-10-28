@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="luz-design-tokens" content="{{TOKEN_SOURCE}}">
+<title>Luz Dev 调研知识库</title>
+<style>
+:root{color-scheme:light;{{TOKENS_CSS}}}
+{{SHELL_CSS}}</style>
+</head>
+<body>
+<main class="doc">
+<h1>Luz Dev 调研知识库</h1>
+<section id="facts"><h2>结论</h2>
+<form class="filters" role="search" onsubmit="return false"><input id="q" type="search" aria-label="关键词" placeholder="主题、结论或模块"><select id="kind" aria-label="类型"><option value="">全部类型</option>{{KIND_OPTIONS}}</select></form>
+<div class="table-wrap"><table><thead><tr><th scope="col">类型</th><th scope="col">主题</th><th scope="col">结论</th><th scope="col">模块</th><th scope="col">状态</th></tr></thead><tbody>{{FACT_ROWS}}</tbody></table></div></section>
+<section id="sources"><h2>原文</h2><div class="table-wrap"><table><thead><tr><th scope="col">原文</th><th scope="col">类型</th><th scope="col">模块</th><th scope="col">状态</th></tr></thead><tbody>{{SOURCE_ROWS}}</tbody></table></div></section>
+</main>
+<script>
+(() => {
+  const rows = [...document.querySelectorAll('tr[data-search]')];
+  const q = document.getElementById('q');
+  const kind = document.getElementById('kind');
+  const apply = () => {
+    const text = q.value.trim().toLowerCase();
+    for (const row of rows) row.hidden = !((!text || row.dataset.search.includes(text)) && (!kind.value || row.dataset.kind === kind.value));
+  };
+  q.addEventListener('input', apply);
+  kind.addEventListener('input', apply);
+})();
+</script>
+</body>
+</html>
