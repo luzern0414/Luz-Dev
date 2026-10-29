@@ -4766,6 +4766,43 @@
       ]
     },
     {
+      "id": "REL-002",
+      "domain": "release",
+      "level": "MUST",
+      "platforms": [
+        "admin",
+        "backend"
+      ],
+      "modules": [
+        "deploy"
+      ],
+      "title": "前后端暴露版本，后台显示并提示新版本",
+      "rule": "构建时把语义化版本、提交编号与构建时间写进前端与后端；后端提供版本接口（例如 GET /api/v1/admin/system/version，返回版本、提交、构建时间、环境与接口版本）并在每个响应头带版本；后台侧栏底部显示前后端版本，点开看上线日期、环境与更新说明；前端发现服务端版本变化时提示刷新，不强制刷新、不丢草稿；接口版本不兼容时返回明确错误码并提示刷新。",
+      "why": "出问题时运营与开发要先知道线上是哪一版；用户停留在旧页面时，不提示新版本会调用已变更的接口而出错。",
+      "do": [
+        "测试与预发环境在顶栏显示环境标识",
+        "更新说明与版本一一对应"
+      ],
+      "dont": [
+        "版本写死在页面里不随构建更新",
+        "发现新版本就强制刷新导致填写内容丢失"
+      ],
+      "verify": [
+        "后台显示的版本与部署的提交一致",
+        "部署新版本后旧页面出现刷新提示，草稿保留"
+      ],
+      "sources": [
+        {
+          "title": "Luz System · 网页管理后台设计规范 版本信息",
+          "url": "https://github.com/luzern0414/Luz-System/blob/master/references/admin-design.html"
+        },
+        {
+          "title": "Semantic Versioning 2.0.0",
+          "url": "https://semver.org/lang/zh-CN/"
+        }
+      ]
+    },
+    {
       "id": "INT-001",
       "domain": "integration",
       "level": "MUST",
