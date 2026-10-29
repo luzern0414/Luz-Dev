@@ -88,6 +88,15 @@
       "last_confirmed": "2026-10-28"
     },
     {
+      "key": "design-revision-plan-revision",
+      "kind": "lesson",
+      "text": "已批准的设计会话改版（新增页面、动作或事件名）后，先对照绑定表与后端接口列出缺口，写成方案修订：新接口逐个对应动作编号、数据变更、前端改版做法与测试，再请用户批准；不要沿用上一版批准直接开发",
+      "why": "plan-approved-before-build：批准绑定方案内容，设计新增的动作不在旧批准范围内",
+      "uses": 1,
+      "first_seen": "2026-10-29",
+      "last_confirmed": "2026-10-29"
+    },
+    {
       "key": "existing-system-auth-review",
       "kind": "lesson",
       "text": "给已有系统补账号体系时，先建 review 方案对照 AUTH/AUTHZ/ADMIN 规则：用户名不存在也做同耗时比对、注册按来源限流防刷额度、附件等上传物核对归属、锁定提示剩余时间",

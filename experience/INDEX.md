@@ -45,6 +45,7 @@
 | 偏好 | reading-page-check-document | 方案页、规范页和知识库页按 Luz Design 阅读页规则生成，标题在首行、无应用外壳、字号只用 14/16/20/24/32，并通过 Luz Design 的 check_document.py，有 ERROR 不能提交。 | 1 | 2026-10-28 |
 | 偏好 | real-backend-data-only | 生产页面只显示真实后端数据；原型里的模拟数据、DEMO 数据和 mock 引用必须全部换成接口数据。 | 1 | 2026-10-28 |
 | 教训 | delivery-mark-only-evidenced | 核对表只把有测试或实测证据的条目标为完成，运维类（恢复演练、HTTPS、回滚、日志、限流）未做就保持计划中并在交付时列为缺口 | 1 | 2026-10-28 |
+| 教训 | design-revision-plan-revision | 已批准的设计会话改版（新增页面、动作或事件名）后，先对照绑定表与后端接口列出缺口，写成方案修订：新接口逐个对应动作编号、数据变更、前端改版做法与测试，再请用户批准；不要沿用上一版批准直接开发 | 1 | 2026-10-29 |
 | 教训 | existing-system-auth-review | 给已有系统补账号体系时，先建 review 方案对照 AUTH/AUTHZ/ADMIN 规则：用户名不存在也做同耗时比对、注册按来源限流防刷额度、附件等上传物核对归属、锁定提示剩余时间 | 1 | 2026-10-28 |
 | 教训 | more-sources-need-read-priority | 获客类系统扩充数据源后，结果数受阅读原文名额限制而非检索；同一公告应优先读官方平台原文，聚合站转载正文常删减、核验率低 | 1 | 2026-10-29 |
 | 教训 | plan-spec-sync-readd | spec --file 会按方案模块重新同步库内详设，替换自定义详设后要再逐个 spec --remove 不适用的库内详设并确认 moduleSpecs；方案页面避免 哈希、sha256、数据来源、输出目录 等被 check_document 拦截的词 | 1 | 2026-10-28 |
