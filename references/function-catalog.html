@@ -2411,6 +2411,105 @@ footer.catalog-footer{padding:20px 2px 4px;color:var(--ink-3);font-size:11px}
           ]
         }
       ]
+    },
+    {
+      "id": "config",
+      "name": "远程配置",
+      "backendModule": "23-app-settings",
+      "status": "design",
+      "description": "运行参数与功能开关集中配置：注册表、校验、发布版本、灰度、回滚、客户端下发与兜底。",
+      "sourceRefs": [
+        "references/module-specs/config.json",
+        "references/standards.json"
+      ],
+      "functions": [
+        {
+          "id": "config.client-fetch",
+          "name": "客户端拉取配置",
+          "status": "design",
+          "rows": [
+            {
+              "label": "业务场景",
+              "value": "小程序与 App 启动或回到前台时取得最新参数与开关，不发版就能调整上传上限、超时、开关。"
+            },
+            {
+              "label": "触发与输入",
+              "value": "GET /api/v1/app/config，带 platform、client_version、config_version。"
+            },
+            {
+              "label": "核心逻辑",
+              "value": "按灰度规则选出用户命中的版本；只下发可见键；版本相同返回未修改。"
+            },
+            {
+              "label": "接口与路由",
+              "value": "GET /api/v1/app/config；响应带 config_version，客户端在后续请求头里回传。"
+            },
+            {
+              "label": "数据与并发",
+              "value": "读缓存；发布后失效；按 client_version 过滤新键。"
+            },
+            {
+              "label": "权限与安全",
+              "value": "不下发密钥与内部地址；按渠道与门店范围过滤。"
+            },
+            {
+              "label": "状态与失败",
+              "value": "服务不可用时客户端用缓存或安装包默认值；非法值丢弃并上报。"
+            },
+            {
+              "label": "验证与证据",
+              "value": "断网启动照常可用；改配置后客户端下次拉取得到新值；旧客户端拿不到新键。"
+            },
+            {
+              "label": "复用提示",
+              "value": "客户端只显示与预检查，执行以服务端同一份配置为准。"
+            }
+          ]
+        },
+        {
+          "id": "config.publish-rollback",
+          "name": "配置发布、灰度与回滚",
+          "status": "design",
+          "rows": [
+            {
+              "label": "业务场景",
+              "value": "运维调整超时或开关，先给部分门店试用，没问题再全量，有问题一键回滚。"
+            },
+            {
+              "label": "触发与输入",
+              "value": "后台修改草稿、查看差异、发布（可带灰度规则）、扩大或回滚。"
+            },
+            {
+              "label": "核心逻辑",
+              "value": "按注册表校验；发布生成版本快照；高风险键两人审批；回滚生成指向旧快照的新版本。"
+            },
+            {
+              "label": "接口与路由",
+              "value": "PUT /api/v1/admin/config/{key}、GET diff、POST releases、POST releases/{id}/rollback。"
+            },
+            {
+              "label": "数据与并发",
+              "value": "config_releases 只追加；config_version 单调递增。"
+            },
+            {
+              "label": "权限与安全",
+              "value": "按配置分组授权；全部操作进审计。"
+            },
+            {
+              "label": "状态与失败",
+              "value": "draft、gray、full、rolled_back；超范围返回 CONFIG_VALUE_OUT_OF_RANGE。"
+            },
+            {
+              "label": "验证与证据",
+              "value": "灰度只影响命中的用户；回滚后客户端拿到旧值；审计记录完整。"
+            },
+            {
+              "label": "复用提示",
+              "value": "发布开关全量后按期清理。"
+            }
+          ]
+        }
+      ]
     }
   ]
 }</script>

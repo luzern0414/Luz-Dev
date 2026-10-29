@@ -1,0 +1,310 @@
+{
+  "id": "config",
+  "order": 21,
+  "name": "远程配置",
+  "modules": [
+    "settings"
+  ],
+  "summary": "运行参数与功能开关集中在配置中心：注册表定义类型、默认值、范围与作用范围；发布有版本，可灰度、可回滚、有审计；客户端拉取有版本编号与兜底默认值。",
+  "features": [
+    {
+      "name": "配置注册表",
+      "description": "每个键登记类型、默认值、范围与单位、作用范围、生效方式、可见端（仅服务端或下发客户端）、风险级别；未登记的键不能写入。"
+    },
+    {
+      "name": "发布、灰度与回滚",
+      "description": "草稿与线上对比后发布，生成版本编号；可按百分比、门店、用户组或客户端版本灰度；一键回滚到任一历史版本。"
+    },
+    {
+      "name": "客户端下发",
+      "description": "按端与客户端版本下发可见的键，带配置版本编号；没变化时返回未修改；安装包内置默认值兜底。"
+    }
+  ],
+  "flows": [
+    {
+      "name": "修改并发布配置",
+      "steps": [
+        "后台编辑配置值，服务端按注册表校验类型与范围，写草稿。",
+        "调用 `GET /api/v1/admin/config/diff` 查看草稿与线上的差异；高风险键需要第二人审批。",
+        "调用 `POST /api/v1/admin/config/releases` 发布（可带灰度规则），生成版本编号，写审计；服务端缓存失效并广播变更。",
+        "灰度期间观察错误率；`POST /api/v1/admin/config/releases/{id}/promote` 扩大到全量，或 `POST /api/v1/admin/config/releases/{id}/rollback` 回滚。"
+      ]
+    },
+    {
+      "name": "客户端拉取",
+      "steps": [
+        "客户端启动先用本地缓存的上次有效配置，同时调用 `GET /api/v1/app/config?platform=&client_version=&config_version=`。",
+        "服务端按灰度规则选出该用户命中的版本；与客户端版本相同返回未修改，不同则返回可见键的值与新版本编号。",
+        "客户端校验后保存；立即生效的键马上应用，下次启动生效的键等冷启动；结算与支付中不切换。"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "page": "配置中心（后台）",
+      "field": "value",
+      "label": "配置值",
+      "type": "按注册表类型",
+      "required": true,
+      "rule": "数字在登记的范围内并带单位；枚举只能选登记的值；开关只有开与关。"
+    },
+    {
+      "page": "配置中心（后台）",
+      "field": "gray_rule",
+      "label": "灰度规则",
+      "type": "选择",
+      "required": false,
+      "rule": "百分比 1–100，或门店、用户组、客户端版本区间。"
+    }
+  ],
+  "apis": [
+    {
+      "method": "GET",
+      "path": "/api/v1/app/config",
+      "caller": "小程序",
+      "purpose": "拉取客户端配置",
+      "request": "platform，client_version，config_version",
+      "response": "config_version，values（仅可见键）；未变化返回未修改",
+      "errors": "—"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/config",
+      "caller": "后台",
+      "purpose": "配置列表",
+      "request": "group，keyword，scope",
+      "response": "键、名称、当前值、默认值、单位、作用范围、生效方式、最近修改人与时间",
+      "errors": "FORBIDDEN"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/admin/config/{key}",
+      "caller": "后台",
+      "purpose": "修改草稿",
+      "request": "scope，value，reason",
+      "response": "草稿值",
+      "errors": "CONFIG_KEY_UNKNOWN，CONFIG_VALUE_OUT_OF_RANGE"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/config/diff",
+      "caller": "后台",
+      "purpose": "草稿与线上差异",
+      "request": "无",
+      "response": "变更的键、旧值、新值、风险级别",
+      "errors": "—"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/config/releases",
+      "caller": "后台",
+      "purpose": "发布",
+      "request": "gray_rule（可选），note",
+      "response": "release_id，config_version",
+      "errors": "APPROVAL_REQUIRED，NOTHING_TO_RELEASE"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/config/releases/{id}/rollback",
+      "caller": "后台",
+      "purpose": "回滚到该版本",
+      "request": "reason",
+      "response": "新的 config_version",
+      "errors": "RELEASE_NOT_FOUND"
+    }
+  ],
+  "results": [
+    {
+      "case": "发布成功",
+      "page": "配置中心",
+      "display": "显示新版本编号与灰度范围；客户端在下次拉取时得到新值。"
+    },
+    {
+      "case": "客户端拉取失败",
+      "page": "任意页面",
+      "display": "照常使用上次有效值或安装包默认值，不提示错误。"
+    }
+  ],
+  "writes": [
+    {
+      "when": "修改草稿或发布",
+      "table": "store_settings、config_releases、audit_logs",
+      "content": "作用范围与值；版本快照、灰度规则与状态；修改人与原因。"
+    }
+  ],
+  "tables": [
+    {
+      "name": "config_keys",
+      "label": "配置注册表",
+      "purpose": "每个配置键的定义",
+      "fields": [
+        {
+          "name": "key",
+          "type": "VARCHAR(64)",
+          "required": true,
+          "default": "—",
+          "comment": "键，如 upload.document_max_mb"
+        },
+        {
+          "name": "group_name",
+          "type": "VARCHAR(32)",
+          "required": true,
+          "default": "—",
+          "comment": "分组"
+        },
+        {
+          "name": "value_type",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "integer、number、boolean、enum、duration、text"
+        },
+        {
+          "name": "default_value",
+          "type": "JSONB",
+          "required": true,
+          "default": "—",
+          "comment": "默认值，与客户端安装包内置值一致"
+        },
+        {
+          "name": "constraints",
+          "type": "JSONB",
+          "required": true,
+          "default": "{}",
+          "comment": "范围、单位、枚举"
+        },
+        {
+          "name": "scopes",
+          "type": "VARCHAR(16)[]",
+          "required": true,
+          "default": "—",
+          "comment": "可用作用范围：global、store、channel、client_version"
+        },
+        {
+          "name": "apply_mode",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "immediate",
+          "comment": "immediate 或 next_launch"
+        },
+        {
+          "name": "client_visible",
+          "type": "BOOLEAN",
+          "required": true,
+          "default": "false",
+          "comment": "是否下发客户端"
+        },
+        {
+          "name": "risk_level",
+          "type": "VARCHAR(8)",
+          "required": true,
+          "default": "low",
+          "comment": "low、high；high 需两人审批"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(key)"
+      ]
+    },
+    {
+      "name": "config_releases",
+      "label": "配置发布",
+      "purpose": "每次发布的版本快照、灰度与状态",
+      "fields": [
+        {
+          "name": "config_version",
+          "type": "INTEGER",
+          "required": true,
+          "default": "—",
+          "comment": "单调递增的版本编号"
+        },
+        {
+          "name": "snapshot",
+          "type": "JSONB",
+          "required": true,
+          "default": "—",
+          "comment": "本次发布后的全部值"
+        },
+        {
+          "name": "gray_rule",
+          "type": "JSONB",
+          "required": false,
+          "default": "—",
+          "comment": "百分比、门店、用户组或客户端版本区间"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "gray",
+          "comment": "gray、full、rolled_back"
+        },
+        {
+          "name": "released_by",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "发布人"
+        },
+        {
+          "name": "approved_by",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "高风险键的审批人"
+        },
+        {
+          "name": "note",
+          "type": "VARCHAR(200)",
+          "required": false,
+          "default": "—",
+          "comment": "原因"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(config_version)"
+      ]
+    }
+  ],
+  "states": [
+    {
+      "entity": "配置发布",
+      "from": "draft",
+      "event": "发布",
+      "to": "gray",
+      "condition": "通过校验；高风险键已审批"
+    },
+    {
+      "entity": "配置发布",
+      "from": "gray",
+      "event": "扩大到全量",
+      "to": "full",
+      "condition": "灰度期错误率正常"
+    },
+    {
+      "entity": "配置发布",
+      "from": "full",
+      "event": "回滚",
+      "to": "rolled_back",
+      "condition": "生成指向旧快照的新版本"
+    }
+  ],
+  "exceptions": [
+    {
+      "case": "值超出范围或类型不对",
+      "handling": "返回 CONFIG_VALUE_OUT_OF_RANGE 与允许范围，不保存。"
+    },
+    {
+      "case": "客户端收到无法解析的值",
+      "handling": "客户端丢弃并继续用上次有效值，上报配置版本与键名。"
+    },
+    {
+      "case": "旧版本客户端不认识新键",
+      "handling": "按 client_version 下发；新键只给支持它的版本。"
+    },
+    {
+      "case": "配置服务不可用",
+      "handling": "服务端用本地缓存的最后版本；客户端用缓存或默认值，业务不中断。"
+    }
+  ]
+}

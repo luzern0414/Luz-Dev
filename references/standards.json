@@ -4803,6 +4803,42 @@
       ]
     },
     {
+      "id": "REL-003",
+      "domain": "release",
+      "level": "MUST",
+      "platforms": [
+        "miniprogram",
+        "mobile"
+      ],
+      "modules": [
+        "deploy"
+      ],
+      "title": "小程序与 App 的代码更新：提示重启、最低可用版本、热更新边界",
+      "rule": "小程序用 wx.getUpdateManager 在新版本下载完成时提示重启，用户确认后 applyUpdate，不在填写或支付中打断；必须修复的问题在微信后台设最低可用版本。App 启动检查最新与最低可用版本，低于最低版本时引导更新；热更新只更新资源与配置，不下载执行会新增或改变功能的代码。",
+      "why": "小程序新版本默认要等下次冷启动才生效，旧版本可能长期在用；App 下载执行改变功能的代码违反苹果审核指南 2.5.2。",
+      "do": [
+        "更新提示写清更新了什么",
+        "最低可用版本与后端接口兼容性一起评估"
+      ],
+      "dont": [
+        "用热更新上线未经审核的新功能"
+      ],
+      "verify": [
+        "发布新版本后旧客户端出现重启提示且不打断支付",
+        "低于最低版本的客户端被引导更新"
+      ],
+      "sources": [
+        {
+          "title": "微信小程序 · 更新机制",
+          "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/runtime/update-mechanism.html"
+        },
+        {
+          "title": "Apple · App Review Guidelines 2.5.2",
+          "url": "https://developer.apple.com/app-store/review/guidelines/"
+        }
+      ]
+    },
+    {
       "id": "INT-001",
       "domain": "integration",
       "level": "MUST",
@@ -5170,6 +5206,47 @@
         {
           "title": "Luz Dev · 运维与上线",
           "url": "file:///D:/Codes/Luz-Dev/references/operations.md"
+        }
+      ]
+    },
+    {
+      "id": "OPS-005",
+      "domain": "ops",
+      "level": "MUST",
+      "platforms": [
+        "all"
+      ],
+      "modules": [
+        "settings"
+      ],
+      "title": "运行参数集中配置：注册表、校验、灰度、回滚与客户端兜底",
+      "rule": "会变的数字、开关与名单（上传上限、超时、轮询间隔、功能开关、最低可用版本、智能体上限）进配置中心，不写死在客户端或服务端代码里。每个键登记类型、默认值、范围、作用范围、生效方式、可见端与风险；同一参数全系统只存一份，客户端只用来显示与预检查，服务端按同一值执行。发布有版本、可灰度、可一键回滚、有审计；客户端内置默认值，启动先用缓存、异步拉新，失败照常使用；密钥不下发客户端。",
+      "why": "写死的参数每次调整都要发版，紧急情况下来不及；前后端各存一份会出现前端放行、后端拒收；没有回滚的配置改错就是线上事故。",
+      "do": [
+        "按客户端版本下发新键",
+        "全量后清理临时的发布开关"
+      ],
+      "dont": [
+        "把密钥或内部地址放进下发配置",
+        "结算或支付进行中切换配置"
+      ],
+      "verify": [
+        "改一项配置后前端显示与后台执行同时变化",
+        "配置服务不可用时客户端用默认值照常使用",
+        "回滚后客户端拿到旧值"
+      ],
+      "sources": [
+        {
+          "title": "Luz System · 远程配置规范",
+          "url": "https://github.com/luzern0414/Luz-System/blob/master/references/config-design.html"
+        },
+        {
+          "title": "Firebase · Remote Config 加载策略",
+          "url": "https://firebase.google.com/docs/remote-config/loading"
+        },
+        {
+          "title": "Apollo 配置中心介绍",
+          "url": "https://www.apolloconfig.com/#/zh/design/apollo-introduction"
         }
       ]
     }
