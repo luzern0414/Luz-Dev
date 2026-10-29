@@ -10,6 +10,10 @@ Every plan is two files that always move together:
 Lifecycle: ``draft`` → ``in-review`` → ``approved`` (→ ``revising`` → ``in-review`` …).
 Development may start only when ``gate`` passes: the plan is approved and its
 content still matches the hash recorded at approval.
+
+Every plan works from rule cards (``scripts/context.py``; saved to ``raw/00-rules/`` by ``new``) and records
+``adoptedRules`` (采用的规则, ``rule``) and ``sediment`` (本次沉淀, ``sediment``: experience notes written or
+confirmed in this call). ``submit`` and ``check --stage delivery`` refuse a plan without them.
 """
 
 from __future__ import annotations
@@ -34,6 +38,7 @@ from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from luz_shell import chip, favicon_for_tokens, fill, inline, load_tokens, render_table, resolve_design_root, shell_css, tokens_css  # noqa: E402
+import context as rule_cards  # noqa: E402  - rule cards (references/cards.json), shared core of every Luz skill
 import knowledge as kb  # noqa: E402
 import module_specs as ms  # noqa: E402
 
@@ -42,12 +47,14 @@ DEFAULT_OUTPUT_ROOT = Path(r"D:\Codes\skill输出\Luz-Dev")
 DEFAULT_CRAWL_ROOT = Path(r"D:\Codes\Luz-Crawl")
 DEFAULT_CRAWL_OUTPUT = Path(r"D:\Codes\skill输出\Luz-Crawl")
 RAW_DIRNAME = "raw"
+RULES_DIRNAME = "00-rules"  # raw/00-rules/<kind>.md: the rule cards this plan works from (scripts/context.py)
 LEGACY_DATA_DIRNAME = "_data"  # layout before 2026-10-26 evening; migrate with `migrate-layout`
 TEMPLATE = ROOT / "assets" / "tech-plan" / "template.html"
 STANDARDS = ROOT / "references" / "standards.json"
 STANDARD_MODULES = ROOT / "references" / "standard-modules.json"
 RESEARCH_SOURCES = ROOT / "references" / "research-sources.json"
 CATALOG = ROOT / "references" / "function-catalog.json"
+NOTES_FILE = ROOT / "experience" / "notes.json"  # record_experience.py note writes here; 本次沉淀 keys are checked against it
 SCHEMA = "luz-dev-plan/2"
 CRAWL_BATCH = 30
 LOGIN_GATED_PLATFORMS = {"zhihu", "xhs", "xiaohongshu", "douyin", "weibo"}  # often stop for a login or verification
@@ -506,9 +513,144 @@ def module_reading_list(modules: list[str]) -> dict[str, Any] | None:
             "text": "；".join(items) + "。方案中的状态机、并发控制与补偿在这些默认做法上按项目调整，并写明差异。"}
 
 
+def card_kinds_for(mode: str, project_types: list[str], chosen: list[str] | None = None) -> list[str]:
+    """Rule cards a plan works from: tech-plan always, then the --card choices or the defaults of the mode and project types."""
+    kinds = ["tech-plan"]
+    if chosen:
+        kinds += split_list(chosen)
+    else:
+        types = set(project_types)
+        if mode == "implementation":
+            if not types or types & ({"backend"} | FRONTEND_TYPES):
+                kinds.append("backend-module")
+            if types & FRONTEND_TYPES:
+                kinds.append("frontend-integration")
+            if "agent" in types:
+                kinds.append("agent-service")
+            kinds.append("launch-compliance")
+        elif mode == "operations":
+            kinds += ["launch-compliance", "review-diagnose"]
+        else:
+            kinds.append("review-diagnose")
+    kinds = list(dict.fromkeys(kinds))
+    known = rule_cards.card_kinds()
+    unknown = [kind for kind in kinds if kind not in known]
+    if unknown:
+        raise ValueError(f"未知规则卡: {unknown}；可选 {known}（python -X utf8 scripts/context.py list）")
+    return kinds
+
+
+def write_rule_cards(plan: Mapping[str, Any], raw_dir: Path) -> tuple[list[str], list[str]]:
+    """Save the plan's rule cards to raw/00-rules/<kind>.md (rule text hash on the first line) for the agent to read."""
+    saved: list[str] = []
+    problems: list[str] = []
+    for kind in plan.get("ruleCards") or []:
+        try:
+            saved.append(str(rule_cards.save_card(raw_dir, kind, list(plan.get("modules") or []))))
+        except (KeyError, OSError, ValueError) as exc:
+            problems.append(f"规则卡 {kind} 没有生成：{exc}；运行 python -X utf8 scripts/context.py check 修好 references/cards.json，"
+                            f"再运行 python -X utf8 scripts/context.py {kind} --session <方案目录>")
+    return saved, problems
+
+
+def adopted_rules(plan: Mapping[str, Any]) -> list[tuple[str, str]]:
+    """Filled rows of 采用的规则 (plan.json → adoptedRules): the rule-card rule or preference key, and how this plan applies it."""
+    rows = []
+    for item in plan.get("adoptedRules") or []:
+        if isinstance(item, Mapping):
+            rule, how = str(item.get("rule", "")).strip(), str(item.get("how", "")).strip()
+            if rule and how:
+                rows.append((rule, how))
+    return rows
+
+
+def rule_card_problems(plan: Mapping[str, Any], data_path: Path) -> list[str]:
+    """A plan works from current rule cards and records the rules it applied; submit and delivery refuse otherwise."""
+    folder = data_path.parent.parent
+    rules_dir = data_path.parent / RULES_DIRNAME
+    number = plan.get("number") or "NN"
+
+    def command(kind: str) -> str:
+        return f'python -X utf8 scripts/context.py {kind} --session "{folder}"'
+
+    errors: list[str] = []
+    cards = sorted(rules_dir.glob("*.md")) if rules_dir.is_dir() else []
+    wanted = list(plan.get("ruleCards") or [])
+    present = {card.stem for card in cards}
+    if not cards and not wanted:
+        errors.append(f"缺少规则卡 {RAW_DIRNAME}/{RULES_DIRNAME}/：运行 {command('tech-plan')}（其他种类见 context.py list），读完再写方案")
+    for kind in wanted:
+        if kind not in present:
+            errors.append(f"缺少规则卡 {RAW_DIRNAME}/{RULES_DIRNAME}/{kind}.md：运行 {command(kind)}，读完再写方案")
+    known = set(rule_cards.card_kinds())
+    for card in cards:
+        if card.stem not in known:
+            continue
+        try:
+            current = rule_cards.card_is_current(card)
+        except (KeyError, OSError) as exc:
+            errors.append(f"规则卡 {card.stem} 无法核对：{exc}；运行 python -X utf8 scripts/context.py check")
+            continue
+        if not current:
+            errors.append(f"规则卡 {RAW_DIRNAME}/{RULES_DIRNAME}/{card.name} 已过期（规范页改过）：运行 {command(card.stem)} 重新生成，"
+                          "读变化的规则并复核方案")
+    if not adopted_rules(plan):
+        errors.append(f"采用的规则为空：逐条写出本方案落实了规则卡上的哪些规则或偏好——python -X utf8 scripts/tech_plan.py rule {number} "
+                      '--rule "<规则卡第 3 部分的小节标签 或 第 1 部分括号里的偏好 key>" --how "<本次怎么落实>"')
+    return errors
+
+
+def load_notes() -> dict[str, Mapping[str, Any]]:
+    """experience/notes.json by key; an unreadable store counts as empty."""
+    try:
+        doc = json.loads(NOTES_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {str(n.get("key")): n for n in doc.get("notes", []) if isinstance(n, Mapping)}
+
+
+def sediment_keys(plan: Mapping[str, Any]) -> list[str]:
+    """Keys listed in 本次沉淀 (plan.json → sediment)."""
+    keys = []
+    for item in plan.get("sediment") or []:
+        key = str(item.get("key", "") if isinstance(item, Mapping) else item).strip().strip("`").strip()
+        if key and key not in keys:
+            keys.append(key)
+    return keys
+
+
+def sediment_problems(plan: Mapping[str, Any], stage: str = "review") -> list[str]:
+    """Every call leaves experience behind (本次沉淀).
+
+    Submit: at least one note key, each in experience/notes.json and written or confirmed on or after the plan's creation date.
+    Delivery: the build and launch leave their own note too — at least one key confirmed on or after the approval date.
+    """
+    number = plan.get("number") or "NN"
+    record = (f'python -X utf8 scripts/record_experience.py note --kind preference|lesson|fact --key <主题> --text "<一句话原则>"，'
+              f"再 python -X utf8 scripts/tech_plan.py sediment {number} --key <主题>")
+    keys = sediment_keys(plan)
+    if not keys:
+        return [f"本次沉淀为空：每次调用至少写入或确认一条经验（用户新偏好、规则纠正与踩坑、有效做法、调研来源与范围、参数）——{record}"]
+    notes = load_notes()
+    since = str(plan.get("createdAt", ""))[:10]
+    errors = []
+    for key in keys:
+        note = notes.get(key)
+        if note is None:
+            errors.append(f"本次沉淀的 key「{key}」不在 experience/notes.json：先用 python -X utf8 scripts/record_experience.py note --key {key} … 写入")
+        elif since and str(note.get("last_confirmed", "")) < since:
+            errors.append(f"本次沉淀的 key「{key}」最近确认于 {note.get('last_confirmed')}，早于本方案创建日 {since}："
+                          f"用同一 key 再运行一次 record_experience.py note 确认或改写")
+    approved = str((plan.get("approval") or {}).get("at", ""))[:10]
+    if stage == "delivery" and not errors and approved:
+        if not any(str(notes[key].get("last_confirmed", "")) >= approved for key in keys):
+            errors.append(f"交付前还要沉淀开发与上线阶段的经验：至少一条在批准日 {approved} 当天或之后写入或确认的经验——{record}")
+    return errors
+
+
 def new_plan_data(
     *, number: str, topic: str, mode: str, summary: str, project_types: list[str], modules: list[str],
-    output_root: Path, archetypes: list[str] | None = None,
+    output_root: Path, archetypes: list[str] | None = None, cards: list[str] | None = None,
 ) -> dict[str, Any]:
     created = now_iso()
     archetypes = list(archetypes or [])
@@ -541,6 +683,12 @@ def new_plan_data(
         "standardModules": [],
         "moduleSpecs": [],
         "decisions": [],
+        # Process records, kept out of the page and out of the approval hash (references/cards.json, experience/notes.json):
+        # ruleCards — raw/00-rules/<kind>.md this plan works from; adoptedRules (采用的规则) — {rule, how};
+        # sediment (本次沉淀) — {key, kind, text, recordedAt} of notes written or confirmed with record_experience.py note.
+        "ruleCards": card_kinds_for(mode, project_types, cards),
+        "adoptedRules": [],
+        "sediment": [],
         "approval": None,
         "revisions": [{"at": created, "version": "0.1", "change": "由 Luz Dev 方案生成器创建草稿。", "basis": "用户请求"}],
     }
@@ -581,6 +729,7 @@ def create_plan(
     modules: list[str] | None = None,
     design_root: Path | None = None,
     archetypes: list[str] | None = None,
+    cards: list[str] | None = None,
 ) -> dict[str, Any]:
     if mode not in TASK_MODES:
         raise ValueError(f"未知任务类型: {mode}")
@@ -591,6 +740,7 @@ def create_plan(
         raise ValueError(f"未知项目类型: {unknown_types}；可选 {list(PROJECT_TYPES)}")
     modules = split_list(modules)
     archetypes = split_list(archetypes)
+    cards = card_kinds_for(mode, project_types, cards)  # unknown kinds fail before a folder is reserved
     output_root.expanduser().mkdir(parents=True, exist_ok=True)
     output_root = output_root.resolve()
     with exclusive_lock(output_root):
@@ -606,10 +756,12 @@ def create_plan(
             plan = new_plan_data(
                 number=sequence, topic=topic, mode=mode, summary=summary,
                 project_types=project_types, modules=modules, output_root=output_root, archetypes=archetypes,
+                cards=cards,
             )
             content = render_plan(plan, design_root=design_root)
             atomic_write(html_path, content)
             atomic_write(data_path, json.dumps(plan, ensure_ascii=False, indent=2) + "\n")
+            saved, problems = write_rule_cards(plan, data_path.parent)
             return {
                 "sequence": sequence,
                 "path": str(html_path),
@@ -621,6 +773,10 @@ def create_plan(
                 "researchTracks": list(research_tracks(plan)),
                 "rules": len(plan["checklist"]["rules"]),
                 "baselines": len(plan["checklist"]["baselines"]),
+                "ruleCards": saved,
+                **({"ruleCardErrors": problems} if problems else {}),
+                "next": "先读完 ruleCards 里的每张规则卡再调研和写方案；采用的规则用 tech_plan.py rule 记录；"
+                        "结束前用 record_experience.py note 写经验，再用 tech_plan.py sediment 记进本次沉淀",
             }
 
 
@@ -1637,7 +1793,8 @@ def render_section(plan: Mapping[str, Any], section: Mapping[str, Any]) -> str:
 
 
 def render_plan(plan: Mapping[str, Any], design_root: Path | None = None) -> str:
-    template = TEMPLATE.read_text(encoding="utf-8")
+    # Authoring notes in the template (<!-- … -->, e.g. "the template is a skeleton; read the rule card") stay out of the page.
+    template = re.sub(r"<!--.*?-->\n?", "", TEMPLATE.read_text(encoding="utf-8"), flags=re.S)
     tokens, token_source = load_tokens(design_root)
     values = {
         "{{TOKENS_CSS}}": tokens_css(tokens),
@@ -1691,13 +1848,25 @@ def print_result(payload: Mapping[str, Any]) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
+def announce_rule_cards(payload: Mapping[str, Any]) -> None:
+    """Point the agent at the rule cards it must read before producing anything (stderr; stdout stays JSON)."""
+    print("下一步：先读完这些规则卡（用户偏好、教训、规范原文、工具、检查），再调研和写方案：", file=sys.stderr)
+    for path in payload.get("ruleCards", []):
+        print(f"  {path}", file=sys.stderr)
+    for problem in payload.get("ruleCardErrors", []):
+        print(f"  错误：{problem}", file=sys.stderr)
+    print("采用的规则：tech_plan.py rule NN --rule … --how …；本次沉淀：record_experience.py note … 后 tech_plan.py sediment NN --key …",
+          file=sys.stderr)
+
+
 def command_new(args: argparse.Namespace) -> int:
     payload = create_plan(
         args.topic, args.mode, args.output_root, args.summary.strip(),
         project_types=args.project_type, modules=args.modules, design_root=args.design_root,
-        archetypes=args.archetype,
+        archetypes=args.archetype, cards=args.card,
     )
     print_result(payload)
+    announce_rule_cards(payload)
     return 0
 
 
@@ -1710,9 +1879,25 @@ def command_render(args: argparse.Namespace) -> int:
     return 0
 
 
+def process_problems(plan: Mapping[str, Any], data_path: Path, stage: str) -> tuple[list[str], list[str]]:
+    """Rule cards, 采用的规则 and 本次沉淀 for a stage: blocking at review (submit) and delivery, reminders otherwise.
+
+    Plans created before rule cards existed (no adoptedRules field) only get reminders at delivery.
+    """
+    cards = rule_card_problems(plan, data_path)
+    if stage == "review" or (stage == "delivery" and "adoptedRules" in plan):
+        return cards + sediment_problems(plan, stage), []
+    if stage == "delivery":
+        return [], cards + sediment_problems(plan, stage)
+    return [], cards
+
+
 def command_check(args: argparse.Namespace) -> int:
-    plan, html_path, _ = _load(args.plan, args.output_root)
+    plan, html_path, data_path = _load(args.plan, args.output_root)
     errors, warnings = check_plan(plan, args.stage)
+    extra_errors, extra_warnings = process_problems(plan, data_path, args.stage)
+    errors += extra_errors
+    warnings += extra_warnings
     print_result({"plan": str(html_path), "stage": args.stage, "status": plan.get("status"), "ok": not errors, "errors": errors, "warnings": warnings})
     return 0 if not errors else 1
 
@@ -1725,6 +1910,7 @@ def command_gate(args: argparse.Namespace) -> int:
 def command_submit(args: argparse.Namespace) -> int:
     plan, html_path, data_path = _load(args.plan, args.output_root)
     errors, warnings = check_plan(plan, "review")
+    errors += process_problems(plan, data_path, "review")[0]  # rule cards current, 采用的规则 and 本次沉淀 filled
     save_plan(plan, html_path, data_path, args.design_root)
     page = check_page(html_path, args.design_root)
     if page is None:
@@ -1913,14 +2099,18 @@ def command_adopt(args: argparse.Namespace) -> int:
     plan = new_plan_data(
         number=number, topic=stem.split("-", 1)[1], mode=args.mode, summary=args.summary,
         project_types=project_types, modules=split_list(args.modules), output_root=output_root,
-        archetypes=split_list(args.archetype),
+        archetypes=split_list(args.archetype), cards=args.card,
     )
     data_path.parent.mkdir(parents=True, exist_ok=True)
     if html_path.is_file():
         os.replace(html_path, data_path.parent / "legacy.html")
     add_revision(plan, f"由旧版 HTML 方案迁移为数据化方案；原页面保存为 {RAW_DIRNAME}/legacy.html。", "tech_plan.py adopt")
     save_plan(plan, html_path, data_path, args.design_root)
-    print_result({"ok": True, "path": str(html_path), "data": str(data_path), "rules": len(plan["checklist"]["rules"])})
+    saved, problems = write_rule_cards(plan, data_path.parent)
+    payload = {"ok": True, "path": str(html_path), "data": str(data_path), "rules": len(plan["checklist"]["rules"]), "ruleCards": saved,
+               **({"ruleCardErrors": problems} if problems else {})}
+    print_result(payload)
+    announce_rule_cards(payload)
     return 0
 
 
@@ -2105,6 +2295,63 @@ def command_design(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_rule(args: argparse.Namespace) -> int:
+    """采用的规则: which rule-card rules (section labels or preference keys) this plan applies, and how (plan.json → adoptedRules)."""
+    plan, html_path, data_path = _load(args.plan, args.output_root)
+    rows = plan.setdefault("adoptedRules", [])
+    result: dict[str, Any] = {"ok": True}
+    if args.remove:
+        before = len(rows)
+        rows[:] = [row for row in rows if str(row.get("rule", "")).strip() != args.remove.strip()]
+        if len(rows) == before:
+            raise PlanError(f"采用的规则里没有「{args.remove}」")
+    elif args.rule is not None or args.how is not None:
+        rule, how = (args.rule or "").strip(), (args.how or "").strip()
+        if not rule or not how:
+            raise PlanError("记录采用的规则需要同时给 --rule（规则卡上的小节标签或偏好 key）与 --how（本次怎么落实）")
+        row = next((r for r in rows if str(r.get("rule", "")).strip() == rule), None)
+        if row is None:
+            rows.append({"rule": rule, "how": how})
+        else:
+            row["how"] = how
+        cards = "\n".join(p.read_text(encoding="utf-8") for p in sorted((data_path.parent / RULES_DIRNAME).glob("*.md")))
+        if rule not in cards:
+            result["warning"] = (f"规则卡里找不到「{rule}」：照抄规则卡第 3 部分的小节标签（例如 SKILL.md › Engineering rules）"
+                                 "或第 1 部分括号里的偏好 key，方便复核")
+    if args.remove or args.rule is not None or args.how is not None:
+        save_plan(plan, html_path, data_path, args.design_root)
+    result["adoptedRules"] = rows
+    result["ruleCards"] = [str(p) for p in sorted((data_path.parent / RULES_DIRNAME).glob("*.md"))]
+    print_result(result)
+    return 0
+
+
+def command_sediment(args: argparse.Namespace) -> int:
+    """本次沉淀: note keys this call wrote or confirmed with record_experience.py note (plan.json → sediment)."""
+    plan, html_path, data_path = _load(args.plan, args.output_root)
+    rows = plan.setdefault("sediment", [])
+    changed = False
+    if args.remove:
+        before = len(rows)
+        rows[:] = [row for row in rows if str(row.get("key", "")).strip() != args.remove.strip()]
+        if len(rows) == before:
+            raise PlanError(f"本次沉淀里没有「{args.remove}」")
+        changed = True
+    notes = load_notes()
+    for key in split_list(args.key):
+        note = notes.get(key)
+        if note is None:
+            raise PlanError(f"experience/notes.json 里没有 key「{key}」：先运行 python -X utf8 scripts/record_experience.py note "
+                            f'--kind preference|lesson|fact --key {key} --text "<一句话原则>"')
+        entry = {"key": key, "kind": note.get("kind", ""), "text": note.get("text", ""), "recordedAt": now_iso()[:10]}
+        rows[:] = [row for row in rows if str(row.get("key", "")).strip() != key] + [entry]
+        changed = True
+    if changed:
+        save_plan(plan, html_path, data_path, args.design_root)
+    print_result({"ok": True, "sediment": rows, "problems": sediment_problems(plan, "delivery" if plan.get("approval") else "review")})
+    return 0
+
+
 def command_list(args: argparse.Namespace) -> int:
     items = []
     for data_path in sorted(args.output_root.glob(f"*/{RAW_DIRNAME}/plan.json")) if args.output_root.is_dir() else []:
@@ -2127,6 +2374,7 @@ def build_parser() -> argparse.ArgumentParser:
     new.add_argument("--modules", action="append", help="业务模块，逗号分隔，例如 payment,coupon,order,face")
     new.add_argument("--archetype", action="append", help="系统原型：mall,food,booking,membership-store,saas-admin；自动加入该类系统的模块与同类系统调研")
     new.add_argument("--summary", default="本方案由 Luz Dev 在任务执行前生成，用于记录调研、选型、架构、契约、安全、测试与交付决策。")
+    new.add_argument("--card", action="append", help="规则卡种类，可重复或逗号分隔（context.py list）；替换按模式和项目类型推出的卡，tech-plan 总会写入")
     new.set_defaults(func=command_new)
 
     def with_plan(name: str, help_text: str) -> argparse.ArgumentParser:
@@ -2232,6 +2480,17 @@ def build_parser() -> argparse.ArgumentParser:
     design.add_argument("--skip", help="不接入前端的原因（例如纯后端任务）")
     design.set_defaults(func=command_design)
 
+    rule = with_plan("rule", "采用的规则：记录本方案落实了规则卡上的哪条规则或偏好、怎么落实（不加参数时列出）")
+    rule.add_argument("--rule", help="规则卡第 3 部分的小节标签（如 SKILL.md › Engineering rules）或第 1 部分括号里的偏好 key")
+    rule.add_argument("--how", help="本次怎么落实")
+    rule.add_argument("--remove", help="删除这条规则的记录")
+    rule.set_defaults(func=command_rule)
+
+    sediment = with_plan("sediment", "本次沉淀：登记本次用 record_experience.py note 写入或确认的经验 key（不加参数时列出并核对）")
+    sediment.add_argument("--key", action="append", help="经验 key，可重复或逗号分隔；必须已在 experience/notes.json")
+    sediment.add_argument("--remove", help="删除这条 key 的登记")
+    sediment.set_defaults(func=command_sediment)
+
     adopt = sub.add_parser("adopt", help="把旧版 HTML 方案迁移为数据化方案")
     adopt.add_argument("number")
     adopt.add_argument("--mode", required=True, choices=TASK_MODES)
@@ -2239,6 +2498,7 @@ def build_parser() -> argparse.ArgumentParser:
     adopt.add_argument("--modules", action="append")
     adopt.add_argument("--archetype", action="append")
     adopt.add_argument("--summary", default="由旧版方案迁移。")
+    adopt.add_argument("--card", action="append", help="规则卡种类（context.py list）；默认按模式和项目类型")
     adopt.set_defaults(func=command_adopt)
 
     migrate = sub.add_parser("migrate-layout", help="把旧的平铺结构迁移为 NN-主题/{NN-主题.html, raw/}")

@@ -1,6 +1,6 @@
 # 智能体项目清单模板（AGENT.md）
 
-复制为 `agent/requirements/<项目名>.md`。每项标注来源"用户 / 默认"；未提及的默认关。规范依据：`../backend/SPEC.md`。
+复制为 `agent/requirements/<项目名>.md`。每项标注来源"用户 / 默认"；未提及的默认关。规范依据：智能体底座 `../../references/agent-foundation.md`（默认值见 §16）与门店业务助手应用规范 `../backend/SPEC.md`。填好后生成项目的 `config/intents.yaml`、`config/tools.yaml`。
 
 ## 1 基本
 
@@ -94,4 +94,4 @@
 |---|---|---|
 | 1 | | |
 
-## 10 验收（复制 `../backend/SPEC.md` §18 与 `$LUZ_DESIGN_ROOT/references/quality-review.md` 与 `$LUZ_DESIGN_ROOT/contracts/HANDOFF.md` 勾选）
+## 10 验收（按底座 §17 检查清单逐项核对，并复制 `../backend/SPEC.md` §18 与 `$LUZ_DESIGN_ROOT/references/quality-review.md` 与 `$LUZ_DESIGN_ROOT/contracts/HANDOFF.md` 勾选）

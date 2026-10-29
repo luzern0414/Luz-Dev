@@ -1,4 +1,4 @@
 interface:
   display_name: "Luz Dev"
   short_description: "Research, plan, get approval, then build Luz apps, backends, admin, and agents"
-  default_prompt: "Create the technical plan, research real sources with Luz-Crawl, apply the Luz security and feature standards, get the user's approval, then build a contract-first implementation with tests, release evidence, and explicit design deviations."
+  default_prompt: "Use Luz Dev to take a Luz product to production. First run python -X utf8 scripts/context.py list and read the rule card for the task kind (preferences, lessons, rule text, tools, checks); the plan generator, asset templates and standard modules are skeletons only. Create the technical plan (it saves the cards to raw/00-rules/), research real sources with Luz-Crawl, apply the Luz security and feature standards, record the rules applied with tech_plan.py rule, get the user's approval, then build a contract-first implementation with tests, release evidence and explicit design deviations. Every call writes or confirms at least one note with record_experience.py note and lists it with tech_plan.py sediment."

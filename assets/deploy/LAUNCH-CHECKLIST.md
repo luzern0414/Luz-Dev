@@ -1,3 +1,4 @@
+<!-- 模板只是骨架，不是规范：先运行 python -X utf8 scripts/context.py launch-compliance 读完规则卡；与规则卡冲突时按规则卡写。 -->
 # 上线检查表
 
 复制到项目 `docs/LAUNCH-CHECKLIST.md`，每项填写结果与证据（截图路径、命令输出、回执编号末几位）。全部通过后才发布（OPS-003）。

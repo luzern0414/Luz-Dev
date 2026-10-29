@@ -17,6 +17,9 @@ DEFAULT_DESIGN_ROOT = ROOT.parent / "Luz-Design"
 DEV_SCHEMA_PATH = ROOT / "contracts" / "handoff.schema.json"
 REQUIRED = [
     "SKILL.md",
+    "scripts/context.py",
+    "references/cards.json",
+    "tests/test_context.py",
     "scripts/module_specs.py",
     "references/module-specs/README.md",
     "tests/test_module_specs.py",
@@ -182,6 +185,82 @@ TECH_PLAN_TOKENS = {
     "{{TOKENS_CSS}}", "{{SHELL_CSS}}", "{{TOKEN_SOURCE}}", "{{PLAN_NUMBER}}", "{{TITLE}}", "{{TASK_MODE}}",
     "{{STATUS}}", "{{SECTIONS}}", "{{FAVICON}}",
 }
+# Templates agents copy or render; each says at the top that it is a skeleton and points to the rule card.
+SKELETON_TEMPLATES = [
+    "assets/tech-plan/template.html",
+    "assets/project-template/IMPLEMENTATION.md",
+    "assets/project-template/PLAN.md",
+    "assets/project-template/QUALITY.md",
+    "assets/project-template/README.md",
+    "assets/legal/face-consent.md",
+    "assets/legal/prepaid-card-terms.md",
+    "assets/legal/privacy-policy.md",
+    "assets/legal/user-terms.md",
+    "assets/deploy/LAUNCH-CHECKLIST.md",
+    "assets/deploy/RUNBOOK.md",
+]
+CORE_START = b"# ---- shared rule-card core"
+CORE_END = b"# ---- end of shared rule-card core"
+
+
+def validate_invocation_protocol(skill_text: str, design_root: Path) -> list[str]:
+    """Rule cards (scripts/context.py + references/cards.json) and the 调用协议 that makes every call start from them."""
+    errors: list[str] = []
+    normalized = skill_text.replace("\r\n", "\n")
+    # The invocation protocol is the first section and starts from the rule card.
+    sections = re.findall(r"(?m)^## (.+)$", normalized)
+    if not sections or not sections[0].startswith("调用协议"):
+        errors.append("SKILL.md must open with the section 调用协议 (invocation protocol) before any other section")
+    protocol = normalized.split("\n## ", 2)[1] if "\n## " in normalized else ""
+    for phrase in ("scripts/context.py", "tech_plan.py rule", "tech_plan.py sediment", "本次沉淀"):
+        if phrase not in protocol:
+            errors.append(f"SKILL.md 调用协议 must mention {phrase}")
+    # Agents choose skills from the parsed frontmatter; an unquoted ": " inside the description breaks it silently.
+    description = re.search(r"(?m)^description: (.+)$", normalized)
+    text = description.group(1) if description else ""
+    try:
+        import yaml  # noqa: PLC0415
+
+        front = yaml.safe_load(normalized.split("---", 2)[1])
+        if not isinstance(front, dict) or not isinstance(front.get("description"), str):
+            errors.append("SKILL.md frontmatter does not parse to a name and a description string")
+    except ImportError:
+        if ": " in text:
+            errors.append("SKILL.md description contains ': ' which breaks YAML; use a dash instead")
+    except Exception as exc:  # noqa: BLE001 - any YAML error is a broken frontmatter
+        errors.append(f"SKILL.md frontmatter is not valid YAML: {exc}")
+    if "context.py" not in text:
+        errors.append("SKILL.md description must tell agents to start with scripts/context.py")
+    if len(text) > 1024:
+        errors.append(f"SKILL.md description exceeds 1024 characters ({len(text)})")
+
+    cards_path = ROOT / "references" / "cards.json"
+    try:
+        json.loads(cards_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return errors + [f"invalid references/cards.json: {exc}"]
+    root_text = str(ROOT / "scripts")
+    if root_text not in sys.path:
+        sys.path.insert(0, root_text)
+    import context  # noqa: PLC0415 - sibling script
+
+    # Every card resolves to existing rule sections, so renaming a heading cannot silently empty a card.
+    errors.extend(f"rule card: {problem}" for problem in context.check_cards())
+    ours = (ROOT / "scripts" / "context.py").read_bytes()
+    theirs_path = design_root / "scripts" / "context.py"
+    if theirs_path.is_file():
+        theirs = theirs_path.read_bytes()
+        try:
+            same = ours[ours.index(CORE_START):ours.index(CORE_END)] == theirs[theirs.index(CORE_START):theirs.index(CORE_END)]
+        except ValueError:
+            same = False
+        if not same:
+            errors.append(f"scripts/context.py shared rule-card core differs from {theirs_path}; copy it byte for byte")
+    for relative in SKELETON_TEMPLATES:
+        path = ROOT / relative
+        if path.is_file() and not any("context.py" in line for line in path.read_text(encoding="utf-8").splitlines()[:3]):
+            errors.append(f"{relative} must say at the top that it is a skeleton and point to scripts/context.py")
+    return errors
 
 
 def parse_frontmatter(text: str) -> dict[str, Any]:
@@ -702,6 +781,7 @@ def main(argv: list[str] | None = None) -> int:
         if required_phrase not in skill:
             errors.append(f"SKILL.md missing required workflow phrase: {required_phrase}")
 
+    errors.extend(validate_invocation_protocol(skill, design_root))
     errors.extend(validate_tech_plan_template(ROOT / "assets" / "tech-plan" / "template.html"))
     errors.extend(validate_experience_root(ROOT / "experience"))
 

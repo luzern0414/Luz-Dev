@@ -3224,15 +3224,19 @@
       "title": "Sign in for Software Support and Product Help - GitHub 支持",
       "tier": "opensource",
       "kind": "opensource",
-      "modules": [],
+      "modules": [
+        "deploy"
+      ],
       "firstReadAt": "2026-10-28T16:49:20+08:00",
-      "checkedAt": "2026-10-28T17:32:55+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
       "evidence": [
-        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\012_Luz-Dev 02 Demo一键生成助手重构技术方案\\raw\\682_Luz-Dev 02 Demo一键生成助手重构技术方案 检索\\raw\\sources\\github\\raw\\001_github_Demo一键生成助手重构技术方案\\raw\\003_Sign in for Software Support and Product Help - GitHub 支持"
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\012_Luz-Dev 02 Demo一键生成助手重构技术方案\\raw\\682_Luz-Dev 02 Demo一键生成助手重构技术方案 检索\\raw\\sources\\github\\raw\\001_github_Demo一键生成助手重构技术方案\\raw\\003_Sign in for Software Support and Product Help - GitHub 支持",
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\722_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索\\raw\\sources\\github\\raw\\002_github_neko virtual browser webrtc docker\\raw\\004_Sign in for Software Support and Product Help - GitHub 支持"
       ],
       "excerpt": "跳至内容 Skip to content / Help 支持 了解 文档 More 登录 Sign in to GitHub Help Get help with anything on GitHub. Create a ticket or check an existing one. Sign in with Git…",
       "queries": [
-        "Demo一键生成助手重构技术方案"
+        "Demo一键生成助手重构技术方案",
+        "neko virtual browser webrtc docker"
       ]
     },
     {
@@ -3780,6 +3784,693 @@
       ],
       "excerpt": "LLM01:2025 Prompt Injection A Prompt Injection Vulnerability occurs when user prompts alter the LLM’s behavior or output in unintended ways. These inputs can af…",
       "queries": []
+    },
+    {
+      "id": "KS-0223",
+      "url": "https://github.com/SeleniumHQ/docker-selenium",
+      "title": "GitHub - SeleniumHQ/docker-selenium: Provides a simple way to run Selenium Grid with Chrome, Firefox, and Edge using Container Platform, making it easier to perform browser automation at scale · GitHub",
+      "tier": "opensource",
+      "kind": "opensource",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:08:44+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\702_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 官方原文\\raw\\sources\\links\\raw\\704_GitHub - SeleniumHQ docker-selenium Provides a simple way to run"
+      ],
+      "excerpt": "SeleniumHQ docker-selenium Repository navigation Code Issues 90 (90) Pull requests 9 (9) Discussions Actions Projects Wiki Security and quality Insights docker-…",
+      "queries": []
+    },
+    {
+      "id": "KS-0224",
+      "url": "https://github.com/novnc/noVNC",
+      "title": "GitHub - novnc/noVNC: VNC client web application · GitHub",
+      "tier": "opensource",
+      "kind": "opensource",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:08:44+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\702_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 官方原文\\raw\\sources\\links\\raw\\705_GitHub - novnc noVNC VNC client web application · GitHub"
+      ],
+      "excerpt": "novnc noVNC Repository navigation Code Issues 79 (79) Pull requests 41 (41) Actions Projects Wiki Security and quality Insights noVNC Public Notifications Fork2…",
+      "queries": []
+    },
+    {
+      "id": "KS-0225",
+      "url": "https://github.com/linuxserver/docker-chromium",
+      "title": "GitHub - linuxserver/docker-chromium: Web accessible Chromium inside an Debian Container · GitHub",
+      "tier": "opensource",
+      "kind": "opensource",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:08:44+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\702_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 官方原文\\raw\\sources\\links\\raw\\706_GitHub - linuxserver docker-chromium Web accessible Chromium ins"
+      ],
+      "excerpt": "linuxserver docker-chromium Repository navigation Code Issues 1 (1) Pull requests Actions Projects Security and quality Insights docker-chromium Public Sponsor …",
+      "queries": []
+    },
+    {
+      "id": "KS-0226",
+      "url": "https://docs.docker.com/reference/cli/docker/container/run",
+      "title": "docker container run | Docker Docs",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:08:44+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\702_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 官方原文\\raw\\sources\\links\\raw\\708_docker container run Docker Docs"
+      ],
+      "excerpt": "Home / Reference / CLI reference / docker / docker container / docker container run docker container run Ask Gordon Copy Markdown View Markdown Description Crea…",
+      "queries": []
+    },
+    {
+      "id": "KS-0227",
+      "url": "https://github.com/m1k1o/neko",
+      "title": "github.com",
+      "tier": "opensource",
+      "kind": "opensource",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:13:40+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\711_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 官方原文\\raw\\sources\\links\\raw\\717_github.com"
+      ],
+      "excerpt": "",
+      "queries": []
+    },
+    {
+      "id": "KS-0228",
+      "url": "https://neko.m1k1o.net/docs/v3/introduction",
+      "title": "Introduction | n.eko",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:13:40+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\711_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 官方原文\\raw\\sources\\links\\raw\\718_Introduction n.eko"
+      ],
+      "excerpt": "Getting StartedIntroduction Version: v3 Introduction Neko is an open-source self-hosted virtual browser solution that allows multiple users to share a single we…",
+      "queries": []
+    },
+    {
+      "id": "KS-0229",
+      "url": "https://docs.browserless.io/",
+      "title": "Browserless Docs | Browserless Documentation",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:13:40+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\711_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 官方原文\\raw\\sources\\links\\raw\\719_Browserless Docs Browserless Documentation"
+      ],
+      "excerpt": "For AI agents: a documentation index is available at /llms.txt Skip to main content Browserless.io Guides API Reference AI & Agent Integrations Examples i Save …",
+      "queries": []
+    },
+    {
+      "id": "KS-0230",
+      "url": "https://playwright.dev/docs/docker",
+      "title": "Docker | Playwright",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:13:40+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\711_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 官方原文\\raw\\sources\\links\\raw\\721_Docker Playwright"
+      ],
+      "excerpt": "IntegrationsDocker Docker Introduction​ Dockerfile.noble can be used to run Playwright scripts in Docker environment. This image includes the Playwright browser…",
+      "queries": []
+    },
+    {
+      "id": "KS-0231",
+      "url": "https://blog.csdn.net/weixin_33226548/article/details/165457327",
+      "title": "Docker容器内运行图形界面：VNC+noVNC实现可视化方案详解-CSDN博客",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:13:40+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\722_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索\\raw\\sources\\web\\raw\\001_web_Docker 容器 运行 有界面 Chrome Xvfb noVNC 部署\\raw\\002_Docker容器内运行图形界面：VNC+noVNC实现可视化方案详解-CSDN博客"
+      ],
+      "excerpt": "Docker容器内运行图形界面：VNC+noVNC实现可视化方案详解 予晚 墨衍会员 · AI 创作全网分发 码龄9年 关注 原创 2026-09-14 13:20:53 78 阅读 AI 写同款 · GEO 优化 › 在Mac上使用 Docker 构建一个 noVNC 环境并运行 MyCobot 本文展示了Mycob…",
+      "queries": [
+        "Docker 容器 运行 有界面 Chrome Xvfb noVNC 部署"
+      ]
+    },
+    {
+      "id": "KS-0232",
+      "url": "https://blog.csdn.net/weixin_56291477/article/details/131856950",
+      "title": "Docker容器应用可视化-VNC方式_docker vnc-CSDN博客",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:13:40+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\722_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索\\raw\\sources\\web\\raw\\001_web_Docker 容器 运行 有界面 Chrome Xvfb noVNC 部署\\raw\\003_Docker容器应用可视化-VNC方式_docker vnc-CSDN博客"
+      ],
+      "excerpt": "Docker容器应用可视化-VNC方式 TheRisingMoon 墨衍会员 · AI 创作全网分发 码龄6年 关注 原创 2025-05-22 10:39:34 7.8k 阅读 AI 写同款 · AI 选题 › 在Mac上使用 Docker 构建一个 noVNC 环境并运行 MyCobot 本文展示了Mycobot …",
+      "queries": [
+        "Docker 容器 运行 有界面 Chrome Xvfb noVNC 部署"
+      ]
+    },
+    {
+      "id": "KS-0233",
+      "url": "https://blog.csdn.net/gitblog_00011/article/details/146807283",
+      "title": "chrome-novnc：轻松实现浏览器远程访问，提升工作效率-CSDN博客",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:13:40+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\722_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索\\raw\\sources\\csdn\\raw\\001_csdn_docker noVNC chrome 远程浏览器\\raw\\002_chrome-novnc：轻松实现浏览器远程访问，提升工作效率-CSDN博客"
+      ],
+      "excerpt": "chrome-novnc：轻松实现浏览器远程访问，提升工作效率 原创 于 2025-03-31 11:28:51 发布 · 933 阅读 · CC 4.0 BY-SA版权 chrome-novnc：轻松实现浏览器远程访问，提升工作效率 项目介绍 在现代工作环境中，远程访问浏览器成为了许多开发者和IT专业人士的需求。ch…",
+      "queries": [
+        "docker noVNC chrome 远程浏览器"
+      ]
+    },
+    {
+      "id": "KS-0234",
+      "url": "https://blog.csdn.net/weixin_29597551/article/details/163790452",
+      "title": "Docker容器化浏览器部署百度网盘私有访问门户实战指南-CSDN博客",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:13:40+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\722_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索\\raw\\sources\\csdn\\raw\\001_csdn_docker noVNC chrome 远程浏览器\\raw\\003_Docker容器化浏览器部署百度网盘私有访问门户实战指南-CSDN博客"
+      ],
+      "excerpt": "Docker容器化浏览器部署百度网盘私有访问门户实战指南 FFFire小火 墨衍会员 · AI 创作全网分发 码龄8年 关注 VIP免费 原创 2026-08-15 16:27:37 270 阅读 AI 写同款 · AI 选题 › Docker & Docker-Compose资源获取下载 该文档记录了 docker&…",
+      "queries": [
+        "docker noVNC chrome 远程浏览器"
+      ]
+    },
+    {
+      "id": "KS-0235",
+      "url": "https://blog.csdn.net/gitblog_00870/article/details/151524104",
+      "title": "5分钟上手Docker-Selenium VNC：远程控制浏览器自动化环境全攻略-CSDN博客",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:13:40+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\722_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索\\raw\\sources\\csdn\\raw\\001_csdn_docker noVNC chrome 远程浏览器\\raw\\004_5分钟上手Docker-Selenium VNC：远程控制浏览器自动化环境全攻略-CSDN博客"
+      ],
+      "excerpt": "5分钟上手Docker-Selenium VNC：远程控制浏览器自动化环境全攻略 原创 于 2025-09-11 05:41:12 发布 · 640 阅读 · CC 4.0 BY-SA版权 收录于 码道开发者社区 5分钟上手Docker-Selenium VNC：远程控制浏览器自动化环境全攻略 【免费下载链接】dock…",
+      "queries": [
+        "docker noVNC chrome 远程浏览器"
+      ]
+    },
+    {
+      "id": "KS-0236",
+      "url": "https://juejin.cn/post/7684460980933459983?searchId=20261028211856312A8D2D37E5E04A83EF",
+      "title": "磁盘IO打满怎么办？我用5个真实案例，总结了这套可复用的排查方法论生产环境磁盘 IO 告警极易误判，CPU、内存指标看似 - 掘",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:13:40+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\722_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索\\raw\\sources\\juejin\\raw\\001_juejin_生产环境 上线检查清单 监控 告警 备份 回滚\\raw\\002_磁盘IO打满怎么办？我用5个真实案例，总结了这套可复用的排查方法论生产环境磁盘 IO 告警极易误判，CPU、内存指标看似 - 掘"
+      ],
+      "excerpt": "",
+      "queries": [
+        "生产环境 上线检查清单 监控 告警 备份 回滚"
+      ]
+    },
+    {
+      "id": "KS-0237",
+      "url": "https://www.cnblogs.com/xulinforDB/p/20071248",
+      "title": "18.postgreSQL的备份恢复pg_dump和pg_restore - 数据库小白（专注） - 博客园",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:13:40+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\722_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索\\raw\\sources\\cnblogs\\raw\\001_cnblogs_PostgreSQL 备份 恢复 定时 pg_dump 异地\\raw\\003_18.postgreSQL的备份恢复pg_dump和pg_restore - 数据库小白（专注） - 博客园"
+      ],
+      "excerpt": "",
+      "queries": [
+        "PostgreSQL 备份 恢复 定时 pg_dump 异地"
+      ]
+    },
+    {
+      "id": "KS-0238",
+      "url": "https://www.cnblogs.com/Amd794/p/18693115",
+      "title": "PostgreSQL 数据备份与恢复：掌握 pg_dump 和 pg_restore 的最佳实践 - Amd794 - 博客园",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:13:40+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\722_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索\\raw\\sources\\cnblogs\\raw\\001_cnblogs_PostgreSQL 备份 恢复 定时 pg_dump 异地\\raw\\004_PostgreSQL 数据备份与恢复：掌握 pg_dump 和 pg_restore 的最佳实践 - Amd794 - 博客园"
+      ],
+      "excerpt": "",
+      "queries": [
+        "PostgreSQL 备份 恢复 定时 pg_dump 异地"
+      ]
+    },
+    {
+      "id": "KS-0239",
+      "url": "https://github.com/nurdism/neko",
+      "title": "GitHub - nurdism neko A self hosted virtual browser (rabb.it clo",
+      "tier": "opensource",
+      "kind": "opensource",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:13:40+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\722_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索\\raw\\sources\\github\\raw\\002_github_neko virtual browser webrtc docker\\raw\\005_GitHub - nurdism neko A self hosted virtual browser (rabb.it clo"
+      ],
+      "excerpt": "",
+      "queries": [
+        "neko virtual browser webrtc docker"
+      ]
+    },
+    {
+      "id": "KS-0240",
+      "url": "https://github.com/HelgeSverre/playwright-hls-stream",
+      "title": "GitHub - HelgeSverre playwright-hls-stream Example of how to str",
+      "tier": "opensource",
+      "kind": "opensource",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:21:58+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\723_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索-02\\raw\\sources\\github\\raw\\001_github_playwright docker xvfb headed chromium\\raw\\003_GitHub - HelgeSverre playwright-hls-stream Example of how to str"
+      ],
+      "excerpt": "",
+      "queries": [
+        "playwright docker xvfb headed chromium"
+      ]
+    },
+    {
+      "id": "KS-0241",
+      "url": "https://github.com/JacobLinCool/playwright-docker",
+      "title": "GitHub - JacobLinCool playwright-docker Playwright Docker Images",
+      "tier": "opensource",
+      "kind": "opensource",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:21:58+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\723_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索-02\\raw\\sources\\github\\raw\\001_github_playwright docker xvfb headed chromium\\raw\\004_GitHub - JacobLinCool playwright-docker Playwright Docker Images"
+      ],
+      "excerpt": "",
+      "queries": [
+        "playwright docker xvfb headed chromium"
+      ]
+    },
+    {
+      "id": "KS-0242",
+      "url": "https://support.microsoft.com/zh-cn/bing/how-bing-delivers-search-results",
+      "title": "必应如何提供搜索结果 | Microsoft Support",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:21:58+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\723_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索-02\\raw\\sources\\web\\raw\\001_web_chromium docker shm-size crash dev shm\\raw\\002_必应如何提供搜索结果 Microsoft Support"
+      ],
+      "excerpt": "必应如何提供搜索结果 上次 年 3 月 有关以前的版本，请参阅 此处的存档。 我们的搜索方法 我们认识到，在我们这个技术驱动的世界中，搜索引擎在许多方面都是通往互联网的门户，也是人们在数以万亿计、不断变化的在线网页中找到所需内容的主要途径。 必应等搜索引擎在维护自由、开放获取信息和言论自由的基本权利方面发挥着至关重要的…",
+      "queries": [
+        "chromium docker shm-size crash dev/shm"
+      ]
+    },
+    {
+      "id": "KS-0243",
+      "url": "https://blog.csdn.net/BytePerch/article/details/154743051",
+      "title": "【Docker高级技巧】：如何正确设置shm-size避免应用异常退出-CSDN博客",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:21:58+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\723_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索-02\\raw\\sources\\web\\raw\\001_web_chromium docker shm-size crash dev shm\\raw\\004_【Docker高级技巧】：如何正确设置shm-size避免应用异常退出-CSDN博客"
+      ],
+      "excerpt": "【Docker高级技巧】：如何正确设置shm-size避免应用异常退出 BytePerch 墨衍会员 · 1 平台 · 1.9k 阅读 码龄1年 关注 原创 2025-11-12 16:35:13 1.9k 阅读 AI 写同款 · GEO 优化 › 兄弟，还在为调API烧钱？TaoToken Coding Plan双F…",
+      "queries": [
+        "chromium docker shm-size crash dev/shm"
+      ]
+    },
+    {
+      "id": "KS-0244",
+      "url": "https://github.com/burlesquer/cdp-hack-play",
+      "title": "GitHub - burlesquer cdp-hack-play Chrome DevTools Protocol suppl",
+      "tier": "opensource",
+      "kind": "opensource",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:21:58+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\723_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索-02\\raw\\sources\\github\\raw\\002_github_chrome devtools screencast remote control web\\raw\\006_GitHub - burlesquer cdp-hack-play Chrome DevTools Protocol suppl"
+      ],
+      "excerpt": "",
+      "queries": [
+        "chrome devtools screencast remote control web"
+      ]
+    },
+    {
+      "id": "KS-0245",
+      "url": "https://docs.docker.com/engine/security/seccomp",
+      "title": "Seccomp security profiles for Docker Docker Docs",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:21:58+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\723_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索-02\\raw\\sources\\web\\raw\\002_web_docker chromium no-sandbox seccomp profile security\\raw\\006_Seccomp security profiles for Docker Docker Docs"
+      ],
+      "excerpt": "",
+      "queries": [
+        "docker chromium no-sandbox seccomp profile security"
+      ]
+    },
+    {
+      "id": "KS-0246",
+      "url": "https://docs.docker.com/engine/security/certificates",
+      "title": "Verify repository client with certificates Docker Docs",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:21:58+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\723_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索-02\\raw\\sources\\web\\raw\\002_web_docker chromium no-sandbox seccomp profile security\\raw\\007_Verify repository client with certificates Docker Docs"
+      ],
+      "excerpt": "",
+      "queries": [
+        "docker chromium no-sandbox seccomp profile security"
+      ]
+    },
+    {
+      "id": "KS-0247",
+      "url": "https://docs.docker.com/engine/security/userns-remap",
+      "title": "Isolate containers with a user namespace Docker Docs",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:21:58+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\723_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索-02\\raw\\sources\\web\\raw\\002_web_docker chromium no-sandbox seccomp profile security\\raw\\008_Isolate containers with a user namespace Docker Docs"
+      ],
+      "excerpt": "",
+      "queries": [
+        "docker chromium no-sandbox seccomp profile security"
+      ]
+    },
+    {
+      "id": "KS-0248",
+      "url": "https://github.com/corebunker/go-overlay",
+      "title": "GitHub - corebunker go-overlay Init system and process superviso",
+      "tier": "opensource",
+      "kind": "opensource",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:21:58+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\723_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索-02\\raw\\sources\\github\\raw\\003_github_s6-overlay supervisord docker multiple processes\\raw\\008_GitHub - corebunker go-overlay Init system and process superviso"
+      ],
+      "excerpt": "",
+      "queries": [
+        "s6-overlay supervisord docker multiple processes"
+      ]
+    },
+    {
+      "id": "KS-0249",
+      "url": "https://datawookie.dev/blog/2021-08-07-websockify-novnc-behind-an-nginx-proxy",
+      "title": "Websockify & noVNC behind an NGINX Proxy – datawookie",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:21:58+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\723_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索-02\\raw\\sources\\web\\raw\\003_web_noVNC websockify token authentication reverse proxy nginx\\raw\\010_Websockify & noVNC behind an NGINX Proxy – datawookie"
+      ],
+      "excerpt": "",
+      "queries": [
+        "noVNC websockify token authentication reverse proxy nginx"
+      ]
+    },
+    {
+      "id": "KS-0250",
+      "url": "https://www.cnblogs.com/connect/p/nginx-proxy-websocket.html",
+      "title": "配置Nginx反向代理WebSocket，以代理noVNC为例 varlemon",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:21:58+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\723_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索-02\\raw\\sources\\web\\raw\\003_web_noVNC websockify token authentication reverse proxy nginx\\raw\\011_配置Nginx反向代理WebSocket，以代理noVNC为例 varlemon"
+      ],
+      "excerpt": "",
+      "queries": [
+        "noVNC websockify token authentication reverse proxy nginx"
+      ]
+    },
+    {
+      "id": "KS-0251",
+      "url": "https://walterfan.github.io/webrtc_note/7.practice/remote_control.html",
+      "title": "Remote Control — WebRTC 学习笔记",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:21:58+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\723_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索-02\\raw\\sources\\web\\raw\\003_web_noVNC websockify token authentication reverse proxy nginx\\raw\\013_Remote Control — WebRTC 学习笔记"
+      ],
+      "excerpt": "",
+      "queries": [
+        "WebRTC vs VNC remote browser streaming latency"
+      ]
+    },
+    {
+      "id": "KS-0252",
+      "url": "https://macky.dev/blog/why-vnc-is-slow-over-5g-webrtc",
+      "title": "Why VNC Lags Over 5G The Technical Difference Between VNC & WebR",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:21:58+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\723_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索-02\\raw\\sources\\web\\raw\\003_web_noVNC websockify token authentication reverse proxy nginx\\raw\\014_Why VNC Lags Over 5G The Technical Difference Between VNC & WebR"
+      ],
+      "excerpt": "",
+      "queries": [
+        "WebRTC vs VNC remote browser streaming latency"
+      ]
+    },
+    {
+      "id": "KS-0253",
+      "url": "https://www.nanocosmos.net/blog/webrtc-latency",
+      "title": "WebRTC Latency What to Expect & How to Cut It Further",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:21:58+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\723_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索-02\\raw\\sources\\web\\raw\\003_web_noVNC websockify token authentication reverse proxy nginx\\raw\\015_WebRTC Latency What to Expect & How to Cut It Further"
+      ],
+      "excerpt": "",
+      "queries": [
+        "WebRTC vs VNC remote browser streaming latency"
+      ]
+    },
+    {
+      "id": "KS-0254",
+      "url": "https://baixiaoustc.github.io/2026/02/23/cdp-chrome-devtools-protocol-guide",
+      "title": "CDP (Chrome DevTools Protocol) 完整指南：从原理到 OpenClaw 实践",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:21:58+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\723_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索-02\\raw\\sources\\web\\raw\\003_web_noVNC websockify token authentication reverse proxy nginx\\raw\\017_CDP (Chrome DevTools Protocol) 完整指南：从原理到 OpenClaw 实践"
+      ],
+      "excerpt": "",
+      "queries": [
+        "Chrome DevTools Protocol Page.startScreencast remote browser control"
+      ]
+    },
+    {
+      "id": "KS-0255",
+      "url": "https://blog.csdn.net/gitblog_01189/article/details/144667668",
+      "title": "【亲测免费】 Docker-Chromium-Xvfb：基于Docker的浏览器自动化测试解决方案-CSDN博客",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:21:58+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\723_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索-02\\raw\\sources\\web\\raw\\003_web_noVNC websockify token authentication reverse proxy nginx\\raw\\022_【亲测免费】 Docker-Chromium-Xvfb：基于Docker的浏览器自动化测试解决方案-CSDN博客"
+      ],
+      "excerpt": "",
+      "queries": [
+        "browser fingerprint docker headless detection xvfb"
+      ]
+    },
+    {
+      "id": "KS-0256",
+      "url": "https://blog.csdn.net/weixin_32430941/article/details/165730701",
+      "title": "解决Chromium在Linux 容器下中文显示方块问题：字体与fontconfig排查指南-CSDN博客",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:21:58+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\723_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索-02\\raw\\sources\\web\\raw\\003_web_noVNC websockify token authentication reverse proxy nginx\\raw\\025_解决Chromium在Linux 容器下中文显示方块问题：字体与fontconfig排查指南-CSDN博客"
+      ],
+      "excerpt": "",
+      "queries": [
+        "Docker 中文字体 fonts-noto-cjk chromium 乱码"
+      ]
+    },
+    {
+      "id": "KS-0257",
+      "url": "https://blog.csdn.net/weixin_28829479/article/details/165823542",
+      "title": "Selenium 自动化登录态保持：user-data-dir 配置与实战指南-CSDN博客",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:21:58+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\723_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索-02\\raw\\sources\\web\\raw\\003_web_noVNC websockify token authentication reverse proxy nginx\\raw\\027_Selenium 自动化登录态保持：user-data-dir 配置与实战指南-CSDN博客"
+      ],
+      "excerpt": "",
+      "queries": [
+        "浏览器自动化 集群 docker 持久化 user-data-dir cookie 登录态"
+      ]
+    },
+    {
+      "id": "KS-0258",
+      "url": "https://github.com/linuxserver/docker-msedge",
+      "title": "GitHub - linuxserver docker-msedge Web accessible Edge inside a",
+      "tier": "opensource",
+      "kind": "opensource",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:21:58+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\723_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索-02\\raw\\sources\\web\\raw\\003_web_noVNC websockify token authentication reverse proxy nginx\\raw\\029_GitHub - linuxserver docker-msedge Web accessible Edge inside a"
+      ],
+      "excerpt": "",
+      "queries": [
+        "Microsoft Edge Linux docker redistribution license"
+      ]
+    },
+    {
+      "id": "KS-0259",
+      "url": "https://github.com/linuxserver/docker-msedge/issues",
+      "title": "Issues · linuxserver docker-msedge · GitHub",
+      "tier": "opensource",
+      "kind": "opensource",
+      "modules": [
+        "deploy"
+      ],
+      "firstReadAt": "2026-10-28T21:21:58+08:00",
+      "checkedAt": "2026-10-28T21:33:36+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\014_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗\\raw\\723_Luz-Dev 04 DealRadar-Docker-镜像与人工验证弹窗 检索-02\\raw\\sources\\web\\raw\\003_web_noVNC websockify token authentication reverse proxy nginx\\raw\\030_Issues · linuxserver docker-msedge · GitHub"
+      ],
+      "excerpt": "",
+      "queries": [
+        "Microsoft Edge Linux docker redistribution license"
+      ]
     }
   ]
 }

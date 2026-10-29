@@ -1,8 +1,22 @@
 # 智能体后端规范（LangGraph）v2
 
-本文是智能体服务的唯一规范。前端对话界面见 Luz System `references/agent-design.html`，前后端事件协议见 `../shared/protocol.md`，每个项目的定制清单按 `../requirements/_template.md` 填写为 `../requirements/<项目名>.md`。后端接口以 `backend/API.md` 为准，工具只能调用其中标注 `agent: yes` 的接口。
+本文是**门店业务助手的应用规范**（意图表、工具清单、审批与降级文案、核验细则），建立在智能体底座之上。底座 `../../references/agent-foundation.md` 是唯一权威规范：流水线、契约、默认值、上限与检查清单以底座为准，本文与底座冲突的地方按底座执行。前端对话界面见 Luz System `references/agent-design.html`，前后端协议见 `../shared/protocol.md` v3，每个项目的定制清单按 `../requirements/_template.md` 填写为 `../requirements/<项目名>.md`。后端接口以 `backend/API.md` 为准，工具只能调用其中标注 `agent: yes` 的接口。
 
-阅读顺序：§0 边界 → §1 架构 → §2 图 → §3 意图 → §6 工具 → §7 确认 → §8 降级 → §9 核验 → §11 流式 → §17 实现顺序。生成项目时先填 `requirements/<项目名>.md`，再按 §17 的顺序实现。
+**被底座取代的条目**（读到时按右侧执行）：
+
+| 本文 | 按底座 |
+|---|---|
+| §1、§11.3 小程序以 WebSocket 为主通道 | 所有端统一 SSE 格式（底座 §2 规则 3–5） |
+| §11.1 事件名 `meta / delta / tool_start / … / done / error`、`seq` | v3 的 14 个事件与 `id / run_id` 信封（底座 §2 契约） |
+| §8.3、§12 同一会话进行中返回 `409 AGENT_BUSY` | 会话内排队，队列满 `429 QUEUE_FULL` + `Retry-After`；错误码表见底座 §14 |
+| §12 `POST …/turns` 直接返回事件流、`…/confirm` | `POST …/runs` 返回 `202`，事件从 `GET /runs/{run_id}/events` 读；审批 `POST /runs/{run_id}/approvals/{approval_id}`（底座 §2） |
+| §10 结构化输出校验失败重试 2 次 | 重试 1 次后降级（底座 §7） |
+| §3.2 置信度 `< 0.5` 走 `general` 让模型自由回答 | 不猜：列候选与入口，不调用写工具（底座 §4） |
+| §6.1 风险等级 `read / low_write / high / forbidden` | 副作用级别 `read / write / write_high`，`forbidden` 不注册（底座 §6）；含义一一对应 |
+| §18 “首 token ≤ 8 秒” | 首个事件 ≤ 1 秒、首个文字增量 P95 ≤ 3 秒；8 秒是首 token 超时（底座 §12、§16） |
+| 超时、重试、熔断、上限的数值 | 底座 §16 总表 |
+
+阅读顺序：§0 边界 → §1 架构 → §2 图 → §3 意图 → §6 工具 → §7 确认 → §8 降级 → §9 核验 → §11 流式 → §17 实现顺序。生成项目时先填 `requirements/<项目名>.md`，再按 `../README.md` 差距待办的顺序实现（§17 是 v2 时的顺序，仅作参考）。
 
 ---
 

@@ -1,17 +1,14 @@
-# 智能体前后端协议 v2
+# 智能体前后端协议 v3
 
-本协议定义客户端（小程序、H5、管理后台）与智能体网关之间的请求、事件流、确认与错误。字段与 `../backend/SPEC.md` §10 的 Pydantic 模型一致；界面行为见 `$LUZ_DESIGN_ROOT/references/system/agents.md`。
+本协议定义客户端（小程序、H5、管理后台）与智能体服务之间的请求、事件流、审批与错误。**传输、事件名、事件信封、续传、排队、幂等与错误码的规则以 `../../references/agent-foundation.md` §2、§14 为准**，本文只补充请求体、事件数据的业务字段、卡片与审批面板数据。界面行为见 Luz System `references/agent-design.html`。
+
+v2 → v3 的对照表见底座 §2“契约”。
 
 ## 1. 传输
 
-| 端 | 主通道 | 备用 | 说明 |
-|---|---|---|---|
-| H5、管理后台 | SSE：`POST /api/v1/agent/conversations/{id}/turns` 直接返回 `text/event-stream` | 轮询 | 客户端用 `Last-Event-ID`（= 最后收到的 `seq`）重连 |
-| 微信小程序 | WebSocket：`wss://<host>/api/v1/agent/ws?token=<短期票据>`；发轮次用 HTTP `POST .../turns` 得到 `202 {turn_id}`，事件从 WebSocket 推送 | 轮询 `GET .../events?after_seq=` 每 800 毫秒 | 心跳 25 秒；重连 1/2/4/8 秒，最多 4 次后转轮询 |
-
-WebSocket 票据由 `POST /api/v1/agent/ws-ticket` 用用户令牌换取，有效 60 秒，一次性。
-
-所有 HTTP 请求带用户令牌（`Authorization: Bearer`）与 `X-Client: miniprogram|h5|admin`。
+- 所有端都用 SSE 格式（`text/event-stream`，UTF-8）。H5 与管理后台用 `fetch` 流式读取（可带 `Authorization` 头）；小程序分块接收后按同一规则解析，并手动带 `Last-Event-ID` 重连；不能分块接收时轮询 `GET /runs/{run_id}/events?after_id=`（同一份事件日志）。
+- 只有确需双向实时（例如语音）才用 WebSocket，并在技术方案里写明理由。
+- 所有 HTTP 请求带用户令牌（`Authorization: Bearer`）与 `X-Client: miniprogram|h5|admin`；响应带 `X-Request-Id`。
 
 ## 2. 请求
 
@@ -23,61 +20,58 @@ WebSocket 票据由 `POST /api/v1/agent/ws-ticket` 用用户令牌换取，有�
 { "channel": "miniprogram", "entry_page": "order_detail", "entry_ref": "20261023115200" }
 ```
 
-→ `201 { "conversation_id": "c_01HZ…", "expires_at": "…" }`。`entry_page/entry_ref` 让助手知道用户从哪来（例如从订单详情进入时默认指代该订单）。
+→ `201 { "conversation_id": "c_01HZ…", "expires_at": "…" }`。`entry_page / entry_ref` 让助手知道用户从哪来（例如从订单详情进入时默认指代该订单）。
 
-### 2.2 发一轮
+### 2.2 发一条消息
 
-`POST /api/v1/agent/conversations/{id}/turns`
+`POST /api/v1/agent/conversations/{cid}/runs`
 
 ```json
 { "text": "帮我看看刚才那单到哪了", "client_message_id": "uuid-v4", "locale": "zh-CN" }
 ```
 
-- `text` 1–500 字；`client_message_id` 24 小时内去重（重复提交返回同一 `turn_id` 并重放事件）。
-- 返回：SSE 流（H5/后台）或 `202 { "turn_id": 7 }`（小程序）。
-- 同一会话已有一轮未结束 → `409 { "code": "AGENT_BUSY" }`。
+- `text` 1–500 字（后台 1–2000 字）；`client_message_id` 由客户端生成，重发同一条消息时复用。
+- 返回 `202 { "run_id": "run_…", "status": "queued", "events_url": "/api/v1/agent/runs/run_…/events" }`；重复的 `client_message_id` 返回 `200` 和同一个 `run_id`；同一键内容不同 → `409 IDEMPOTENCY_KEY_REUSED`。
+- 同一会话已有运行在进行：新运行进入会话内待发送队列（事件 `run.queued`，`reason: "conversation_busy"`）；会话队列或全局队列满 → `429 QUEUE_FULL` + `Retry-After`。
 
-### 2.3 确认
+### 2.3 读取事件
 
-`POST /api/v1/agent/conversations/{id}/confirm`
+`GET /api/v1/agent/runs/{run_id}/events`（首次连接与重连同一接口，重连带 `Last-Event-ID`）。终止事件已送达时返回 `204`，客户端停止重连。
+
+### 2.4 审批
+
+`POST /api/v1/agent/runs/{run_id}/approvals/{approval_id}`
 
 ```json
-{ "request_id": "r_01HZ…", "approved": true, "client_message_id": "uuid-v4" }
+{ "approved": true, "client_message_id": "uuid-v4" }
 ```
 
-- 服务端校验 `request_id` 等于当前待确认且未过期；否则 `409 CONFIRM_MISMATCH` / `410 CONFIRM_EXPIRED`。
-- 通过后继续同一 `turn_id` 的事件流（`seq` 继续递增）。
+- 服务端校验 `approval_id` 是当前待审批且未过期；否则 `409 APPROVAL_MISMATCH` / `410 APPROVAL_EXPIRED`。
+- 通过后在同一 `run_id` 的事件流里继续（`id` 继续递增）。
 
-### 2.4 其他
+### 2.5 其他
 
-`GET .../events?after_seq=`、`GET .../messages?before=&limit=`、`POST .../feedback { turn_id, rating: up|down, reason? }`、`GET/DELETE /api/v1/agent/memory`。
+`POST /runs/{run_id}/cancel`（停止）、`POST /runs/{run_id}/retry`（从失败处续跑，返回新 `run_id` 与 `resume_of`）、`GET /conversations/{cid}/messages?before=&limit=`（历史，含各段耗时）、`POST /conversations/{cid}/feedback { run_id, rating: up|down, reason? }`、`GET / DELETE /memory`、`DELETE /memory/{id}`。
 
 ## 3. 事件
 
-所有事件统一信封：
-
-```json
-{ "seq": 12, "turn_id": 7, "event": "delta", "ts": "2026-10-23T12:00:00Z", "data": { } }
-```
-
-SSE 形式：`id: 12`、`event: delta`、`data: {…信封…}`。WebSocket 与轮询直接发信封 JSON（轮询返回 `{ "events": [...], "next_seq": 13, "done": false }`）。
+事件名、信封（`schema_version / id / run_id / conversation_id / event / ts / elapsed_ms / data`）与 Pydantic 契约见底座 §2。业务字段：
 
 | event | data | 说明 |
 |---|---|---|
-| `meta` | `{ trace_id, degraded: [] }` | 每轮第一个事件 |
-| `intent` | `{ intent, confidence }` | 可选，供前端埋点，不展示 |
-| `delta` | `{ text }` | 最终回答的文本增量；前端按 80 毫秒合并渲染 |
-| `tool_start` | `{ tool, summary }` | 服务端一句话，如"正在查你最近的订单" |
-| `tool_end` | `{ tool, ok, summary, latency_ms }` | 失败时 `summary` 为用户可读原因 |
-| `card` | `Card` | 商品/订单/门店/转人工/引用/通知卡片，见 §4 |
-| `confirm_request` | `ConfirmRequest` | 见 §5；收到后本轮进入等待确认，不会再有 `delta` |
-| `notice` | `{ level: info|warning, message }` | 降级或系统提示，如"规则说明暂时查不到" |
-| `suggestions` | `{ items: QuickReply[] }` | 最多 4 个快捷回复 |
-| `done` | `FinalAnswer` | 本轮结束；含完整 `text`（客户端以此校正增量）、`cards`、`quick_replies`、`citations` |
-| `error` | `AgentError` | 本轮结束；见 §6 |
-| `ping` | `{}` | 保活，不计入 `seq`（`seq` 置 0） |
+| `run.queued` | `{ position, eta_s, reason }` | 排队位置与预计开始秒数；变化时更新，最多每秒一次 |
+| `run.started` | `{ trace_id, degraded: [] }` | 本次运行开始；`degraded` 非空时说明降级影响 |
+| `stage.started` / `stage.completed` | `{ stage, label, duration_ms? }`；意图阶段完成时带 `{ intent, confidence }` | 阶段与耗时；意图只用于埋点，不展示 |
+| `step.started` / `step.completed` / `step.failed` | `StepInfo` | 工具或子任务：服务端一句话（“正在查你最近的订单”）、尝试次数、耗时、失败原因 |
+| `message.delta` | `{ text }` | 回答文字增量；前端按 80 毫秒合并渲染 |
+| `approval.required` | `ApprovalRequest`（§5） | 等待审批，单独计时 |
+| `approval.resolved` | `{ approval_id, result, wait_ms }` | `approved / rejected / expired / superseded` |
+| `run.completed` | `{ answer: FinalAnswer, timings, usage }` | 结束；`answer` 含完整 `text`（客户端以此校正增量）、`cards`、`quick_replies`（≤ 4）、`citations` |
+| `run.failed` | `RunError` | 结束；说明错误、影响、可做的事，带 `request_id`；`partial` 为真时保留已完成部分 |
+| `run.cancelled` | `{ completed_steps, partial_text }` | 结束；显示“已停止”和已完成部分 |
+| `ping` | `{ ts }` | 每 15 秒心跳，不带 `id`，不入事件日志 |
 
-顺序保证：同一轮内 `seq` 严格递增；`done` 或 `error` 是最后一个事件；`confirm_request` 之后直到确认前不会有新事件。重复投递（重连回填）按 `seq` 去重。
+顺序保证：同一运行内 `id` 严格递增；终止事件（`run.completed / run.failed / run.cancelled`）是最后一个事件；`approval.required` 之后、`approval.resolved` 之前只会有 `ping`。重连补发按 `id` 去重。
 
 ## 4. 卡片
 
@@ -89,44 +83,48 @@ SSE 形式：`id: 12`、`event: delta`、`data: {…信封…}`。WebSocket 与�
 |---|---|---|
 | `product` | id, name, price_cents, image, tags, sold_out | 商品卡（最多 3 个一组） |
 | `order` | order_no_tail, status, status_text, amount_cents, eta_text | 订单卡 |
-| `store` | name, hours_text, address, distance_text, phone | 门店卡（带导航/拨号） |
-| `confirm` | 同 `ConfirmRequest`（历史回显用） | 确认面板（只读） |
+| `store` | name, hours_text, address, distance_text, phone | 门店卡（带导航 / 拨号） |
+| `approval` | 同 `ApprovalRequest`（历史回显用） | 审批面板（只读） |
 | `handoff` | reason, cs_route, phone | 转人工卡 |
-| `citation` | items[{title_path}] | "来源"折叠 |
+| `citation` | items[{title_path, doc_id, version}] | “来源”折叠 |
 | `notice` | level, message | 系统提示条 |
 
-`route` 为小程序页面路径或后台路由；所有卡片必须有 `route`（§9 核验"入口"规则）。
+`route` 为小程序页面路径或后台路由；所有卡片必须有 `route`（核验“入口”规则）。
 
-## 5. 确认请求
+## 5. 审批请求
 
 ```json
 {
-  "request_id": "r_01HZ…",
+  "approval_id": "a_01HZ…",
   "action": "create_order",
   "summary": "外卖配送 · 剁椒鱼头 ×1、米饭 ×2 · 送至 长沙路 88 号（张先生）· 预计 12:30 · 实付 ¥143.20（已用满 99 减 20 券）",
-  "args_view": { "fulfillment": "delivery", "items": [ { "name": "剁椒鱼头", "qty": 1, "spec": "中份·微辣" } ], "address": "长沙路 88 号 3 栋 1201（张先生 138****0000）", "eta": "12:30", "amount_cents": 14320, "coupon": "满 99 减 20" },
+  "facts": { "fulfillment": "delivery", "items": [ { "name": "剁椒鱼头", "qty": 1, "spec": "中份·微辣" } ], "address": "长沙路 88 号 3 栋 1201（张先生 138****0000）", "eta": "12:30", "amount_cents": 14320, "coupon": "满 99 减 20" },
   "amount_cents": 14320,
+  "danger": false,
   "expires_at": "2026-10-23T12:10:00Z",
-  "danger": false
+  "idempotency_key": "…"
 }
 ```
 
-- `summary` 与 `args_view` 全部由服务端基于预览接口生成；前端不得根据模型文本重算。
+- `summary` 与 `facts` 全部由服务端基于预览接口生成；前端不得根据模型文本重算。
 - `danger: true`（取消、删除类）时确认按钮用 danger 样式。
-- 过期后前端禁用按钮并显示"确认已过期，请重新发起"。
+- 过期后前端禁用按钮并显示“确认已过期，请重新发起”；服务端同时推 `approval.resolved`（`expired`）。
 
 ## 6. 错误
 
+HTTP 错误体与 `run.failed` / `step.failed` 的 `error` 都是 `RunError`：
+
 ```json
-{ "code": "MODEL_UNAVAILABLE", "message": "助手现在有点忙，请稍后再试", "retryable": true, "retry_after": 5, "trace_id": "t_…" }
+{ "code": "MODEL_UNAVAILABLE", "message": "助手现在有点忙，预计 2 分钟后恢复", "next_action": "wait", "retryable": true, "retry_after_s": 120, "request_id": "req_…", "partial": false }
 ```
 
-错误码表见 `../backend/SPEC.md` §8.3。`message` 为用户可读文案，前端直接展示；`trace_id` 可复制。
+错误码表见底座 §14。`message` 为用户可读文案，前端直接展示；`request_id` 可复制；不展示堆栈与内部信息。
 
 ## 7. 不变量
 
-1. 一个会话同时只有一轮在处理。
-2. 高风险操作只在 `approved: true` 且未过期后执行；重复确认不重复执行。
+1. 一个会话同时只有一个运行在执行；其余排队。
+2. 高风险操作只在审批通过且未过期后执行；重复审批不重复执行。
 3. 用户看到的所有文本由服务端生成；前端不拼接、不计算金额。
-4. 事件可重放、可去重；客户端断线重连不丢不重。
-5. 任何回答至少带一个页面入口（卡片 `route` 或快捷回复 `route`）。
+4. 事件可重放、可去重；断线重连不丢不重，不重新执行。
+5. 只有终止事件代表结束；连接关闭不代表成功。
+6. 任何回答至少带一个页面入口（卡片 `route` 或快捷回复 `route`）。

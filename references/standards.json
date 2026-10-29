@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "updatedAt": "2026-10-26",
+  "updatedAt": "2026-10-29",
   "title": "Luz Dev 安全与功能规范",
   "description": "Luz Dev 交付小程序、管理后台、移动 App、后端与智能体时必须遵守的工程规范。MUST 规则进入每份实施方案的核对表，必须纳入方案或写明不适用原因；SHOULD 规则不处理时给出警告。规则的依据写在 sources 中，涉及外部平台的规则必须带官方来源与核对日期。",
   "levels": {
@@ -3612,6 +3612,874 @@
       ]
     },
     {
+      "id": "AGENT-002",
+      "domain": "agent",
+      "level": "MUST",
+      "platforms": [
+        "agent"
+      ],
+      "modules": [
+        "agent"
+      ],
+      "title": "智能体过程与结果一律用 SSE 推送",
+      "rule": "回复文字、阶段与步骤进度、耗时、排队位置、审批请求、结果与错误全部通过 SSE（text/event-stream，UTF-8）推送，事件名只用底座规定的 14 个，每个事件带单调递增 id、run_id、ts、elapsed_ms；只把 run.completed、run.failed、run.cancelled 当作结束；不用轮询作主通道，WebSocket 只在确需双向实时时使用并写明理由。",
+      "why": "等整段生成完再返回会让用户在 1 秒后失去反馈并重复提交；把连接关闭当成功会把半截回复当作完成，而模型过载错误可能在 HTTP 200 之后才出现。",
+      "do": [
+        "POST /runs 立即返回 202 与 run_id，事件从 GET /runs/{run_id}/events 读取",
+        "每个步骤与阶段事件带 duration_ms，run.completed 带分开计时的 timings",
+        "客户端忽略不认识的事件名"
+      ],
+      "dont": [
+        "整段生成后一次性返回",
+        "把连接关闭当作成功",
+        "用定时轮询作为主通道"
+      ],
+      "verify": [
+        "抓包看到 text/event-stream 且事件序列符合契约",
+        "流中注入 run.failed 后界面显示失败与已完成部分",
+        "首个事件 P95 不超过 1 秒的压测记录"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 智能体底座 §2 接入层",
+          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+        },
+        {
+          "title": "WHATWG HTML Standard · Server-sent events",
+          "url": "https://html.spec.whatwg.org/multipage/server-sent-events.html"
+        },
+        {
+          "title": "Claude Platform Docs · Streaming messages",
+          "url": "https://docs.anthropic.com/en/docs/build-with-claude/streaming"
+        },
+        {
+          "title": "Claude Platform Docs · API errors",
+          "url": "https://docs.anthropic.com/en/api/errors"
+        },
+        {
+          "title": "NN/g · Response Time Limits",
+          "url": "https://www.nngroup.com/articles/response-times-3-important-limits/"
+        }
+      ]
+    },
+    {
+      "id": "AGENT-003",
+      "domain": "agent",
+      "level": "MUST",
+      "platforms": [
+        "agent"
+      ],
+      "modules": [
+        "agent"
+      ],
+      "title": "SSE 断线续传、心跳与网关不缓冲",
+      "rule": "服务端按运行保存事件日志（24 小时）；客户端带 Last-Event-ID 重连时只补发之后的事件；流开头发 retry: 3000；终止事件已送达时对重连返回 204；每 15 秒发一次心跳；响应头 Cache-Control: no-cache、X-Accel-Buffering: no，Nginx 事件路径 proxy_buffering off 且 proxy_read_timeout 大于心跳间隔；刷新或切回前台按 run_id 恢复显示，不重新执行。",
+      "why": "代理默认缓冲响应、60 秒无数据就断开；没有续传时断线会丢事件或重复执行。",
+      "do": [
+        "事件 id 在运行内单调递增，ping 不带 id",
+        "收到终止事件后客户端主动关闭连接"
+      ],
+      "dont": [
+        "断线后重新发起同一条消息",
+        "代理开启缓冲或把读超时设得比心跳短"
+      ],
+      "verify": [
+        "断线重连集成测试：补发不丢不重，终止后返回 204",
+        "空闲 60 秒以上连接不断的实测",
+        "网关配置文件含关闭缓冲的设置"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 智能体底座 §2 接入层",
+          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+        },
+        {
+          "title": "WHATWG HTML Standard · Server-sent events",
+          "url": "https://html.spec.whatwg.org/multipage/server-sent-events.html"
+        },
+        {
+          "title": "MDN · 使用服务器发送事件",
+          "url": "https://developer.mozilla.org/zh-CN/docs/Web/API/Server-sent_events/Using_server-sent_events"
+        },
+        {
+          "title": "Nginx · ngx_http_proxy_module",
+          "url": "https://nginx.org/en/docs/http/ngx_http_proxy_module.html"
+        }
+      ]
+    },
+    {
+      "id": "AGENT-004",
+      "domain": "agent",
+      "level": "MUST",
+      "platforms": [
+        "agent"
+      ],
+      "modules": [
+        "agent"
+      ],
+      "title": "排队削峰与三级并发上限",
+      "rule": "设全局、每用户、每会话并发上限，每个会话同时只执行一个运行；超出的运行入队并推送 run.queued（位置、预计开始时间）；队列满或预计等待超过上限时返回 429 并带 Retry-After 与可读说明；运行中再次发送进入会话内待发送队列或由用户选择停止并发送；监控队列深度，在入口限流而不是无界扩容。",
+      "why": "无上限的并发会把模型配额与后端打满；直接报错会让用户反复重试，放大高峰。",
+      "do": [
+        "队列满时界面显示预计等待而不是失败",
+        "排队时间单独计时，不算进执行耗时"
+      ],
+      "dont": [
+        "同一会话并行执行两个运行",
+        "队列满时只返回 500 或不带 Retry-After 的错误"
+      ],
+      "verify": [
+        "并发测试：超过上限的请求进入队列并收到位置更新",
+        "队列满测试返回 429 且带 Retry-After",
+        "同一会话连续发送不会并行执行"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 智能体底座 §2 接入层",
+          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+        },
+        {
+          "title": "Azure Architecture Center · Queue-Based Load Leveling pattern",
+          "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/queue-based-load-leveling"
+        },
+        {
+          "title": "MDN · Retry-After",
+          "url": "https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Reference/Headers/Retry-After"
+        },
+        {
+          "title": "NN/g · Progress Indicators",
+          "url": "https://www.nngroup.com/articles/progress-indicators/"
+        }
+      ]
+    },
+    {
+      "id": "AGENT-005",
+      "domain": "agent",
+      "level": "MUST",
+      "platforms": [
+        "agent"
+      ],
+      "modules": [
+        "agent"
+      ],
+      "title": "消息与写工具都幂等",
+      "rule": "每条用户消息带客户端生成的 client_message_id（UUID v4，重发时复用），服务端 24 小时内去重，重复请求返回同一个 run_id，同一键内容不同返回 409；每个写工具调用带由会话、运行、工具与参数摘要生成的 UUID v5 幂等键，同一审批重放得到同一个键。",
+      "why": "网络重发、双击和断线重连都会重复提交；没有幂等键的写操作在重试或节点重跑时会执行两次。",
+      "do": [
+        "发送后按钮变为停止",
+        "校验失败的请求不登记幂等结果"
+      ],
+      "dont": [
+        "每次重发生成新的 client_message_id",
+        "用随机数作写操作的幂等键"
+      ],
+      "verify": [
+        "重复提交测试返回同一 run_id",
+        "同一审批重复提交只执行一次写操作"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 智能体底座 §2 接入层、§6 工具层",
+          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+        },
+        {
+          "title": "Stripe API Reference · Idempotent requests",
+          "url": "https://docs.stripe.com/api/idempotent_requests"
+        },
+        {
+          "title": "LangGraph · Graph API overview",
+          "url": "https://langchain-ai.github.io/langgraph/concepts/multi_agent/"
+        }
+      ]
+    },
+    {
+      "id": "AGENT-006",
+      "domain": "agent",
+      "level": "MUST",
+      "platforms": [
+        "agent"
+      ],
+      "modules": [
+        "agent"
+      ],
+      "title": "只对瞬时错误重试，指数退避加抖动",
+      "rule": "只对 429、529 或过载、500、502、503、504、超时和连接中断自动重试，最多 3 次，指数退避加随机抖动，有 Retry-After 时等待不少于它、超过本步剩余时间则直接降级；400、401、403、404、409、422 与业务拒绝不重试；写操作只有带幂等键才自动重试，否则暂停并询问用户；只在最外层重试。",
+      "why": "对非瞬时错误重试只会浪费时间和配额；激进或嵌套的重试会拖垮已经繁忙的依赖；非幂等写重试会重复执行。",
+      "do": [
+        "前几次失败记信息级日志，最后一次记错误级",
+        "模型重试用尽后切备用模型"
+      ],
+      "dont": [
+        "无限重试或固定间隔重试",
+        "对无幂等键的写操作自动重试"
+      ],
+      "verify": [
+        "注入 429、529、503、400 的重试测试：前三者按退避重试，400 不重试",
+        "无幂等键的写工具失败后发出需要用户处理的事件"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 智能体底座 §14 稳定",
+          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+        },
+        {
+          "title": "Azure Architecture Center · Retry pattern",
+          "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/retry"
+        },
+        {
+          "title": "Claude Platform Docs · API errors",
+          "url": "https://docs.anthropic.com/en/api/errors"
+        },
+        {
+          "title": "Claude Platform Docs · Rate limits",
+          "url": "https://docs.anthropic.com/en/api/rate-limits"
+        },
+        {
+          "title": "MDN · Retry-After",
+          "url": "https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Reference/Headers/Retry-After"
+        }
+      ]
+    },
+    {
+      "id": "AGENT-007",
+      "domain": "agent",
+      "level": "MUST",
+      "platforms": [
+        "agent"
+      ],
+      "modules": [
+        "agent"
+      ],
+      "title": "按依赖熔断并分级降级",
+      "rule": "每个模型供应商、后端服务、知识库与 MCP 服务器各有熔断器：窗口内失败达到阈值即打开，打开期间立即失败并告诉用户预计恢复时间（对外 503 加 Retry-After），半开时放少量探测请求，再次失败延长打开时间；降级按 L0–L5 梯度执行并说明影响，降级结果不得伪装成功。",
+      "why": "持续失败的依赖会拖住线程与用户；没有说明的降级会让用户把不完整的结果当成真的。",
+      "do": [
+        "熔断状态变化发事件与告警，提供手动强制打开或关闭",
+        "知识库不可用时跳过检索并说明"
+      ],
+      "dont": [
+        "熔断打开后仍持续请求依赖",
+        "降级后返回伪造的成功"
+      ],
+      "verify": [
+        "熔断测试：连续失败后打开，半开探测成功后关闭",
+        "每个降级级别都有用户文案与事件"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 智能体底座 §14 稳定",
+          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+        },
+        {
+          "title": "Azure Architecture Center · Circuit Breaker pattern",
+          "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/circuit-breaker"
+        },
+        {
+          "title": "Azure Architecture Center · Retry pattern",
+          "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/retry"
+        }
+      ]
+    },
+    {
+      "id": "AGENT-008",
+      "domain": "agent",
+      "level": "MUST",
+      "platforms": [
+        "agent"
+      ],
+      "modules": [
+        "agent"
+      ],
+      "title": "工具契约：Pydantic 参数与返回、副作用、超时、幂等、错误分类",
+      "rule": "每个工具有一份契约：动词_对象的名称、写明何时用与何时不用的描述、Pydantic 参数模型（extra=forbid，类型、范围、枚举、示例）、精简的返回模型（分页与截断说明）、副作用级别（read、write、write_high，write_high 必须有只读预览工具）、超时、幂等声明、熔断分组、错误分类（retryable、fatal、needs_user）；注册表启动时校验契约；参数校验失败不调用后端，把可执行的错误说明回给模型；工具总数不超过 20，每轮只暴露当前意图允许的工具；各家模型的工具调用经适配层转为统一格式，并行调用全部处理，参数 JSON 解析并校验后才使用。",
+      "why": "模型会填错参数、混淆重叠的工具；手写模式与实现漂移；不分类的错误要么被盲目重试，要么让模型无从纠正。",
+      "do": [
+        "身份字段由程序注入，不作为参数",
+        "外部系统优先经 MCP 接入，MCP 工具描述视为不可信并套同一契约"
+      ],
+      "dont": [
+        "把后端接口一对一包成工具",
+        "参数解析失败时静默当作空参数",
+        "只处理并行调用中的第一个"
+      ],
+      "verify": [
+        "注册表测试：缺少超时、幂等声明或预览工具的工具拒绝注册",
+        "参数错误测试：不调用后端且错误回给模型",
+        "适配层测试覆盖并行调用与流式参数拼接"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 智能体底座 §6 工具层",
+          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+        },
+        {
+          "title": "Anthropic · Writing effective tools for agents",
+          "url": "https://www.anthropic.com/engineering/writing-tools-for-agents"
+        },
+        {
+          "title": "Anthropic · Building effective agents",
+          "url": "https://www.anthropic.com/engineering/building-effective-agents"
+        },
+        {
+          "title": "Claude Platform Docs · Tool use overview",
+          "url": "https://docs.anthropic.com/en/docs/agents-and-tools/tool-use/overview"
+        },
+        {
+          "title": "Pydantic AI · Function Tools",
+          "url": "https://ai.pydantic.dev/tools/"
+        },
+        {
+          "title": "阿里云百炼 · 通义千问 Function Calling",
+          "url": "https://help.aliyun.com/zh/model-studio/qwen-function-calling"
+        },
+        {
+          "title": "Qwen 文档 · Function Calling",
+          "url": "https://qwen.readthedocs.io/en/latest/framework/function_call.html"
+        },
+        {
+          "title": "Model Context Protocol · Specification 2025-06-18",
+          "url": "https://modelcontextprotocol.io/specification/2025-06-18"
+        }
+      ]
+    },
+    {
+      "id": "AGENT-009",
+      "domain": "agent",
+      "level": "MUST",
+      "platforms": [
+        "agent"
+      ],
+      "modules": [
+        "agent"
+      ],
+      "title": "模型输出用 Pydantic 校验，失败重试一次后降级",
+      "rule": "程序消费的模型输出（意图、工具调用决策、核验判定、记忆候选、回答结构）全部用 Pydantic 模型定义并校验，优先用工具输出或原生结构化输出；校验失败带错误信息重试 1 次，仍失败转规则结果或模板回答并记录降级；流式部分输出不触发副作用；契约导出 JSON Schema 并标明契约版本。",
+      "why": "提示约束的 JSON 不可靠；未经校验的输出会把错误带进工具调用与页面。",
+      "do": [
+        "金额、id、状态字段用严格类型",
+        "改契约时升 schema_version 并跑评测"
+      ],
+      "dont": [
+        "用正则从文本里抠 JSON 后直接使用",
+        "无限次让模型重试"
+      ],
+      "verify": [
+        "结构化输出测试：非法输出重试一次后降级",
+        "契约 JSON Schema 已导出并被前端或评测引用"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 智能体底座 §7 结构化输出",
+          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+        },
+        {
+          "title": "Pydantic · Models",
+          "url": "https://docs.pydantic.dev/latest/concepts/models/"
+        },
+        {
+          "title": "Pydantic AI · Output",
+          "url": "https://ai.pydantic.dev/output/"
+        }
+      ]
+    },
+    {
+      "id": "AGENT-010",
+      "domain": "agent",
+      "level": "MUST",
+      "platforms": [
+        "agent"
+      ],
+      "modules": [
+        "agent"
+      ],
+      "title": "意图表配置化，低于置信度阈值时追问而不是猜",
+      "rule": "意图表是配置数据，每个意图写明描述、至少 5 条示例句、必填槽位、允许的工具、是否需要审批、渠道与角色，并用 Pydantic 校验；识别按规则、语义路由、小模型的顺序进行；置信度不低于 0.75 直接进入，0.5 到 0.75 或缺必填槽位时追问，低于 0.5 时列出能做的事与入口且不调用写工具；越权意图在路由前由程序拦截。",
+      "why": "散落在提示里的意图无法测试也无法维护；低置信度时让模型猜会调用错误的工具。",
+      "do": [
+        "分类提示、语义路由样例与评测集统一从意图表导出",
+        "语义路由阈值在评测集上校准后才允许直接判定"
+      ],
+      "dont": [
+        "在提示里另写一份意图清单",
+        "置信度低时直接执行写操作"
+      ],
+      "verify": [
+        "意图表配置校验测试",
+        "低置信度样例只追问或列候选、不调用写工具的测试"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 智能体底座 §4 意图识别与路由",
+          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+        },
+        {
+          "title": "Anthropic · Building effective agents",
+          "url": "https://www.anthropic.com/engineering/building-effective-agents"
+        },
+        {
+          "title": "aurelio-labs/semantic-router",
+          "url": "https://github.com/aurelio-labs/semantic-router"
+        },
+        {
+          "title": "OpenAI Agents SDK · Handoffs",
+          "url": "https://openai.github.io/openai-agents-python/handoffs/"
+        }
+      ]
+    },
+    {
+      "id": "AGENT-011",
+      "domain": "agent",
+      "level": "MUST",
+      "platforms": [
+        "agent"
+      ],
+      "modules": [
+        "agent"
+      ],
+      "title": "长期记忆带来源、可查看可删除、不存敏感信息",
+      "rule": "长期记忆按租户、用户、类型的命名空间存储，只写用户明确陈述的稳定信息，每条带来源（会话、运行）与时间，冲突时新覆盖旧并保留上一版；禁止写入密码、证件号、银行卡号、完整手机号与地址、支付信息和凭据；用户可以查看、逐条删除和全部删除，删除立即生效且之后不再被检索到。",
+      "why": "看不见、删不掉的记忆既违反个人信息保护要求，也会让错误的偏好持续影响回答。",
+      "do": [
+        "写入在回答之后后台进行",
+        "回答用到记忆时说明来源"
+      ],
+      "dont": [
+        "把模型推测或一次性事实写成长期记忆",
+        "删除只做标记而检索仍能命中"
+      ],
+      "verify": [
+        "记忆禁止项被拒绝的测试",
+        "查看与删除接口测试，删除后检索为空"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 智能体底座 §8 记忆",
+          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+        },
+        {
+          "title": "LangGraph · Memory overview",
+          "url": "https://langchain-ai.github.io/langgraph/concepts/memory/"
+        },
+        {
+          "title": "LangGraph · Persistence",
+          "url": "https://langchain-ai.github.io/langgraph/concepts/persistence/"
+        },
+        {
+          "title": "Mem0 · Platform overview",
+          "url": "https://docs.mem0.ai/overview"
+        },
+        {
+          "title": "OWASP GenAI · LLM Top 10 (2025)",
+          "url": "https://genai.owasp.org/llm-top-10/"
+        }
+      ]
+    },
+    {
+      "id": "AGENT-012",
+      "domain": "agent",
+      "level": "MUST",
+      "platforms": [
+        "agent"
+      ],
+      "modules": [
+        "agent"
+      ],
+      "title": "知识库按权限检索、回答带引用、找不到明确说",
+      "rule": "知识库文档经审核才生效，分块带上下文前缀，元数据含租户、门店、角色、版本与有效期；检索用向量与 BM25 两路召回加 RRF 融合（可加重排），并在查询内按租户、门店、角色、有效期过滤；最高相关度低于阈值时回答知识库里没有找到并给入口；规则类回答必须带真实存在于本轮检索结果的引用；价格、库存、订单状态等实时数据不进知识库。",
+      "why": "先检索再在应用里过滤会泄露其他租户或角色的数据；没有引用与没有找到的表达，模型会编造规则。",
+      "do": [
+        "阈值在评测集上校准",
+        "文档更新时清检索缓存，旧版本保留 7 天可回滚"
+      ],
+      "dont": [
+        "把原始向量分与 BM25 分直接线性相加",
+        "检索不到时让模型自由发挥"
+      ],
+      "verify": [
+        "跨租户与跨角色检索为空的测试",
+        "引用评测与无命中测试达到通过线"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 智能体底座 §9 知识库",
+          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+        },
+        {
+          "title": "Anthropic · Contextual retrieval",
+          "url": "https://www.anthropic.com/news/contextual-retrieval"
+        },
+        {
+          "title": "pgvector README",
+          "url": "https://github.com/pgvector/pgvector"
+        },
+        {
+          "title": "Qdrant · Hybrid queries",
+          "url": "https://qdrant.tech/documentation/concepts/hybrid-queries/"
+        },
+        {
+          "title": "OWASP GenAI · LLM Top 10 (2025)",
+          "url": "https://genai.owasp.org/llm-top-10/"
+        }
+      ]
+    },
+    {
+      "id": "AGENT-013",
+      "domain": "agent",
+      "level": "MUST",
+      "platforms": [
+        "agent"
+      ],
+      "modules": [
+        "agent"
+      ],
+      "title": "防提示注入：外部内容当数据、最小权限、护栏先于主模型",
+      "rule": "输入护栏在主模型调用之前以阻塞方式完成（校验、敏感信息遮蔽、注入检测、越权意图拦截）；工具结果、知识片段、网页、文件与记忆一律放在标明为数据的分隔块中，系统提示声明块内指令无效，外部内容不得拼进系统提示或工具描述；可疑输入时本次运行只读；工具最小权限、高风险动作审批；用对抗集定期测试。",
+      "why": "提示注入没有一劳永逸的防法，RAG 也不能消除它；只能靠隔离外部内容、限制权限与人工审批把影响降到最低。",
+      "do": [
+        "系统提示里不放密钥、权限规则与内部地址",
+        "MCP 服务器给的工具描述按不可信处理"
+      ],
+      "dont": [
+        "把检索片段或工具结果拼进系统提示",
+        "由模型判断用户是否有权限"
+      ],
+      "verify": [
+        "对抗集注入成功率为 0",
+        "被护栏拦下的请求不调用主模型、不执行工具的测试"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 智能体底座 §3 输入护栏、§13 安全",
+          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+        },
+        {
+          "title": "OWASP GenAI · LLM01:2025 Prompt Injection",
+          "url": "https://genai.owasp.org/llmrisk/llm01-prompt-injection/"
+        },
+        {
+          "title": "OWASP GenAI · LLM Top 10 (2025)",
+          "url": "https://genai.owasp.org/llm-top-10/"
+        },
+        {
+          "title": "OpenAI Agents SDK · Guardrails",
+          "url": "https://openai.github.io/openai-agents-python/guardrails/"
+        },
+        {
+          "title": "Model Context Protocol · Specification 2025-06-18",
+          "url": "https://modelcontextprotocol.io/specification/2025-06-18"
+        }
+      ]
+    },
+    {
+      "id": "AGENT-014",
+      "domain": "agent",
+      "level": "MUST",
+      "platforms": [
+        "agent"
+      ],
+      "modules": [
+        "agent"
+      ],
+      "title": "模型输出是不可信输入：核验、转义、校验后再用",
+      "rule": "最终回答先过 Pydantic 校验与确定性核验（数字与实体能在工具结果或引用中找到、引用存在、失败不说成功、无承诺词、至少一个页面入口），不通过重生成一次后改用模板回答；回答只含当前用户的数据并遮蔽敏感信息；前端渲染前转义，禁用原始 HTML 与脚本链接；模型文本不得直接拼进 SQL、命令、URL 或文件路径。",
+      "why": "模型会编造数字和规则；未经处理的模型输出会造成跨站脚本、注入与错误承诺。",
+      "do": [
+        "核验规则用代码实现，语义检查用小模型并在不可用时记降级",
+        "被拦下的输出用不含敏感信息的固定文案"
+      ],
+      "dont": [
+        "用 innerHTML 渲染模型回答",
+        "把模型生成的字符串拼进查询或命令"
+      ],
+      "verify": [
+        "核验测试覆盖编造金额、编造订单号、失败说成功",
+        "含脚本与 HTML 的回答被转义的测试"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 智能体底座 §10 输出护栏",
+          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+        },
+        {
+          "title": "OWASP GenAI · LLM Top 10 (2025)",
+          "url": "https://genai.owasp.org/llm-top-10/"
+        },
+        {
+          "title": "OpenAI Agents SDK · Guardrails",
+          "url": "https://openai.github.io/openai-agents-python/guardrails/"
+        },
+        {
+          "title": "Anthropic · How we built our multi-agent research system",
+          "url": "https://www.anthropic.com/engineering/multi-agent-research-system"
+        }
+      ]
+    },
+    {
+      "id": "AGENT-015",
+      "domain": "agent",
+      "level": "MUST",
+      "platforms": [
+        "agent"
+      ],
+      "modules": [
+        "agent"
+      ],
+      "title": "评测集与回归门槛",
+      "rule": "维护意图识别、工具选择与参数、引用正确率、拒答正确率四类评测集和一份对抗集，各有通过线；改提示、换模型或模型版本、改工具描述、改意图表、改契约或检索参数时，合并前必须跑离线评测，任一指标低于通过线或较上一版下降超过 2 个百分点不得发布；能确定的用代码判，开放回答用模型评审并定期人工抽检；线上失败回流为评测样例。",
+      "why": "提示与模型的小改动会让成功率大幅波动，没有回归门槛的改动无法知道是否变差。",
+      "do": [
+        "评测从约 20 条代表性样例开始",
+        "会改变状态的流程按最终状态判定"
+      ],
+      "dont": [
+        "只凭几次手工对话判断效果",
+        "改了工具描述不跑评测"
+      ],
+      "verify": [
+        "评测报告附在交付记录中",
+        "CI 配置能阻止低于通过线的改动"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 智能体底座 §11 可观测与评测",
+          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+        },
+        {
+          "title": "LangSmith · Evaluation",
+          "url": "https://docs.smith.langchain.com/evaluation/concepts"
+        },
+        {
+          "title": "Anthropic · How we built our multi-agent research system",
+          "url": "https://www.anthropic.com/engineering/multi-agent-research-system"
+        },
+        {
+          "title": "Anthropic · Writing effective tools for agents",
+          "url": "https://www.anthropic.com/engineering/writing-tools-for-agents"
+        }
+      ]
+    },
+    {
+      "id": "AGENT-016",
+      "domain": "agent",
+      "level": "MUST",
+      "platforms": [
+        "agent"
+      ],
+      "modules": [
+        "agent"
+      ],
+      "title": "运行上限：token、工具次数、步数、时长、次数与费用",
+      "rule": "每次运行设 token 上限、工具调用次数上限、图步数上限（显式设置 recursion_limit）、同名同参重复调用上限与整轮执行时长；每用户每日运行数与租户每日费用设预算；任一上限触发即停止并说明原因，不静默截断；超预算返回 429。",
+      "why": "没有上限的循环会无限调用工具和模型，造成失控的费用与资源耗尽。",
+      "do": [
+        "上限数值写进技术方案并与配置一致",
+        "费用达到预算 80% 告警"
+      ],
+      "dont": [
+        "依赖框架默认的递归上限",
+        "触发上限后返回伪造的完整回答"
+      ],
+      "verify": [
+        "每个上限一条触发测试",
+        "超预算返回 429 的测试"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 智能体底座 §14 稳定、§16 上限",
+          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+        },
+        {
+          "title": "OWASP GenAI · LLM Top 10 (2025)",
+          "url": "https://genai.owasp.org/llm-top-10/"
+        },
+        {
+          "title": "Anthropic · Building effective agents",
+          "url": "https://www.anthropic.com/engineering/building-effective-agents"
+        },
+        {
+          "title": "LangGraph · Graph API overview",
+          "url": "https://langchain-ai.github.io/langgraph/concepts/multi_agent/"
+        }
+      ]
+    },
+    {
+      "id": "AGENT-017",
+      "domain": "agent",
+      "level": "MUST",
+      "platforms": [
+        "agent"
+      ],
+      "modules": [
+        "agent"
+      ],
+      "title": "断点续跑、保留部分结果、取消与回滚",
+      "rule": "运行状态每个节点后落检查点（生产用数据库存储），断线、刷新、服务重启后从断点继续，已完成的步骤与写操作不重做；失败时保留已完成步骤与已生成文字并标记未完成，提供从失败处重试；用户随时可以取消，服务端停止后续步骤、未提交的写操作回滚、推送 run.cancelled；节点内写操作幂等，审批中断之前不得有写操作。",
+      "why": "智能体运行耗时长，从头重来既浪费又可能重复写入；不能取消会让用户只能等待或强退。",
+      "do": [
+        "服务启动时扫描运行中的任务并恢复或标记可重试",
+        "跨服务的多步写有补偿动作"
+      ],
+      "dont": [
+        "用内存检查点上生产",
+        "在 interrupt 之前执行写操作"
+      ],
+      "verify": [
+        "杀进程后续跑测试：已完成步骤不重做",
+        "取消测试：后续步骤停止且未提交写操作回滚"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 智能体底座 §14 稳定",
+          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+        },
+        {
+          "title": "LangGraph · Persistence",
+          "url": "https://langchain-ai.github.io/langgraph/concepts/persistence/"
+        },
+        {
+          "title": "LangGraph · Interrupts (human-in-the-loop)",
+          "url": "https://langchain-ai.github.io/langgraph/concepts/human_in_the_loop/"
+        },
+        {
+          "title": "LangGraph · Graph API overview",
+          "url": "https://langchain-ai.github.io/langgraph/concepts/multi_agent/"
+        },
+        {
+          "title": "Anthropic · How we built our multi-agent research system",
+          "url": "https://www.anthropic.com/engineering/multi-agent-research-system"
+        }
+      ]
+    },
+    {
+      "id": "AGENT-018",
+      "domain": "agent",
+      "level": "MUST",
+      "platforms": [
+        "agent"
+      ],
+      "modules": [
+        "agent"
+      ],
+      "title": "追踪与指标：trace、请求编号、脱敏、P95",
+      "rule": "每次运行一条 trace，span 覆盖排队、护栏、意图、检索、模型、工具、审批、核验与记忆，记录耗时、token、重试与降级；日志每行带 request_id、run_id、trace_id；默认不记录模型输入输出与工具参数原文，脱敏失败的数据丢弃；监控错误率、超时率、首事件与首 token 时延、平均与 P95 时长、队列、熔断、回退率与费用并配置告警。",
+      "why": "没有链路追踪就无法定位慢在哪一步、错在哪个依赖；记录原文会泄露个人信息。",
+      "do": [
+        "错误事件带可复制的 request_id",
+        "按租户短时打开原文记录排障并自动过期"
+      ],
+      "dont": [
+        "在日志里打印完整对话、令牌或密钥",
+        "只看平均耗时不看 P95"
+      ],
+      "verify": [
+        "trace 抽查 span 齐全且无原文",
+        "监控面板与告警规则截图"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 智能体底座 §11 可观测与评测",
+          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+        },
+        {
+          "title": "OpenAI Agents SDK · Tracing",
+          "url": "https://openai.github.io/openai-agents-python/tracing/"
+        },
+        {
+          "title": "Anthropic · How we built our multi-agent research system",
+          "url": "https://www.anthropic.com/engineering/multi-agent-research-system"
+        }
+      ]
+    },
+    {
+      "id": "AGENT-019",
+      "domain": "agent",
+      "level": "SHOULD",
+      "platforms": [
+        "agent"
+      ],
+      "modules": [
+        "agent"
+      ],
+      "title": "性能：首事件 1 秒、提示缓存、并行、模型分层",
+      "rule": "首个事件 P95 不超过 1 秒、首个文字增量 P95 不超过 3 秒；提示按工具定义、系统提示、静态知识、会话历史、本轮输入的固定顺序拼装并在最后一个不变的块上设缓存断点，时间戳等可变内容放在断点之后；记忆读取与意图分类并行、两路检索并行、互不依赖的只读工具并行；路由、分类、护栏、核验与摘要用小模型；监控缓存命中。",
+      "why": "1 秒以上没有反馈用户会以为没收到；不稳定的提示前缀让缓存失效，成本与时延都上升。",
+      "do": [
+        "只流 respond 节点的文字，内部调用不流出",
+        "同一运行内同名同参的只读调用复用结果"
+      ],
+      "dont": [
+        "把时间戳放进系统提示开头",
+        "串行执行互不依赖的检索与工具"
+      ],
+      "verify": [
+        "压测记录首事件与首字时延",
+        "用量记录中有缓存读取 token"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 智能体底座 §12 性能",
+          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+        },
+        {
+          "title": "Claude Platform Docs · Prompt caching",
+          "url": "https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching"
+        },
+        {
+          "title": "NN/g · Response Time Limits",
+          "url": "https://www.nngroup.com/articles/response-times-3-important-limits/"
+        },
+        {
+          "title": "Anthropic · How we built our multi-agent research system",
+          "url": "https://www.anthropic.com/engineering/multi-agent-research-system"
+        },
+        {
+          "title": "LangGraph · Streaming",
+          "url": "https://langchain-ai.github.io/langgraph/concepts/streaming/"
+        }
+      ]
+    },
+    {
+      "id": "AGENT-020",
+      "domain": "agent",
+      "level": "SHOULD",
+      "platforms": [
+        "agent"
+      ],
+      "modules": [
+        "agent"
+      ],
+      "title": "工作流优先，多智能体要有理由",
+      "rule": "智能体服务默认是固定节点的 LangGraph 工作流，自由循环只在规划与工具调用之间并受上限约束；只有子任务可并行、彼此独立、单个上下文装不下时才用多智能体，并在方案中写明理由与成本；每个子智能体有目标、输出格式、可用工具与边界。",
+      "why": "多智能体的 token 用量约为普通对话的 15 倍，需要共享上下文或依赖多的任务用多智能体效果反而差。",
+      "do": [
+        "从最简单的方案开始，评测证明更好才增加复杂度"
+      ],
+      "dont": [
+        "为简单问答引入多个智能体"
+      ],
+      "verify": [
+        "方案审查记录多智能体的理由与成本估算"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 智能体底座 §5 编排",
+          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+        },
+        {
+          "title": "Anthropic · Building effective agents",
+          "url": "https://www.anthropic.com/engineering/building-effective-agents"
+        },
+        {
+          "title": "Anthropic · How we built our multi-agent research system",
+          "url": "https://www.anthropic.com/engineering/multi-agent-research-system"
+        },
+        {
+          "title": "Anthropic · Effective context engineering for AI agents",
+          "url": "https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents"
+        }
+      ]
+    },
+    {
       "id": "REL-001",
       "domain": "release",
       "level": "MUST",
@@ -4820,7 +5688,8 @@
         "agent"
       ],
       "rules": [
-        "AGENT-001"
+        "AGENT-001",
+        "AGENT-008"
       ],
       "acceptance": "高影响操作需确认且不可重复执行。"
     },
@@ -4833,8 +5702,86 @@
       "modules": [
         "agent"
       ],
-      "rules": [],
+      "rules": [
+        "AGENT-015"
+      ],
       "acceptance": "评估集记录通过率；版本变更对比回归。"
+    },
+    {
+      "id": "BL-AG-03",
+      "projectType": "agent",
+      "feature": "SSE 流式输出与断线续传",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "agent"
+      ],
+      "rules": [
+        "AGENT-002",
+        "AGENT-003"
+      ],
+      "acceptance": "回复、进度、耗时、排队与错误经 SSE 推送；断线重连不丢不重、不重新执行；首个事件 1 秒内到达。"
+    },
+    {
+      "id": "BL-AG-04",
+      "projectType": "agent",
+      "feature": "排队、防重复提交与停止",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "agent"
+      ],
+      "rules": [
+        "AGENT-004",
+        "AGENT-005",
+        "AGENT-017"
+      ],
+      "acceptance": "超过并发上限时显示排队位置与预计时间，队列满返回 429 与 Retry-After；重复提交返回同一运行；随时可停止。"
+    },
+    {
+      "id": "BL-AG-05",
+      "projectType": "agent",
+      "feature": "失败可恢复与运行上限",
+      "requirement": "required",
+      "condition": "",
+      "modules": [
+        "agent"
+      ],
+      "rules": [
+        "AGENT-006",
+        "AGENT-007",
+        "AGENT-016",
+        "AGENT-017"
+      ],
+      "acceptance": "瞬时错误自动重试，依赖故障时熔断并说明预计恢复时间；失败保留部分结果并可从失败处重试；上限触发时停止并说明。"
+    },
+    {
+      "id": "BL-AG-06",
+      "projectType": "agent",
+      "feature": "长期记忆查看与删除",
+      "requirement": "conditional",
+      "condition": "启用长期记忆",
+      "modules": [
+        "agent"
+      ],
+      "rules": [
+        "AGENT-011"
+      ],
+      "acceptance": "用户能看到被记住的内容及来源，能逐条与全部删除，删除后不再被使用。"
+    },
+    {
+      "id": "BL-AG-07",
+      "projectType": "agent",
+      "feature": "知识库引用与没有找到",
+      "requirement": "conditional",
+      "condition": "启用知识库",
+      "modules": [
+        "agent"
+      ],
+      "rules": [
+        "AGENT-012"
+      ],
+      "acceptance": "规则类回答带可展开的来源；检索不到时明确说明并给入口；只检索到用户有权看的文档。"
     },
     {
       "id": "BL-MP-17",

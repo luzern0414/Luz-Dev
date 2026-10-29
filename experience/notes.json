@@ -7,6 +7,15 @@
   },
   "notes": [
     {
+      "key": "agent-must-use-sse",
+      "kind": "preference",
+      "text": "智能体必须用 SSE 推送回复、阶段与步骤进度、各段耗时、排队位置、审批请求和错误，不轮询、不整段返回；必须有排队等待（并发上限、排队位置与预计时间、队列满 429 加 Retry-After）、防重复提交（client_message_id 幂等）和防失败（只对瞬时错误退避重试、熔断降级、断线续传、断点续跑、保留部分结果、可取消、运行上限），只认终止事件为结束",
+      "why": "用户 2026-10-29 要求：智能体必须使用 SSE，要有排队等待与防错防失败机制、耗时显示",
+      "uses": 1,
+      "first_seen": "2026-10-29",
+      "last_confirmed": "2026-10-29"
+    },
+    {
       "key": "base-then-custom-features",
       "kind": "preference",
       "text": "方案页在结论之后先列这类系统的基础功能（逐项标注包含或不适用），再列本项目的定制功能，然后才是调研、设计和架构。",
@@ -79,6 +88,24 @@
       "last_confirmed": "2026-10-28"
     },
     {
+      "key": "existing-system-auth-review",
+      "kind": "lesson",
+      "text": "给已有系统补账号体系时，先建 review 方案对照 AUTH/AUTHZ/ADMIN 规则：用户名不存在也做同耗时比对、注册按来源限流防刷额度、附件等上传物核对归属、锁定提示剩余时间",
+      "why": "DealRadar 登录额度审查查出 5 项问题",
+      "uses": 1,
+      "first_seen": "2026-10-28",
+      "last_confirmed": "2026-10-28"
+    },
+    {
+      "key": "more-sources-need-read-priority",
+      "kind": "lesson",
+      "text": "获客类系统扩充数据源后，结果数受阅读原文名额限制而非检索；同一公告应优先读官方平台原文，聚合站转载正文常删减、核验率低",
+      "why": "DealRadar 接入 58 个入口后候选增 70% 而买家减少、核验率由 97.7% 降至 87.8%",
+      "uses": 1,
+      "first_seen": "2026-10-29",
+      "last_confirmed": "2026-10-29"
+    },
+    {
       "key": "plan-spec-sync-readd",
       "kind": "lesson",
       "text": "spec --file 会按方案模块重新同步库内详设，替换自定义详设后要再逐个 spec --remove 不适用的库内详设并确认 moduleSpecs；方案页面避免 哈希、sha256、数据来源、输出目录 等被 check_document 拦截的词",
@@ -92,6 +119,41 @@
       "kind": "lesson",
       "text": "平台驱动 Luz-System 会话时，调研来源可能在调研后被站点临时封锁（如 HTTP 423），发布前要复核来源、失败重试一次、仍不可达则从经验库替换同类来源再跑 strict 校验",
       "why": "02 真实联调首次发布被 strict 拦截",
+      "uses": 1,
+      "first_seen": "2026-10-28",
+      "last_confirmed": "2026-10-28"
+    },
+    {
+      "key": "standards-rule-id-format",
+      "kind": "lesson",
+      "text": "standards.json 的规则编号必须是 前缀-三位数字（如 AGENT-002），build_standards.py 用 ^[A-Z]+-\\d{3}$ 校验；AGENT-SSE-001 这类分段编号会被拒，主题写进标题而不是编号",
+      "why": "2026-10-29 新增智能体底座规则时规格建议的编号格式不符合校验",
+      "uses": 1,
+      "first_seen": "2026-10-29",
+      "last_confirmed": "2026-10-29"
+    },
+    {
+      "key": "agent-foundation-pipeline",
+      "kind": "fact",
+      "text": "智能体服务按 references/agent-foundation.md 的固定流水线实现：接入（SSE、排队、幂等）→ 输入护栏（先于主模型）→ 意图路由（规则→语义路由→小模型，置信度 0.75/0.5，低于阈值追问不猜）→ LangGraph 工作流 → 工具契约（Pydantic 参数与返回、副作用级别、超时、幂等键、错误三分类）→ 结构化输出（校验失败重试 1 次后降级）→ 记忆（检查点 + Store，可看可删）→ 知识库（上下文前缀、向量+BM25+RRF、权限预过滤、引用）→ 输出护栏与审批 → 追踪与评测回归；超时与上限统一见底座 §16",
+      "why": "Luz-Crawl 调研 017/018 共 46 个来源（Anthropic、Claude 文档、OpenAI Agents SDK、LangGraph、Pydantic AI、MCP、OWASP、pgvector、Qdrant、通义千问等）；DeepSeek 工具调用页与 OpenTelemetry 生成式 AI 属性页未采到，落地前补采",
+      "uses": 1,
+      "first_seen": "2026-10-29",
+      "last_confirmed": "2026-10-29"
+    },
+    {
+      "key": "browser-in-docker-handover",
+      "kind": "fact",
+      "text": "容器内需人工验证的浏览器：Xvfb + 有界面 Chromium + x11vnc + noVNC，经应用自身登录的同源 WebSocket 代理暴露，shm 至少 1–2GB，--init，非 root + seccomp；WebRTC（n.eko）延迟低但需 UDP",
+      "why": "docker-selenium、linuxserver/chromium、Playwright Docker 文档",
+      "uses": 1,
+      "first_seen": "2026-10-28",
+      "last_confirmed": "2026-10-28"
+    },
+    {
+      "key": "plan-page-banned-words",
+      "kind": "fact",
+      "text": "方案页正文不能出现“哈希”“SHA-256”字样（被 check_document 当作来源元数据拦截），改写为“不可逆摘要”“密码比对”",
       "uses": 1,
       "first_seen": "2026-10-28",
       "last_confirmed": "2026-10-28"

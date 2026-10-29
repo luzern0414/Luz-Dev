@@ -1,3 +1,4 @@
+<!-- 模板只是骨架，不是规范：先运行 python -X utf8 scripts/context.py launch-compliance 读完规则卡；与规则卡冲突时按规则卡写。 -->
 # 发布、回滚与恢复手册
 
 复制到项目 `docs/RUNBOOK.md`，把域名、主机、联系人替换为实际值。脚本在 `/opt/luz/deploy/`：`release.sh`、`backup.sh`、`verify-restore.sh`。

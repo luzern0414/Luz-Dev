@@ -17,6 +17,7 @@ The Design package is resolved by `--design-root`, then `LUZ_DESIGN_ROOT`, then 
 
 | Need | Read next |
 |---|---|
+| Every call starts here: the rule card for the task kind (preferences, lessons, rule text, tools, checks) | `python -X utf8 scripts/context.py list` → `context.py <kind>`; cards defined in `references/cards.json` |
 | Technical plan lifecycle (create, research, submit, approve, gate) | `SKILL.md` → `scripts/tech_plan.py` |
 | Research with Luz-Crawl | `references/research.md` + `references/research-sources.json` |
 | Module detailed design: page inputs, APIs, result pages, data writes, tables and fields per module | `references/module-specs/README.md` |
@@ -35,7 +36,7 @@ The Design package is resolved by `--design-root`, then `LUZ_DESIGN_ROOT`, then 
 | Completed-flow result pages | `references/result-patterns.md`; catalog module `result-flow` |
 | Catalog maintenance | Canonical JSON -> `scripts/build_function_catalog.py` -> generated HTML |
 | Standards maintenance | Canonical JSON -> `scripts/build_standards.py` -> generated HTML |
-| Intelligent agent service | `references/agent.md` -> `agent/README.md` |
+| Intelligent agent service (canonical spec: pipeline, contracts, limits, checklist) | `references/agent-foundation.md` -> `agent/README.md` (code gaps) |
 | Frontend/backend API bindings | `references/api-bindings.md` |
 | Architecture decisions | `references/implementation-architecture.md` |
 | Quality and release | `references/quality.md` + `references/delivery.md` |

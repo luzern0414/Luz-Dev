@@ -19,6 +19,34 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import build_standards  # noqa: E402
 import tech_plan  # noqa: E402
 
+TEST_NOTE = "test-plan-note"
+
+
+def use_test_notes(folder: Path, last_confirmed: str | None = None) -> Path:
+    """Point the 本次沉淀 check at a temporary experience store holding one note confirmed today (or on the given date)."""
+    import datetime
+
+    notes = Path(folder) / "notes.json"
+    day = last_confirmed or datetime.date.today().isoformat()
+    notes.write_text(json.dumps({"schema_version": "1.0", "notes": [
+        {"key": TEST_NOTE, "kind": "lesson", "text": "测试方案写入的经验", "uses": 1, "first_seen": day, "last_confirmed": day}]},
+        ensure_ascii=False), encoding="utf-8")
+    tech_plan.NOTES_FILE = notes
+    return notes
+
+
+_NOTES_DIR = tempfile.TemporaryDirectory(prefix="luz-notes-")
+_REAL_NOTES = tech_plan.NOTES_FILE
+
+
+def setUpModule() -> None:  # noqa: N802 - unittest hook
+    use_test_notes(Path(_NOTES_DIR.name))
+
+
+def tearDownModule() -> None:  # noqa: N802 - unittest hook
+    tech_plan.NOTES_FILE = _REAL_NOTES
+    _NOTES_DIR.cleanup()
+
 
 def run(output: Path, *argv: str) -> int:
     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
@@ -58,6 +86,9 @@ def complete(plan: dict) -> dict:
     if not plan.get("customFeatures"):
         plan["customFeatures"] = [{"id": "CF-01", "name": "人脸入场", "description": "会员刷脸入场，可用会员码替代",
                                    "priority": "P0", "modules": ["face"], "source": "用户需求"}]
+    # 采用的规则 and 本次沉淀, written after reading the rule cards and recording a note.
+    plan["adoptedRules"] = plan.get("adoptedRules") or [{"rule": "SKILL.md › Engineering rules", "how": "金额用分，状态只经状态机改变"}]
+    plan["sediment"] = plan.get("sediment") or [{"key": TEST_NOTE, "kind": "lesson", "text": "测试方案写入的经验"}]
     return plan
 
 
@@ -159,6 +190,148 @@ class LifecycleTests(unittest.TestCase):
         plan["sections"][0]["blocks"] = [{"type": "p", "text": "结论 [S99]"}]
         errors, _ = tech_plan.check_plan(plan)
         self.assertIn("引用了不存在的来源 [S99]", errors)
+
+
+def run_out(output: Path, *argv: str) -> tuple[int, str, str]:
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        code = tech_plan.main(["--output-root", str(output), *argv])
+    return code, out.getvalue(), err.getvalue()
+
+
+class RuleCardGateTests(unittest.TestCase):
+    """Plans work from rule cards (raw/00-rules/), record 采用的规则 and 本次沉淀; submit and delivery refuse otherwise."""
+
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.output = Path(self.temp.name)
+        use_test_notes(self.output)
+
+    def tearDown(self) -> None:
+        use_test_notes(Path(_NOTES_DIR.name))
+        self.temp.cleanup()
+
+    def new(self, *argv: str) -> dict:
+        code, out, err = run_out(self.output, "new", *argv)
+        self.assertEqual(code, 0, err)
+        self.assertIn("规则卡", err)  # the agent is told to read the cards before anything else
+        return json.loads(out)
+
+    def rules_dir(self, number: str = "01") -> Path:
+        _, data_path = tech_plan.find_plan(number, self.output)
+        return data_path.parent / tech_plan.RULES_DIRNAME
+
+    def test_new_plan_saves_the_cards_of_its_mode_and_project_types(self) -> None:
+        payload = self.new("小程序商城", "--mode", "implementation", "--project-type", "miniprogram,backend", "--modules", "payment")
+        expected = ["tech-plan", "backend-module", "frontend-integration", "launch-compliance"]
+        self.assertEqual(load(self.output)["ruleCards"], expected)
+        self.assertEqual([Path(p).stem for p in payload["ruleCards"]], expected)
+        self.assertEqual(sorted(p.stem for p in self.rules_dir().glob("*.md")), sorted(expected))
+        for card in self.rules_dir().glob("*.md"):
+            self.assertTrue(tech_plan.rule_cards.card_is_current(card))
+        plan = load(self.output)
+        self.assertEqual((plan["adoptedRules"], plan["sediment"]), ([], []))
+        self.new("巡检", "--mode", "review", "--project-type", "backend")
+        self.assertEqual(load(self.output, "02")["ruleCards"], ["tech-plan", "review-diagnose"])
+        self.new("智能体", "--mode", "implementation", "--card", "agent-service")
+        self.assertEqual(load(self.output, "03")["ruleCards"], ["tech-plan", "agent-service"])
+        # An unknown kind fails before a folder is reserved.
+        self.assertEqual(run(self.output, "new", "未知卡", "--mode", "analysis", "--card", "nope"), 2)
+        self.assertFalse(list(self.output.glob("04-*")))
+
+    def test_rendered_page_keeps_template_notes_and_process_records_off(self) -> None:
+        self.new("页面", "--mode", "analysis")
+        save(self.output, complete(load(self.output)))
+        html = (self.output / "01-页面" / "01-页面.html").read_text(encoding="utf-8")
+        self.assertNotIn("context.py", html)
+        self.assertNotIn("<!--", html)
+        self.assertNotIn("Engineering rules", html)  # 采用的规则 stay in plan.json
+        self.assertNotIn(TEST_NOTE, html)  # so does 本次沉淀
+
+    def test_submit_refuses_without_current_cards_adopted_rules_or_sediment(self) -> None:
+        self.new("健身房", "--mode", "implementation", "--project-type", "backend", "--modules", "payment")
+        plan = complete(load(self.output))
+        plan["adoptedRules"], plan["sediment"] = [], []
+        save(self.output, plan)
+        code, out, _ = run_out(self.output, "submit", "01")
+        errors = json.loads(out)["errors"]
+        self.assertEqual(code, 1)
+        self.assertTrue(any("采用的规则为空" in e and "tech_plan.py rule 01" in e for e in errors), errors)
+        self.assertTrue(any("本次沉淀为空" in e and "record_experience.py note" in e for e in errors), errors)
+
+        # 采用的规则: a label copied from a card is accepted silently; anything else gets a warning.
+        code, out, _ = run_out(self.output, "rule", "01", "--rule", "SKILL.md › Engineering rules", "--how", "金额用分")
+        self.assertEqual(code, 0)
+        self.assertNotIn("warning", json.loads(out))
+        code, out, _ = run_out(self.output, "rule", "01", "--rule", "随便写的规则", "--how", "x")
+        self.assertIn("warning", json.loads(out))
+        self.assertEqual(run(self.output, "rule", "01", "--remove", "随便写的规则"), 0)
+        self.assertEqual(run(self.output, "rule", "01", "--rule", "只有规则"), 2)
+        self.assertEqual(load(self.output)["adoptedRules"], [{"rule": "SKILL.md › Engineering rules", "how": "金额用分"}])
+
+        # 本次沉淀: only keys that exist in the experience store.
+        self.assertEqual(run(self.output, "sediment", "01", "--key", "never-written"), 2)
+        self.assertEqual(run(self.output, "sediment", "01", "--key", TEST_NOTE), 0)
+        self.assertEqual(load(self.output)["sediment"][0]["kind"], "lesson")
+
+        # A missing or out-of-date card blocks submission and names the command to regenerate it.
+        card = self.rules_dir() / "backend-module.md"
+        card.unlink()
+        code, out, _ = run_out(self.output, "submit", "01")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("backend-module.md" in e and "context.py backend-module --session" in e for e in json.loads(out)["errors"]))
+        tech_plan.rule_cards.save_card(self.rules_dir().parent, "backend-module")
+        first, rest = card.read_text(encoding="utf-8").split("\n", 1)
+        card.write_text(first.replace(first[19:31], "000000000000") + "\n" + rest, encoding="utf-8")
+        code, out, _ = run_out(self.output, "submit", "01")
+        self.assertTrue(any("已过期" in e for e in json.loads(out)["errors"]))
+        tech_plan.rule_cards.save_card(self.rules_dir().parent, "backend-module")
+        self.assertEqual(run(self.output, "submit", "01"), 0)
+
+    def test_sediment_must_be_dated_this_plan_and_delivery_needs_a_fresh_note(self) -> None:
+        self.new("对账", "--mode", "implementation", "--project-type", "backend", "--modules", "payment")
+        save(self.output, complete(load(self.output)))
+        use_test_notes(self.output, last_confirmed="2020-01-01")  # a note last confirmed before the plan began
+        code, out, _ = run_out(self.output, "submit", "01")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("早于本方案创建日" in e for e in json.loads(out)["errors"]))
+        use_test_notes(self.output)
+        self.assertEqual(run(self.output, "submit", "01"), 0)
+        self.assertEqual(run(self.output, "approve", "01", "--note", "用户：通过"), 0)
+        self.assertEqual(run(self.output, "gate", "01"), 0)
+        ids = [item["id"] for kind in ("rules", "baselines") for item in load(self.output)["checklist"][kind]]
+        self.assertEqual(run(self.output, "mark", "01", ",".join(ids), "--status", "done", "--evidence", "pytest 全绿"), 0)
+        self.assertEqual(run(self.output, "check", "01", "--stage", "delivery"), 0)
+        # Building and launching is a later call: delivery wants a note confirmed on or after the approval day.
+        plan = load(self.output)
+        plan["approval"]["at"] = "2999-01-01T00:00:00+08:00"
+        save(self.output, plan)
+        code, out, _ = run_out(self.output, "check", "01", "--stage", "delivery")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("交付前还要沉淀" in e for e in json.loads(out)["errors"]))
+        use_test_notes(self.output, last_confirmed="2999-01-01")
+        self.assertEqual(run(self.output, "check", "01", "--stage", "delivery"), 0)
+        self.assertEqual(run(self.output, "gate", "01"), 0)  # process records are outside the approval hash
+
+    def test_plans_from_before_rule_cards_are_only_reminded_at_delivery(self) -> None:
+        self.new("旧方案", "--mode", "implementation", "--project-type", "backend", "--modules", "payment")
+        save(self.output, complete(load(self.output)))
+        run(self.output, "submit", "01")
+        run(self.output, "approve", "01", "--note", "用户：通过")
+        ids = [item["id"] for kind in ("rules", "baselines") for item in load(self.output)["checklist"][kind]]
+        run(self.output, "mark", "01", ",".join(ids), "--status", "done", "--evidence", "pytest 全绿")
+        plan = load(self.output)
+        for key in ("ruleCards", "adoptedRules", "sediment"):
+            plan.pop(key)
+        save(self.output, plan)
+        for card in self.rules_dir().glob("*.md"):
+            card.unlink()
+        code, out, _ = run_out(self.output, "check", "01", "--stage", "delivery")
+        result = json.loads(out)
+        self.assertEqual(code, 0, result["errors"])
+        self.assertTrue(any("规则卡" in w for w in result["warnings"]))
+        self.assertTrue(any("本次沉淀" in w for w in result["warnings"]))
+        self.assertEqual(run(self.output, "gate", "01"), 0)
 
 
 class ArchetypeTests(unittest.TestCase):

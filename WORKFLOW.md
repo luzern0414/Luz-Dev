@@ -2,23 +2,29 @@
 
 Luz Dev runs a product from approved design to production. Development proceeds in vertical slices; launch follows a checklist. Each gate has evidence that a reviewer can inspect.
 
-## 0. Plan, research, and user approval
+## 0. Rule card and experience first, then plan, research and user approval
+
+### 0a. Rule card and experience first
+
+Before anything else, run `python -X utf8 scripts/context.py list` and read the whole rule card for the task kind (`context.py <kind>`): it carries the user's preferences, the matching lessons and facts, the rule text cut from the rule pages, the tools and the checks. The plan generator, the asset templates and the standard modules are skeletons; the card decides. Creating the plan (below) saves the cards for its mode and project types into `raw/00-rules/` (`--card <kind>` chooses them). Then search `record_experience.py search` and `knowledge.py search`; stored preferences and lessons apply without being asked again. While working, record each applied rule section or preference key in 采用的规则 (`tech_plan.py rule NN --rule … --how …`), and before finishing write at least one note and list it in 本次沉淀 (`tech_plan.py sediment NN --key …`).
+
+**Gate:** `tech_plan.py submit` and `check --stage delivery` refuse a plan whose rule cards are missing or out of date (regenerate with `context.py <kind> --session <方案目录>` and re-check), or whose 采用的规则 or 本次沉淀 is empty.
 
 Every invocation starts a numbered plan with `scripts/create_tech_plan.py` (or `tech_plan.py new`), naming the project types, archetype and modules. Each plan has its own folder `D:\Codes\skill输出\Luz-Dev\NN-主题\`: the reviewable page `NN-主题.html` and `raw\` (canonical `plan.json`, research inputs and logs, design intake). The page lists the system's base features and custom features before the technical content.
 
-### 0a. Research
+### 0b. Research
 
 Start from `knowledge/`: a new plan already carries the fresh sources and facts for its modules. Run `tech_plan.py research NN --run` (see `references/research.md`) for what is missing or stale: Luz-Crawl opens official pages directly, then runs the planned searches in batches; every source is imported with its tier and read state and written back to `knowledge/`. Read the brief, design handoff, repository state, prior verified experience, the function catalog entries, and the standards that apply.
 
 **Gate:** the research thresholds for the mode are met (`references/research-sources.json`), every `officialRequired` module has an official source, and external facts in the plan cite `[S#]`. Research is skipped only with a written reason, and for implementation only with the user's explicit consent.
 
-### 0b. Plan
+### 0c. Plan
 
 List the custom features (`tech_plan.py feature`). Register the Luz System session for frontend work (`tech_plan.py design NN --session …`). Fill the launch section: qualifications and filings, agreements, deployment, launch checklist. Complete every other section. Work through the standards checklist: each applicable MUST rule is `planned` with how the plan satisfies it, or `n/a` with why. Each required feature baseline is in scope. Questions only the user can answer are recorded as decisions; blocking ones are marked. When the plan covers user-facing screens without an approved handoff, the screens section comes from $luz-design.
 
-**Gate:** `tech_plan.py submit NN` passes — no `todo` blocks or placeholder text, research thresholds met, custom features listed, design session registered for frontend plans, no unhandled MUST rule, no dangling source reference. The plan status becomes 待审核. Qualifications and filings that need the merchant are handed over now, because they take time.
+**Gate:** `tech_plan.py submit NN` passes — no `todo` blocks or placeholder text, research thresholds met, custom features listed, design session registered for frontend plans, no unhandled MUST rule, no dangling source reference, current rule cards in `raw/00-rules/`, 采用的规则 filled, and 本次沉淀 naming a note written or confirmed since the plan was created. The plan status becomes 待审核. Qualifications and filings that need the merchant are handed over now, because they take time.
 
-### 0c. User approval
+### 0d. User approval
 
 Present the plan page and the open decisions to the user. Record approval only when the user explicitly approves this plan, quoting their words: `tech_plan.py approve NN --note "…"`. Blocking decisions are recorded with `tech_plan.py decide` before approval.
 
@@ -98,7 +104,7 @@ Run unit, contract, integration, end-to-end, accessibility, performance, and sec
 
 Follow `references/operations.md`: environments, release flow (CI → staging rehearsal → production backup, migration, health check, observation), HTTPS and hardening, monitoring and alerts, backups with a restore drill, rollback. Complete the qualifications and filings in `references/compliance.md` and publish the agreements in `references/legal-documents.md` with consent records (`backend/27-legal`). Release the mini-program through trial version, review and publication. Work through `assets/deploy/LAUNCH-CHECKLIST.md` with evidence.
 
-**Output:** release notes, health checks, monitoring, `config/` and README, and the implementation record mapped to design IDs. Checklist items are marked `done` with evidence and `tech_plan.py check NN --stage delivery` passes.
+**Output:** release notes, health checks, monitoring, `config/` and README, and the implementation record mapped to design IDs. Checklist items are marked `done` with evidence, this build's note is in 本次沉淀, and `tech_plan.py check NN --stage delivery` passes (current rule cards, 采用的规则, and a note confirmed on or after the approval day).
 
 **Gate:** every launch-checklist item has a result and evidence; key flows (login, order, real small payment, callback, query, refund, reconciliation) pass in production; rollback is possible; observability exists; any design deviation has been reviewed by Design.
 
@@ -114,10 +120,10 @@ Record every reusable conclusion from this task's research as a fact in `knowled
 
 ### 每次调用后沉淀
 
-Mandatory on every call, whatever its outcome:
+Mandatory on every call, whatever its outcome — every call writes or confirms at least one note and lists its key in the plan's 本次沉淀; `submit` and `check --stage delivery` check it:
 
 1. At the start, `record_experience.py search <关键词> [--kind preference|lesson|fact]` and apply the matching preferences, lessons and facts.
-2. Before finishing, `record_experience.py note --kind preference|lesson|fact --key K --text "…" [--why "…"]` for each preference the user stated or corrected, each route, source, parameter or fix that proved effective or failed, and each rule correction. Write the general principle, not task details.
+2. Before finishing, `record_experience.py note --kind preference|lesson|fact --key K --text "…" [--why "…"]` for each preference the user newly stated or corrected (preference), each rule correction, pitfall or problem a check missed (lesson), and each approach, research source and scope, or parameter that proved effective or failed (fact); a note used again is confirmed by writing the same key again. Write the general principle, not task details. Then `tech_plan.py sediment NN --key K` lists it in 本次沉淀 (`raw/plan.json` → `sediment`).
 3. The store is `experience/notes.json` (same shape in all four Luz skills; see SKILL.md). Same topic, same key: the new statement replaces the old one (one `previous` kept); the same statement under another key only confirms that note. Caps: preferences 60, lessons 120, facts 120, active records 120; `prune` drops the fewest uses, then the oldest confirmation, and lists notes unconfirmed for 180 days; `check` fails on duplicates, missing fields, private data and overflow.
 4. No phone numbers, emails, WeChat IDs, user-home paths, credentials, personal or client names; those stay in a git-ignored `*.local.json`.
 

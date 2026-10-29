@@ -229,17 +229,17 @@
       "platform": "cnblogs",
       "query": "PostgreSQL 备份 恢复 定时 pg_dump 异地",
       "module": "deploy",
-      "runs": 2,
-      "lastRunAt": "2026-10-26T17:03:34+08:00",
-      "outcome": "cooled"
+      "runs": 5,
+      "lastRunAt": "2026-10-28T21:33:36+08:00",
+      "outcome": "ok"
     },
     {
       "platform": "juejin",
       "query": "生产环境 上线检查清单 监控 告警 备份 回滚",
       "module": "deploy",
-      "runs": 2,
-      "lastRunAt": "2026-10-26T17:03:34+08:00",
-      "outcome": "cooled"
+      "runs": 5,
+      "lastRunAt": "2026-10-28T21:33:36+08:00",
+      "outcome": "ok"
     },
     {
       "platform": "csdn",
@@ -423,6 +423,134 @@
       "module": "topic",
       "runs": 3,
       "lastRunAt": "2026-10-28T17:32:55+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "web",
+      "query": "Docker 容器 运行 有界面 Chrome Xvfb noVNC 部署",
+      "module": "deploy",
+      "runs": 3,
+      "lastRunAt": "2026-10-28T21:33:36+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "csdn",
+      "query": "docker noVNC chrome 远程浏览器",
+      "module": "deploy",
+      "runs": 3,
+      "lastRunAt": "2026-10-28T21:33:36+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "github",
+      "query": "neko virtual browser webrtc docker",
+      "module": "deploy",
+      "runs": 3,
+      "lastRunAt": "2026-10-28T21:33:36+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "web",
+      "query": "爬虫 扫码登录 人工介入 远程浏览器 方案",
+      "module": "deploy",
+      "runs": 3,
+      "lastRunAt": "2026-10-28T21:33:36+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "github",
+      "query": "playwright docker xvfb headed chromium",
+      "module": "deploy",
+      "runs": 2,
+      "lastRunAt": "2026-10-28T21:33:36+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "web",
+      "query": "chromium docker shm-size crash dev/shm",
+      "module": "deploy",
+      "runs": 2,
+      "lastRunAt": "2026-10-28T21:33:36+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "github",
+      "query": "chrome devtools screencast remote control web",
+      "module": "deploy",
+      "runs": 2,
+      "lastRunAt": "2026-10-28T21:33:36+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "web",
+      "query": "docker chromium no-sandbox seccomp profile security",
+      "module": "deploy",
+      "runs": 2,
+      "lastRunAt": "2026-10-28T21:33:36+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "github",
+      "query": "s6-overlay supervisord docker multiple processes",
+      "module": "deploy",
+      "runs": 2,
+      "lastRunAt": "2026-10-28T21:33:36+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "web",
+      "query": "noVNC websockify token authentication reverse proxy nginx",
+      "module": "deploy",
+      "runs": 2,
+      "lastRunAt": "2026-10-28T21:33:36+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "web",
+      "query": "WebRTC vs VNC remote browser streaming latency",
+      "module": "deploy",
+      "runs": 2,
+      "lastRunAt": "2026-10-28T21:33:36+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "web",
+      "query": "Chrome DevTools Protocol Page.startScreencast remote browser control",
+      "module": "deploy",
+      "runs": 2,
+      "lastRunAt": "2026-10-28T21:33:36+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "web",
+      "query": "browser fingerprint docker headless detection xvfb",
+      "module": "deploy",
+      "runs": 2,
+      "lastRunAt": "2026-10-28T21:33:36+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "web",
+      "query": "Docker 中文字体 fonts-noto-cjk chromium 乱码",
+      "module": "deploy",
+      "runs": 2,
+      "lastRunAt": "2026-10-28T21:33:36+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "web",
+      "query": "浏览器自动化 集群 docker 持久化 user-data-dir cookie 登录态",
+      "module": "deploy",
+      "runs": 2,
+      "lastRunAt": "2026-10-28T21:33:36+08:00",
+      "outcome": "ok"
+    },
+    {
+      "platform": "web",
+      "query": "Microsoft Edge Linux docker redistribution license",
+      "module": "deploy",
+      "runs": 2,
+      "lastRunAt": "2026-10-28T21:33:36+08:00",
       "outcome": "ok"
     }
   ]
