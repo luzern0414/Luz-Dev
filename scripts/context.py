@@ -299,10 +299,13 @@ def note_matches(note: dict, words: list[str]) -> bool:
 
 def closing_lines(cards: dict, card: dict) -> list[str]:
     """Part 6 of the card. A skill may replace the wording (cards.json "closing", per card or top level) and the fact examples ("fact_examples")."""
+    note = cards.get("note_command", "scripts/experience.py note --kind preference|lesson|fact --key <主题> --text <一句话>")
+    # A card is often read inside another skill's session (a Luz-System session reads Luz-Design's visual cards).
+    cross = (f"- 在别的技能的会话里用本卡时：本次沉淀写进会话所属技能的经验库（它的发布检查只认那里）；经验涉及本卡规则本身"
+             f"（{cards.get('skill', SKILL_ROOT.name)} 的规范、检查脚本或模板）时，再在 {SKILL_ROOT} 用 {note} 写一份同 key 的经验。")
     custom = card.get("closing") or cards.get("closing")
     if custom:
-        return list(custom)
-    note = cards.get("note_command", "scripts/experience.py note --kind preference|lesson|fact --key <主题> --text <一句话>")
+        return [*custom, cross]
     facts = card.get("fact_examples") or cards.get("fact_examples") or "有效的做法与参数、调研来源与范围（哪些站点或资料有效、哪些无效、用的关键词）"
     return [
         "- 采用的规则：在 BRIEF 的“采用的规则”里逐条写出本次落实了上面哪些规则（规范页 › 小节或偏好 key → 怎么落实）；没有会话时在回复末尾用一句话说明依据的规则卡。",
@@ -312,6 +315,7 @@ def closing_lines(cards: dict, card: dict) -> list[str]:
         f"  - fact：{facts}；",
         "  - 已有经验这次又用上了：用同一 key 再写一次即确认（次数加一），不新增重复条目；与旧经验冲突时用同一 key 改写，旧内容自动留作上一版。",
         "- 只记一般规律，不记一次性的任务细节；不写手机号、邮箱、个人路径、凭据和客户名称。",
+        cross,
     ]
 
 
