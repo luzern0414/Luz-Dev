@@ -50,6 +50,8 @@
 贯穿全程：§11 可观测与评测 · §12 性能 · §13 安全（OWASP 十大风险） · §14 稳定（超时 · 重试 · 熔断 · 降级 · 续跑 · 取消 · 上限）
 ```
 
+**总原则：模型只做决策，程序控制运行。** 模型每一步只输出一个经 §7 校验的决策（`ToolCall` 列表、追问、审批请求或最终回答）；要不要执行、执行几次、重试、审批、何时停止、出错怎么办，全部由程序判定，写在代码与配置里，不写进提示词等模型遵守。授权在下游系统里完成，不依赖模型判断能否执行〔E54〕。下面每个环节都按这条原则分工。
+
 | 环节 | 输入 | 输出契约 | 失败时 | 代码目录（§15） |
 |---|---|---|---|---|
 | §2 接入层 | HTTP 请求 + 令牌 | `RunAccepted`、`RunEvent` 流 | 422 / 409 / 429 + `Retry-After`，不入队 | `01-app`（待建） |
@@ -330,6 +332,8 @@ class IntentResult(Contract):
 6. **多智能体有条件。** 只在子任务可并行、彼此独立、单个上下文装不下时使用（多智能体的 token 用量约为普通对话的 15 倍）；每个子智能体要有目标、输出格式、可用工具和边界，结果以精简摘要回传。门店业务助手默认单智能体工作流。
 7. 显式设置 `recursion_limit = MAX_GRAPH_STEPS`（LangGraph 1.0.6 起默认 1000 步，不能依赖）。
 8. **发布与图变更。** 有中断中的线程时，只允许新增节点，不改名、不删节点、不改状态键名；新旧版本并行运行、逐步切流。
+9. **推理与行动交替（ReAct）由程序驱动。** `plan` 节点让模型输出一个决策；`route` 是普通函数，按状态与计数决定去 `run_tools`、`clarify`、`approve`、`respond` 还是结束；`run_tools` 先过权限（§6 规则 15）与参数校验（§6 规则 10），再执行，结果作为观察写回状态。每进入一次 `plan` 记一个决策轮次（`rounds`），超过 `MAX_ROUNDS`（§16）立即发 `run.failed`（`STEP_LIMIT`，`partial: true`），不再调用模型收尾，也不自动加轮次；工具次数、同名同参重复与 `recursion_limit` 只是兜底。循环只有五个出口：最终回答、追问、等待审批、报错、达到上限。用模型原生的结构化工具调用，不用依赖停止词解析文字的 ReAct 模板。
+10. **多轮对话。** 每条用户消息是一次新运行：`rounds`、`tool_calls_made`、`tool_call_counts`、`call_signatures`、`used_single` 等轮次级字段在 `guard` 重置；跨消息只保留 `messages`（较早部分压成 `summary`，旧的工具结果只留一句话，§8）、已确认的意图参数与长期记忆。追问是一次运行的正常结束（§4），连续追问上限见 §16。
 
 ### 契约
 
@@ -350,7 +354,10 @@ class AgentState(TypedDict, total=False):
     verdict: GuardrailVerdict | None
     intent: IntentResult | None
     context: RetrievedContext | None
+    rounds: int                                # 决策轮次：每进入一次 plan 加 1，超过 MAX_ROUNDS 即 STEP_LIMIT
     tool_calls_made: int
+    tool_call_counts: dict[str, int]           # 每个工具本次运行的调用次数（multi 对照 max_calls_per_run）
+    used_single: list[str]                     # 已成功的 single 工具：移出 tools，再调即拒绝
     call_signatures: list[str]                 # 同名同参重复检测
     pending_approval: ApprovalRequest | None
     verify_feedback: str | None
@@ -371,6 +378,9 @@ class AgentState(TypedDict, total=False):
 - 〔E33 LangGraph Graph API〕未指定 reducer 的键每次被覆盖；合并型 reducer 返回空值不能清空字段，要用 `Overwrite`；检查点在超步边界保存，节点恢复时重跑，需要幂等键或 upsert；不要在同一节点混用普通边和动态路由；默认递归上限 1000；有中断线程时不要改名或删除节点。
 - 〔E31 LangGraph Persistence〕checkpointer 按 `thread_id` 保存线程状态，Store 保存跨线程数据；内存实现重启即丢；`thread_id` 小于 255 字符；检查点会无限增长，要定期清理。
 - 〔E17 Anthropic 上下文工程〕上下文是有限资源，用最少的高信号 token 达到目标。
+- 〔E48 ReAct 论文〕让模型交替生成推理与动作：推理用来形成、跟踪和调整计划并处理异常，动作调用外部接口取得信息；比只做思维链少幻觉与错误传递。
+- 〔E51 OpenAI Agents SDK 运行智能体〕循环：有工具调用就执行、追加结果、再循环；只有输出最终结果且没有工具调用才结束；超过 `max_turns` 抛出 `MaxTurnsExceeded`。
+- 〔E53 LangGraph GRAPH_RECURSION_LIMIT〕图在达到停止条件前走到最大步数时报错，通常是环路造成的死循环；可在调用配置里设 `recursion_limit`。
 
 ## 6 工具层
 
@@ -382,17 +392,19 @@ class AgentState(TypedDict, total=False):
 4. **参数模型**：Pydantic，`extra="forbid"`；每个字段有类型、范围、枚举（`Literal`）、长度、`description` 和例子；身份字段（`user_id`、`tenant_id`）永远不是参数，由程序注入；JSON Schema 由 `model_json_schema()` 生成，不手写。参数设计成不容易填错（固定格式、枚举而不是自由文本）。
 5. **返回模型**精简、对模型友好：用可读名称和后续调用需要的 id，不返回内部技术字段；列表带分页（`limit`、`next_cursor`、`has_more`），超长截断并说明“还有 N 项，可用 cursor 继续”；需要时提供 `detail: "concise" | "detailed"`。结果进入模型前脱敏、截断（§16）。动作类工具返回明确的状态说明（“已加入购物车”“操作失败：库存不足”）。
 6. **副作用级别**：`read` 直接执行；`write`（低风险写）执行后回显并可撤销；`write_high` 必须审批（§10），且必须声明对应的只读预览工具；支付、退款执行、改价、改库存、改权限、删除账号一律不注册为工具，只给页面入口。默认只读。
-7. **超时与重试**：每个工具声明超时；只有 `read` 和带幂等键的写工具可自动重试；重试与熔断按 §14。
+7. **超时与重试**：每个工具声明超时；只有 `read` 和带幂等键的写工具可自动重试；重试与熔断按 §14。重试、降级还是终止由程序按契约决定；程序决定继续运行时，才把 `TIMEOUT` 型结果交给模型（`for_model` 写明已重试几次、不要用同样参数再调、可改用什么）；关键工具超时且无法降级，直接以 `TOOL_TIMEOUT` 失败。
 8. **幂等键**：写工具一律带 `Idempotency-Key = uuid5(命名空间, tenant:conversation:run:tool:参数摘要)`；同一审批重放得到同一个键，后端据此去重。
 9. **错误分类**：`retryable`（超时、连接中断、429、5xx）、`fatal`（参数错误、不存在、冲突、业务拒绝）、`needs_user`（登录过期、无权限、缺信息、需确认）。给模型的错误说明具体、可执行（哪个字段、为什么、正确示例），不给错误码堆栈；给用户的文案由模板生成。
-10. **参数校验失败不调用后端**：把校验错误作为错误型工具结果回给模型自我纠正；同一工具每次运行最多纠正 2 次，计入工具调用上限。
+10. **参数校验失败不调用后端**，也不只回一句“参数错误”：回给模型一条 `INVALID_ARGS` 错误型结果，带原样的当前参数 `received_args`、逐字段的 `problems`（字段、收到的值、原因、正确写法、例子）、一句话改法 `how_to_fix` 和剩余次数 `attempts_left`；这些由 Pydantic `ValidationError` 的 `loc`、`input`、`msg` 与字段的 `description`、`examples` 生成。JSON 解析失败同样处理（`received_args` 放原始字符串）。业务拒绝也写原因与下一步。同一工具每次运行最多纠正 2 次，计入工具调用与轮次上限，用完按 `fatal` 结束该步骤。
 11. **少而精**：一个智能体的工具总数 ≤ 20，每轮只暴露当前意图允许的工具；功能重叠的工具合并；不把后端接口一对一包成工具，能用一个“取上下文”工具完成的不拆成多个底层调用。工具描述的任何改动按提示词改动对待，跑 §11 评测。
-12. **外部系统优先 MCP**：通过 MCP 客户端接入；MCP 服务器给出的工具描述和注解视为不可信，只启用经审核、在白名单里的工具，并同样套上本节契约（副作用、超时、幂等、错误分类、熔断分组）；调用前满足用户同意与授权。
+12. **外部系统优先 MCP**：通过 MCP 客户端接入；MCP 服务器给出的工具描述和注解视为不可信，只启用经审核、在白名单里的工具，并同样套上本节契约（副作用、超时、幂等、错误分类、熔断分组）；调用前满足用户同意与授权。白名单里每个 MCP 工具由我方登记 `side_effect` 与 `result_kind`，注解只作参考；服务器发出工具清单变化通知后，新增或改动的工具停用到审核通过。按最新规范，参数校验错误、接口失败与业务错误以 `isError: true` 的结果返回，转成同一 `ToolError` 交给模型自我纠正；未知工具、请求格式错误、服务器错误是协议错误，不交给模型，按 `fatal` 或依赖失败处理〔E49〕。授权按 OAuth 2.1：令牌只发给签发给该服务器的那一方，不转发用户令牌或别处的令牌〔E50〕。
 13. **模型格式适配统一在 `10-llm`**：工具只定义一次（Pydantic），适配层转换为各家格式，并把模型的调用转回统一的 `ToolCall`：
     - OpenAI 兼容格式（通义千问百炼、vLLM 部署的 Qwen 等）：`tools=[{"type": "function", "function": {name, description, parameters}}]`；返回的参数是 JSON 字符串，必须自行解析并用 Pydantic 校验，解析失败按参数错误回给模型；结果以 `{"role": "tool", "tool_call_id": …}` 回传；`parallel_tool_calls` 默认开启，一次可能返回多个调用（设为关闭也可能多个），必须遍历全部并按顺序回传；流式时函数名在第一块，参数按 `index` 拼接完整后再解析；通义千问不支持 `tool_choice: "required"`；让模型总结工具结果时去掉 `tool_choice`。
     - Claude：`{name, description, input_schema}`，可加 `strict: true`；结果用 `tool_result`（`tool_use_id`），失败时标记为错误；`disable_parallel_tool_use` 控制每轮最多一个调用；流式时工具参数是部分 JSON，拼接完整后再解析。
     - 自部署 Qwen3：用 Hermes 风格工具模板（vLLM `--tool-call-parser hermes`），不用 ReAct 一类依赖停止词的模板。
     - DeepSeek：按 OpenAI 兼容格式接入；本次采集的 DeepSeek 文档页为 404，接入前补采并核对（差距表）。
+14. **结果分级**：`result_kind` 二选一。`single`（单一结果）：一次调用给出本次运行所需的完整结果，同参再调结果不变（取一张订单、算一次报价、生成一份草稿）；成功一次后记入 `used_single`，之后本次运行发给模型的 `tools` 不再包含它，执行层同时拒绝再调用（`TOOL_NOT_AVAILABLE`，`for_model` 写明已在第几步执行、结果在哪）；参数错误、超时与重试失败不算用掉。`multi`（多种结果）：参数不同结果不同，可在一次运行内多次调用（按条件检索、分页、逐个对象查询）；描述写清覆盖范围、不做什么并指向替代工具，契约声明 `max_calls_per_run`（默认 3，≤ 5），同名同参不重复；功能重叠的 `multi` 工具合并。移除工具定义会让提示缓存从工具段起失效一次〔E21〕：工具按固定顺序传入，只在 `single` 成功后移除，一次运行最多几次，代价可控。
+15. **权限由程序逐轮计算**：每次调用模型前，`tools` = 角色允许 ∩ 当前意图允许 ∩ 本次运行仍可用（去掉 `used_single`、已达 `max_calls_per_run` 的、已在待审批的 `write_high`）∩ MCP 白名单；执行前按同一规则再校验一次，不在清单里、超次数或越权的调用不执行，返回 `TOOL_NOT_AVAILABLE` 或 `FORBIDDEN` 型结果并计入轮次。身份字段由程序注入（规则 4），后端接口按用户令牌鉴权，智能体权限不超过用户本人；不让模型判断某个操作有没有权限〔E54〕。
 
 ### 契约
 
@@ -400,6 +412,7 @@ class AgentState(TypedDict, total=False):
 from pydantic import model_validator
 
 SideEffect = Literal["read", "write", "write_high"]
+ResultKind = Literal["single", "multi"]       # 规则 14
 
 class ToolSpec(Contract):
     name: str = Field(pattern=r"^[a-z]+(_[a-z0-9]+)+$")     # 动词_对象
@@ -407,6 +420,8 @@ class ToolSpec(Contract):
     params: type[BaseModel]
     returns: type[BaseModel]
     side_effect: SideEffect
+    result_kind: ResultKind                  # single：成功一次后本次运行不再提供；multi：可多次调用
+    max_calls_per_run: int = Field(default=1, ge=1, le=5)   # single 固定 1；multi 写明 2–5（默认 3）
     preview_tool: str | None = None          # write_high 必填：执行前取服务端事实的只读工具
     timeout_s: float = Field(gt=0, le=30)
     max_retries: int = Field(ge=0, le=3)     # 只对 retryable 错误
@@ -423,6 +438,10 @@ class ToolSpec(Contract):
             raise ValueError("write_high 工具必须声明只读预览工具")
         if self.side_effect != "read" and not self.idempotent:
             raise ValueError("写工具必须声明幂等键规则")
+        if self.result_kind == "single" and self.max_calls_per_run != 1:
+            raise ValueError("single 工具每次运行只成功执行一次")
+        if self.result_kind == "multi" and self.max_calls_per_run < 2:
+            raise ValueError("multi 工具写明每次运行最多调用几次（2–5）")
         return self
 
 class GetOrderParams(Contract):
@@ -438,12 +457,30 @@ class OrderView(Contract):
     eta_text: str | None = None
     route: str                               # 去页面的入口
 
+class ArgProblem(Contract):
+    field: str                               # "date_from"；整体问题写 "(args)"
+    received: Any = None                     # 收到的值；缺失为 None
+    reason: str                              # "需要具体日期，收到相对时间"
+    expected: str                            # "日期，YYYY-MM-DD，不早于 2025-01-01"
+    example: Any = None                      # "2026-10-20"
+
 class ToolError(Contract):
     kind: Literal["retryable", "fatal", "needs_user"]
-    code: str                                # TIMEOUT / UPSTREAM_5XX / RATE_LIMITED / INVALID_ARGS / NOT_FOUND / CONFLICT / FORBIDDEN / LOGIN_EXPIRED
+    code: str                                # TIMEOUT / UPSTREAM_5XX / RATE_LIMITED / INVALID_ARGS / TOOL_NOT_AVAILABLE / NOT_FOUND / CONFLICT / FORBIDDEN / LOGIN_EXPIRED
     for_model: str = Field(max_length=300)   # “order_id 必须是 14–20 位数字，例如 20261023115200”
     for_user: str = Field(max_length=80)     # 模板文案
     retry_after_s: int | None = None
+    received_args: dict[str, Any] | str | None = None   # INVALID_ARGS：原样的当前参数（JSON 解析失败时为原始字符串）
+    problems: list[ArgProblem] = []                     # INVALID_ARGS：逐字段的问题
+    how_to_fix: str | None = None                       # INVALID_ARGS：一句话改法
+    attempts_left: int | None = None                    # 本工具本次运行还可纠正几次
+
+    @model_validator(mode="after")
+    def _invalid_args_complete(self) -> "ToolError":
+        if self.code == "INVALID_ARGS" and (self.received_args is None or not self.problems
+                                            or not self.how_to_fix or self.attempts_left is None):
+            raise ValueError("INVALID_ARGS 必须带 received_args、problems、how_to_fix 与 attempts_left")
+        return self
 
 class ToolCall(Contract):
     call_id: str
@@ -463,9 +500,20 @@ class ToolResult(Contract):
     duration_ms: int
 ```
 
+模型看到的参数错误（`tool_result` 或 `role: "tool"` 的内容）：
+
+```json
+{"ok": false, "error": {"kind": "fatal", "code": "INVALID_ARGS",
+  "received_args": {"date_from": "上周", "status": "全部"},
+  "problems": [{"field": "date_from", "received": "上周", "reason": "需要具体日期，收到相对时间",
+                "expected": "日期，YYYY-MM-DD", "example": "2026-10-20"}],
+  "how_to_fix": "把“上周”换算成具体日期后重试", "attempts_left": 1,
+  "for_model": "date_from 需要具体日期，例如 2026-10-20"}}
+```
+
 ### 默认值
 
-智能体工具总数 ≤ 20；每轮暴露 ≤ 5 个；参数自我纠正每工具每运行 ≤ 2 次；工具结果 ≤ 2000 字符、列表 ≤ 10 项。各类工具的超时与重试次数见 §16。
+智能体工具总数 ≤ 20；每轮暴露 ≤ 5 个；参数自我纠正每工具每运行 ≤ 2 次；`single` 工具每次运行成功 1 次，`multi` 工具每次运行默认 ≤ 3 次；工具结果 ≤ 2000 字符、列表 ≤ 10 项。各类工具的超时与重试次数见 §16。
 
 ### 依据
 
@@ -478,6 +526,11 @@ class ToolResult(Contract):
 - 〔E42 Qwen 文档 Function Calling〕推荐 Hermes 风格；不推荐基于停止词的模板；生成的调用可能格式错误无法解析，生产代码要自行解析并准备补救。
 - 〔E22 MCP 规范〕JSON-RPC 2.0；主机、客户端、服务器三种角色；工具代表任意代码执行，调用前要得到用户明确同意；工具描述和注解视为不可信。
 - 〔E43 DeepSeek Function Calling〕本次采集为 404 页面，无可用内容。
+- 〔E49 MCP 规范“工具”最新版〕协议错误（未知工具、请求格式错误、服务器错误）模型难以修正；接口失败、参数校验错误、业务错误放在结果里并标 `isError: true`，客户端应交给模型自我纠正；注解除非来自可信服务器否则不可信；应始终有人能拒绝工具调用；`listChanged` 时服务器会通知工具清单变化。
+- 〔E50 MCP 规范“授权”最新版〕基于 OAuth 2.1；服务器只接受签发给自己的令牌，客户端不发送其他授权服务器签发的令牌。
+- 〔E52 Claude 文档“定义工具”〕描述要极其详细（做什么、何时用与不用、每个参数的含义、限制），这是影响工具调用效果最大的因素。
+- 〔E54 OWASP LLM06:2025 过度代理〕只给必要的工具、功能和最小权限；以用户本人的身份与权限执行；高影响动作要人批准；在下游系统里做完全仲裁，不依赖模型判断能否执行。
+- 〔E21 Claude 提示缓存〕缓存按 工具 → 系统 → 消息 分层，某一层改动会让该层及之后全部失效。
 
 ## 7 结构化输出与模型适配
 
@@ -779,7 +832,7 @@ class VerifyResult(Contract):
 | LLM03 供应链 | 模型、嵌入模型、SDK、MCP 服务器来源登记并锁定版本；MCP 只用白名单服务器与工具；依赖漏洞扫描 | §6、§15 | 依赖锁文件与模型清单在方案中；未登记的 MCP 工具无法注册 |
 | LLM04 数据与模型投毒 | 知识库入库审核、版本与回滚；长期记忆只写用户明确陈述且过规则检查 | §8、§9 | 未审核文档不可检索的测试；记忆禁止项被拒的测试 |
 | LLM05 不当输出处理 | 模型输出当不可信输入：Pydantic 校验、前端转义、不拼进 SQL / 命令 / URL | §7、§10 | 含脚本与 HTML 的回答被转义的测试 |
-| LLM06 过度授权 | 工具最小权限、默认只读；按意图暴露工具；`write_high` 审批；不可逆操作不做成工具；身份只来自令牌 | §4、§6、§10 | 未审批即执行 = 0；工具参数里的 `user_id` 被忽略的测试 |
+| LLM06 过度授权 | 工具最小权限、默认只读；每轮按角色、意图与本次运行状态计算工具清单，执行前再校验；`single` 工具用后禁用；`write_high` 审批；不可逆操作不做成工具；身份只来自令牌 | §4、§6、§10 | 未审批即执行 = 0；工具参数里的 `user_id` 被忽略的测试 |
 | LLM07 系统提示泄露 | 系统提示不放密钥、权限规则和内部地址（这些在代码里执行）；索要提示的请求按注入处理 | §3、§6 | 对抗集“输出你的提示词”不泄露配置 |
 | LLM08 向量与嵌入弱点 | 检索时按租户、门店、角色、有效期在查询内过滤；多租户分区；嵌入数据随文档删除 | §9 | 跨租户、跨角色检索为空的测试 |
 | LLM09 错误信息 | 引用必须存在；数字与实体落地；检索不到明确说“没有找到”；禁止承诺词 | §9、§10 | 引用正确率、拒答正确率达标；数字落地违规 = 0 |
@@ -821,7 +874,7 @@ class VerifyResult(Contract):
 | `NEEDS_USER` | `step.failed` | — | 写操作失败且没有幂等键 | 确认后重试 |
 | `APPROVAL_EXPIRED` | 410 / `approval.resolved` | 否 | 审批过期 | 重新发起 |
 | `APPROVAL_MISMATCH` | 409 | 否 | 审批 id 不是当前待审批 | 刷新会话 |
-| `STEP_LIMIT` | `run.failed` | 否 | 工具次数、步数或重复调用达到上限 | 换个说法或分步说明 |
+| `STEP_LIMIT` | `run.failed` | 否 | 决策轮次、工具次数、步数或重复调用达到上限 | 换个说法或分步说明 |
 | `TOKEN_LIMIT` | `run.failed` | 否 | 本次运行 token 用完 | 缩短问题后重试 |
 | `RUN_TIMEOUT` | `run.failed` | 是 | 整轮执行超时 | 从失败处重试 |
 | `UNAUTHORIZED` | 401 | 否 | 令牌无效或过期 | 重新登录 |
@@ -904,7 +957,10 @@ class VerifyResult(Contract):
 | 熔断 | 打开条件 | 60 秒内 ≥ 10 次且失败率 ≥ 50% | `BREAKER_WINDOW_S`、`BREAKER_MIN_FAILS`、`BREAKER_FAIL_RATE` | 打开 | E08 |
 | 熔断 | 打开时长 | 30 秒，再次失败翻倍，最长 300 秒 | `BREAKER_OPEN_S`、`BREAKER_OPEN_MAX_S` | 半开 | E08 |
 | 熔断 | 半开探测 | 3 个请求 | `BREAKER_HALF_OPEN_PROBES` | 关闭或重新打开 | E08 |
+| 上限 | 每次运行决策轮次 | 6 | `MAX_ROUNDS` | `run.failed` `STEP_LIMIT`，保留部分结果，不让模型收尾 | E15、E51 |
 | 上限 | 每次运行工具调用 | 5 | `MAX_TOOL_CALLS` | `STEP_LIMIT` | E15 |
+| 上限 | 单一结果工具 | 每次运行成功 1 次 | 工具契约 `result_kind` | 移出工具清单，再调返回 `TOOL_NOT_AVAILABLE` | E54 |
+| 上限 | 多种结果工具调用 | 每次运行 3 次（≤ 5） | 工具契约 `max_calls_per_run` | 返回 `TOOL_NOT_AVAILABLE` | E16 |
 | 上限 | 每次运行图步数 | 25（即 `recursion_limit`） | `MAX_GRAPH_STEPS` | `STEP_LIMIT` | E33 |
 | 上限 | 同名同参重复调用 | 3 次即停止 | `MAX_SAME_CALL` | `STEP_LIMIT` | E15 |
 | 上限 | 每步并行工具调用 | 3 | `MAX_PARALLEL_TOOLS` | 超出部分顺序执行 | E41 |
@@ -940,7 +996,7 @@ class VerifyResult(Contract):
 | F14 | 意图表是配置数据，经 `IntentSpec` 校验；提示词与评测集由它生成 | 配置校验测试 | AGENT-010 |
 | F15 | 置信度低于阈值时追问或列候选，不调用写工具 | 意图路由测试 | AGENT-010 |
 | F16 | 每个工具有 Pydantic 参数与返回模型、副作用级别、超时、幂等声明、熔断分组 | 注册表启动校验测试 | AGENT-008 |
-| F17 | 参数校验失败不调用后端，错误回给模型；纠正次数受限 | 工具测试 | AGENT-008 |
+| F17 | 参数校验失败不调用后端，错误回给模型；纠正次数受限 | 工具测试 | AGENT-008、AGENT-023 |
 | F18 | 每轮只暴露当前意图允许的工具；工具总数 ≤ 20 | 注册表测试 | AGENT-008 |
 | F19 | 各家模型的工具调用经适配层转为统一 `ToolCall`；并行调用全部处理；流式参数拼接后再解析 | 适配层测试（各家响应样例） | AGENT-008 |
 | F20 | 程序消费的模型输出全部经 Pydantic 校验，失败重试 1 次后降级 | 结构化输出测试 | AGENT-009 |
@@ -965,10 +1021,14 @@ class VerifyResult(Contract):
 | F39 | 改提示词、模型、工具、意图表、契约、检索参数会触发评测回归，下降超过 2 个百分点阻止发布 | CI 配置与一次阻止记录 | AGENT-015 |
 | F40 | 提示按固定顺序拼装并设缓存断点，缓存命中率有监控 | 用量记录中的缓存读取 token | AGENT-019 |
 | F41 | 默认单智能体工作流；用多智能体时方案写明并行理由与成本 | 方案审查 | AGENT-020 |
+| F42 | 模型只输出决策，执行、重试、审批、终止都在程序里；决策轮次超过 `MAX_ROUNDS` 以 `STEP_LIMIT` 失败，不再调用模型收尾 | 轮次上限测试（模型一直请求工具） | AGENT-021 |
+| F43 | `single` 工具成功后，下一次模型请求的 `tools` 不含它，强行调用被拒绝；`multi` 工具超过 `max_calls_per_run` 被拒绝 | 工具分级测试 | AGENT-022 |
+| F44 | 每轮工具清单 = 角色 ∩ 意图 ∩ 本次运行可用 ∩ MCP 白名单；越权调用不执行，后端没有收到请求 | 权限测试 | AGENT-022 |
+| F45 | 参数错误结果含 `received_args`、`problems`、`how_to_fix`、`attempts_left`，后端调用为 0；MCP `isError` 结果转成同一格式 | 参数错误测试 | AGENT-023 |
 
 ## 18 依据表
 
-全部来源由 Luz-Crawl 采集，原文在 `D:\Codes\skill输出\Luz-Crawl\raw\017_…`（SSE、排队、防失败）与 `018_…`（底座技术栈）的 `raw/<编号>/raw/content.json`。
+全部来源由 Luz-Crawl 采集，原文在 `D:\Codes\skill输出\Luz-Crawl\raw\017_…`（SSE、排队、防失败）、`018_…`（底座技术栈）与 `023_…`（ReAct、MCP 工具与授权、轮次上限、过度代理）的 `raw/<编号>/raw/content.json`。
 
 | 编号 | 来源 | 链接 | 用于 | 采集 |
 |---|---|---|---|---|
@@ -1019,5 +1079,12 @@ class VerifyResult(Contract):
 | E45 | OpenTelemetry · Generative AI semantic conventions | https://opentelemetry.io/docs/specs/semconv/gen-ai/ | §11 | 018/1280（“已迁移”提示页） |
 | E46 | OpenTelemetry · Generative AI spans | https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/ | §11 | 018/1289（“已迁移”提示页） |
 | E47 | 微信开放文档 · wx.request（`enableChunked`：开启 transfer-encoding chunked，基础库 2.20.2 起；声明后走 HTTP/1） | https://developers.weixin.qq.com/miniprogram/dev/api/network/request/wx.request.html | §2 | 018 |
+| E48 | Yao et al. · ReAct: Synergizing Reasoning and Acting in Language Models（arXiv 2210.03629） | https://arxiv.org/abs/2210.03629 | §5 | 023/1337（摘要页） |
+| E49 | Model Context Protocol · Specification（latest）· Server · Tools | https://modelcontextprotocol.io/specification/latest/server/tools | §6、§13 | 023/1339 |
+| E50 | Model Context Protocol · Specification（latest）· Basic · Authorization | https://modelcontextprotocol.io/specification/latest/basic/authorization | §6、§13 | 023/1343 |
+| E51 | OpenAI Agents SDK · Running agents | https://openai.github.io/openai-agents-python/running_agents/ | §5、§16 | 023/1340 |
+| E52 | Claude Platform Docs · Define tools | https://docs.anthropic.com/en/docs/agents-and-tools/tool-use/implement-tool-use | §6 | 023/1338（链接跳到 Define tools） |
+| E53 | LangGraph · GRAPH_RECURSION_LIMIT | https://langchain-ai.github.io/langgraph/troubleshooting/errors/GRAPH_RECURSION_LIMIT/ | §5、§16 | 023/1341 |
+| E54 | OWASP GenAI · LLM06:2025 Excessive Agency | https://genai.owasp.org/llmrisk/llm062025-excessive-agency/ | §1、§6、§13 | 023/1342 |
 
 本次调研没有覆盖、落地前要补的：DeepSeek 工具调用文档（E43 为 404）、OpenTelemetry 生成式 AI 属性名（E45、E46 为迁移页）、LangGraph 检查点的超步与待写入细节、Pydantic AI 的工具重试与延迟工具（审批）页面。

@@ -180,16 +180,37 @@
       ]
     },
     "agent-service": {
-      "title": "智能体服务（底座：SSE 接入、意图、工具、记忆、知识库、护栏、稳定）",
-      "summary": "按智能体底座实现服务端：SSE 与排队、意图路由、工具契约、结构化输出、记忆、知识库、审批、防失败与上限、评测",
-      "keywords": ["智能体", "agent", "LangGraph", "SSE", "排队", "幂等", "意图", "工具", "Pydantic", "记忆", "知识库", "RAG", "护栏", "审批", "熔断", "评测"],
+      "title": "智能体服务（底座：模型决策程序控制、SSE 接入、意图、编排、工具、结构化输出）",
+      "summary": "按智能体底座实现服务端：模型只做决策、程序控制运行；SSE 与排队、意图路由、ReAct 受控循环与轮次上限、多轮对话、工具契约与分级、权限计算、参数错误回传、MCP、结构化输出；与 agent-runtime 一起读",
+      "keywords": ["智能体", "agent", "LangGraph", "SSE", "排队", "幂等", "意图", "工具", "Pydantic", "记忆", "知识库", "RAG", "护栏", "审批", "熔断", "评测", "ReAct", "循环", "轮次", "多轮", "工具分级", "权限", "MCP", "参数错误"],
       "sections": [
         {"page": "agent-foundation.md", "title": "智能体底座", "path": ["1 固定流水线"], "label": "agent-foundation.md › 1 固定流水线"},
         {"page": "agent-foundation.md", "title": "智能体底座", "path": ["2 接入层：鉴权、SSE、排队、幂等", "规则"], "label": "agent-foundation.md › 2 接入层：鉴权、SSE、排队、幂等 › 规则"},
         {"page": "agent-foundation.md", "title": "智能体底座", "path": ["3 输入护栏", "规则"], "label": "agent-foundation.md › 3 输入护栏 › 规则"},
         {"page": "agent-foundation.md", "title": "智能体底座", "path": ["4 意图识别与路由", "规则"], "label": "agent-foundation.md › 4 意图识别与路由 › 规则"},
+        {"page": "agent-foundation.md", "title": "智能体底座", "path": ["5 编排：工作流优先", "规则"], "label": "agent-foundation.md › 5 编排：工作流优先 › 规则"},
         {"page": "agent-foundation.md", "title": "智能体底座", "path": ["6 工具层", "规则"], "label": "agent-foundation.md › 6 工具层 › 规则"},
-        {"page": "agent-foundation.md", "title": "智能体底座", "path": ["7 结构化输出与模型适配", "规则"], "label": "agent-foundation.md › 7 结构化输出与模型适配 › 规则"},
+        {"page": "agent-foundation.md", "title": "智能体底座", "path": ["7 结构化输出与模型适配", "规则"], "label": "agent-foundation.md › 7 结构化输出与模型适配 › 规则"}
+      ],
+      "tools": [
+        "建方案时 `--project-type agent`（自动带上本卡与 `AGENT-*` 核对表）；智能体界面由 Luz-System 设计（`references/agent-design.html`），本技能只做服务端与协议",
+        "唯一规范 `references/agent-foundation.md`：本卡摘了流水线（含总原则：模型只做决策，程序控制运行）、接入、护栏、意图、编排（ReAct 受控循环、多轮）、工具层、结构化输出；记忆、知识库、审批、稳定与上限总表在 `context.py agent-runtime`；契约代码（§2、§4、§6、§10 的“契约”）、可观测与评测（§11）、性能（§12）、OWASP 十大风险对照（§13）、代码目录（§15）、检查清单（§17）、依据表（§18）按需读原节",
+        "门店业务助手的意图表、工具清单、审批与降级文案、核验细则：`agent/backend/SPEC.md`（与底座冲突处以底座为准，冲突条目列在其文首）；前后端协议 `agent/shared/protocol.md` v3",
+        "代码按 `agent/` 编号目录组织（底座 §15）；现状与差距待办在 `agent/README.md`；规则原文按编号查 `references/standards.json`（AGENT-001…AGENT-023）",
+        "调研或核对外部文档用 Luz-Crawl；底座 §18 列出本次未覆盖、落地前要补采的（DeepSeek 工具调用、OpenTelemetry 生成式 AI 属性名、小程序分块接收）"
+      ],
+      "checks": [
+        "底座 §17 检查清单逐项有测试名或实测记录（`tech_plan.py mark NN <ID> --status done --evidence \"…\"`），没做的在交付时列为缺口",
+        "`python -m pytest -q agent` 全绿，含断线续传、队列满 429、重复提交幂等、工具越权、审批绕过、依赖超时与熔断降级、取消与续跑、结果核验失败的用例",
+        "意图、工具、引用、拒答、对抗五类评测集达到底座 §11 通过线，交付附评测报告；改提示词、模型、工具、意图表、契约后回归下降不超过 2 个百分点",
+        "`python -X utf8 scripts/tech_plan.py check NN --stage delivery` 零错误（含 `adoptedRules` 与本次沉淀）"
+      ]
+    },
+    "agent-runtime": {
+      "title": "智能体运行保障（记忆、知识库、审批、稳定、上限）",
+      "summary": "按智能体底座实现运行保障：记忆、知识库检索与引用、输出护栏与人工审批、超时重试熔断降级、断点续跑与取消、轮次与全部上限；与 agent-service 一起读",
+      "keywords": ["智能体", "agent", "记忆", "知识库", "RAG", "审批", "护栏", "超时", "重试", "熔断", "降级", "续跑", "取消", "上限", "轮次", "死循环"],
+      "sections": [
         {"page": "agent-foundation.md", "title": "智能体底座", "path": ["8 记忆", "规则"], "label": "agent-foundation.md › 8 记忆 › 规则"},
         {"page": "agent-foundation.md", "title": "智能体底座", "path": ["9 知识库（RAG）", "规则"], "label": "agent-foundation.md › 9 知识库（RAG） › 规则"},
         {"page": "agent-foundation.md", "title": "智能体底座", "path": ["10 输出护栏与人工审批", "规则"], "label": "agent-foundation.md › 10 输出护栏与人工审批 › 规则"},
@@ -197,16 +218,13 @@
         {"page": "agent-foundation.md", "title": "智能体底座", "path": ["16 上限与超时（总表）"], "label": "agent-foundation.md › 16 上限与超时（总表）"}
       ],
       "tools": [
-        "建方案时 `--project-type agent`（自动带上本卡与 `AGENT-*` 核对表）；智能体界面由 Luz-System 设计（`references/agent-design.html`），本技能只做服务端与协议",
-        "唯一规范 `references/agent-foundation.md`：本卡摘了流水线、各环节规则、稳定与上限；契约代码（§2、§4、§6、§10 的“契约”）、编排（§5）、可观测与评测（§11）、性能（§12）、OWASP 十大风险对照（§13）、代码目录（§15）、检查清单（§17）、依据表（§18）按需读原节",
-        "门店业务助手的意图表、工具清单、审批与降级文案、核验细则：`agent/backend/SPEC.md`（与底座冲突处以底座为准，冲突条目列在其文首）；前后端协议 `agent/shared/protocol.md` v3",
-        "代码按 `agent/` 编号目录组织（底座 §15）；现状与差距待办在 `agent/README.md`；规则原文按编号查 `references/standards.json`（AGENT-001…AGENT-020）",
-        "调研或核对外部文档用 Luz-Crawl；底座 §18 列出本次未覆盖、落地前要补采的（DeepSeek 工具调用、OpenTelemetry 生成式 AI 属性名、小程序分块接收）"
+        "与 `context.py agent-service` 一起读：那张卡是流水线、编排与工具，本卡是运行保障；两张卡都来自 `references/agent-foundation.md`",
+        "数值以底座 §16 为准，改上限或超时同时改 §16 与 `agent/00-core/code/agent_core/config.py`，方案里改默认值要写理由",
+        "调研或核对外部文档用 Luz-Crawl；来源与采集编号见底座 §18（任务 017、018、023）"
       ],
       "checks": [
-        "底座 §17 检查清单逐项有测试名或实测记录（`tech_plan.py mark NN <ID> --status done --evidence \"…\"`），没做的在交付时列为缺口",
-        "`python -m pytest -q agent` 全绿，含断线续传、队列满 429、重复提交幂等、工具越权、审批绕过、依赖超时与熔断降级、取消与续跑、结果核验失败的用例",
-        "意图、工具、引用、拒答、对抗五类评测集达到底座 §11 通过线，交付附评测报告；改提示词、模型、工具、意图表、契约后回归下降不超过 2 个百分点",
+        "底座 §17 中记忆、知识库、审批、重试、熔断、降级、续跑、取消、上限各项有测试名或实测记录",
+        "上限测试每项一条：决策轮次、工具次数、单一结果工具再调、多种结果工具次数、同名同参重复、token、整轮时长、每日次数与费用",
         "`python -X utf8 scripts/tech_plan.py check NN --stage delivery` 零错误（含 `adoptedRules` 与本次沉淀）"
       ]
     }

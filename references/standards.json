@@ -4269,7 +4269,7 @@
         "agent"
       ],
       "title": "运行上限：token、工具次数、步数、时长、次数与费用",
-      "rule": "每次运行设 token 上限、工具调用次数上限、图步数上限（显式设置 recursion_limit）、同名同参重复调用上限与整轮执行时长；每用户每日运行数与租户每日费用设预算；任一上限触发即停止并说明原因，不静默截断；超预算返回 429。",
+      "rule": "每次运行设决策轮次上限（AGENT-021）、token 上限、工具调用次数上限、图步数上限（显式设置 recursion_limit）、同名同参重复调用上限与整轮执行时长；每用户每日运行数与租户每日费用设预算；任一上限触发即停止并说明原因，不静默截断；超预算返回 429。",
       "why": "没有上限的循环会无限调用工具和模型，造成失控的费用与资源耗尽。",
       "do": [
         "上限数值写进技术方案并与配置一致",
@@ -4476,6 +4476,148 @@
         {
           "title": "Anthropic · Effective context engineering for AI agents",
           "url": "https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents"
+        }
+      ]
+    },
+    {
+      "id": "AGENT-021",
+      "domain": "agent",
+      "level": "MUST",
+      "platforms": [
+        "agent"
+      ],
+      "modules": [
+        "agent"
+      ],
+      "title": "模型只做决策，程序控制运行；执行轮次硬上限",
+      "rule": "模型每一步只输出一个经 Pydantic 校验的决策（调用哪些工具及参数、追问、请求审批或最终回答）；要不要执行、执行几次、重试、审批、终止与错误处理全部由程序判定，不写进提示等模型遵守。推理与行动交替（ReAct）实现为 plan 与 run_tools 两个节点，由程序的路由函数按状态与计数决定去向；每进入一次 plan 记一个决策轮次，超过 MAX_ROUNDS（默认 6）立即以 STEP_LIMIT 结束运行，不再调用模型收尾，也不自动加轮次；工具次数、同名同参重复与 recursion_limit 作兜底。每条用户消息是一次新运行，轮次、工具计数与工具禁用状态从零开始。",
+      "why": "把控制权交给模型时，它会反复调用同一工具、出错后空转或绕开提示里的规则；只有程序里的硬上限与路由能保证每次运行一定结束。",
+      "do": [
+        "用模型原生的结构化工具调用",
+        "超过轮次推送 run.failed（STEP_LIMIT，partial: true），保留已完成步骤"
+      ],
+      "dont": [
+        "用依赖停止词解析文字的 ReAct 模板",
+        "把“最多调用 N 次”只写在提示里",
+        "达到上限后让模型再写一段总结冒充完成"
+      ],
+      "verify": [
+        "轮次上限测试：模型一直请求工具时，运行在第 MAX_ROUNDS 轮后以 STEP_LIMIT 结束，模型调用次数等于上限",
+        "多轮测试：第二条消息的轮次与工具计数从零开始"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 智能体底座 §1 总原则、§5 编排、§16 上限",
+          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+        },
+        {
+          "title": "Yao et al. · ReAct (arXiv 2210.03629)",
+          "url": "https://arxiv.org/abs/2210.03629"
+        },
+        {
+          "title": "OpenAI Agents SDK · Running agents",
+          "url": "https://openai.github.io/openai-agents-python/running_agents/"
+        },
+        {
+          "title": "LangGraph · GRAPH_RECURSION_LIMIT",
+          "url": "https://langchain-ai.github.io/langgraph/troubleshooting/errors/GRAPH_RECURSION_LIMIT/"
+        },
+        {
+          "title": "Anthropic · Building effective agents",
+          "url": "https://www.anthropic.com/engineering/building-effective-agents"
+        }
+      ]
+    },
+    {
+      "id": "AGENT-022",
+      "domain": "agent",
+      "level": "MUST",
+      "platforms": [
+        "agent"
+      ],
+      "modules": [
+        "agent"
+      ],
+      "title": "工具按影响与结果分级，权限由程序逐轮计算",
+      "rule": "每个工具登记影响分级（read、write、write_high）与结果分级（single、multi）。single 一次调用给出本次运行所需的完整结果，成功后本次运行后续的模型调用不再传它的定义，执行层同时拒绝再调用；multi 按参数返回不同结果，描述写清覆盖范围、不做什么及替代工具，契约声明每次运行最多调用次数（默认 3，不超过 5），同名同参不重复。每次调用模型前，工具清单 = 角色允许 ∩ 当前意图允许 ∩ 本次运行仍可用 ∩ MCP 白名单；执行前再校验一次，不在清单里、超次数或越权的调用不执行，返回结构化拒绝并计入轮次。身份字段由程序注入，后端按用户令牌鉴权，智能体权限不超过用户本人。",
+      "why": "单一结果工具被重复调用是最常见的循环；让模型判断能否执行等于没有授权，授权必须在程序与下游系统里完成。",
+      "do": [
+        "工具按固定顺序传入，只在 single 成功后移除（移除会让提示缓存从工具段起失效一次）",
+        "MCP 工具的两种分级由我方登记，注解只作参考"
+      ],
+      "dont": [
+        "让模型判断某个操作有没有权限",
+        "功能重叠的 multi 工具并存",
+        "把参数错误或超时算作 single 已用掉"
+      ],
+      "verify": [
+        "single 工具成功后，下一次模型请求的 tools 不含它，强行调用被拒绝",
+        "multi 工具超过次数被拒绝",
+        "越权调用不执行，后端没有收到请求"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 智能体底座 §6 工具层 规则 14、15",
+          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+        },
+        {
+          "title": "OWASP GenAI · LLM06:2025 Excessive Agency",
+          "url": "https://genai.owasp.org/llmrisk/llm062025-excessive-agency/"
+        },
+        {
+          "title": "Model Context Protocol · Specification (latest) · Tools",
+          "url": "https://modelcontextprotocol.io/specification/latest/server/tools"
+        },
+        {
+          "title": "Model Context Protocol · Specification (latest) · Authorization",
+          "url": "https://modelcontextprotocol.io/specification/latest/basic/authorization"
+        },
+        {
+          "title": "Anthropic · Writing effective tools for agents",
+          "url": "https://www.anthropic.com/engineering/writing-tools-for-agents"
+        }
+      ]
+    },
+    {
+      "id": "AGENT-023",
+      "domain": "agent",
+      "level": "MUST",
+      "platforms": [
+        "agent"
+      ],
+      "modules": [
+        "agent"
+      ],
+      "title": "工具参数错误回传当前参数、原因与改法",
+      "rule": "参数校验失败（JSON 解析失败、类型、范围、枚举、缺字段）不调用后端，也不只回一句“参数错误”：回给模型一条 INVALID_ARGS 错误型结果，带原样的当前参数 received_args、逐字段的 problems（字段、收到的值、原因、正确写法、例子）、一句话改法 how_to_fix 和剩余可纠正次数 attempts_left；业务拒绝同样写原因与下一步。同一工具每次运行最多纠正 2 次，计入工具调用与轮次上限，用完按 fatal 结束该步骤。MCP 服务器以 isError 返回的参数错误与业务错误转成同一格式交给模型；未知工具、请求格式错误等协议错误不交给模型纠正。",
+      "why": "只回错误码时模型只能盲猜，常常原样重试直到上限；给出当前值、原因和例子，模型一次就能改对。",
+      "do": [
+        "problems 由 Pydantic ValidationError 的 loc、input、msg 与字段的 description、examples 生成"
+      ],
+      "dont": [
+        "只返回错误码或堆栈",
+        "把校验失败的参数静默改成默认值后执行"
+      ],
+      "verify": [
+        "参数错误测试：结果含 received_args、problems、how_to_fix、attempts_left，后端调用次数为 0",
+        "MCP isError 结果转换测试"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 智能体底座 §6 工具层 规则 10、12",
+          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+        },
+        {
+          "title": "Model Context Protocol · Specification (latest) · Tools",
+          "url": "https://modelcontextprotocol.io/specification/latest/server/tools"
+        },
+        {
+          "title": "Anthropic · Writing effective tools for agents",
+          "url": "https://www.anthropic.com/engineering/writing-tools-for-agents"
+        },
+        {
+          "title": "Claude Platform Docs · Define tools",
+          "url": "https://docs.anthropic.com/en/docs/agents-and-tools/tool-use/implement-tool-use"
         }
       ]
     },

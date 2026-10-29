@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import context  # noqa: E402
 
 SECTIONS = ["## 1 用户偏好", "## 2 相关教训与有效做法", "## 3 规则", "## 4 用什么做", "## 5 交付前必须通过", "## 6 收尾"]
-KINDS = {"tech-plan", "backend-module", "frontend-integration", "launch-compliance", "review-diagnose", "agent-service"}
+KINDS = {"tech-plan", "backend-module", "frontend-integration", "launch-compliance", "review-diagnose", "agent-service", "agent-runtime"}
 
 
 def rule_text(kind: str) -> str:

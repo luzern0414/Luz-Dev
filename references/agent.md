@@ -6,7 +6,7 @@
 
 | 要做的事 | 读 |
 |---|---|
-| 任何智能体服务工作 | `python -X utf8 scripts/context.py agent-service`（规则卡）→ `agent-foundation.md` |
+| 任何智能体服务工作 | `python -X utf8 scripts/context.py agent-service` 与 `agent-runtime`（两张规则卡）→ `agent-foundation.md` |
 | 门店业务助手的意图表、工具清单、审批与降级文案、核验细则 | `../agent/backend/SPEC.md`（文首列出被底座取代的条目） |
 | 前后端协议：请求、SSE 事件、卡片、审批、错误 | `../agent/shared/protocol.md` v3 |
 | 代码现状与差距待办 | `../agent/README.md` |
