@@ -115,6 +115,15 @@
       "last_confirmed": "2026-10-28"
     },
     {
+      "key": "in-process-concurrency-single-instance",
+      "kind": "lesson",
+      "text": "智能体平台的执行位、并发计数与熔断器状态放在进程内时只适用于单实例部署；多实例需要把这些状态移到数据库或缓存",
+      "why": "Demo 一键生成助手修订 3 实现多执行位与熔断器后的部署评估",
+      "uses": 1,
+      "first_seen": "2026-10-29",
+      "last_confirmed": "2026-10-29"
+    },
+    {
       "key": "more-sources-need-read-priority",
       "kind": "lesson",
       "text": "获客类系统扩充数据源后，结果数受阅读原文名额限制而非检索；同一公告应优先读官方平台原文，聚合站转载正文常删减、核验率低",
@@ -184,6 +193,15 @@
       "uses": 1,
       "first_seen": "2026-10-28",
       "last_confirmed": "2026-10-28"
+    },
+    {
+      "key": "reasoning-model-intent-max-tokens",
+      "kind": "fact",
+      "text": "用推理型模型做意图判定时 max_tokens 要给隐藏推理留余量，300 会被截断导致输出不合格",
+      "why": "修订 3 真实模型评测中意图判定被截断后调大",
+      "uses": 1,
+      "first_seen": "2026-10-29",
+      "last_confirmed": "2026-10-29"
     }
   ]
 }

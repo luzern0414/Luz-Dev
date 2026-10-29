@@ -14,7 +14,7 @@
     },
     {
       "name": "门店状态",
-      "description": "筹备、营业、暂停、关闭；暂停时不可入场与购卡，关闭前需处理有效会员卡。"
+      "description": "筹备、营业中、暂停营业（临时，可带恢复时间）、休息中（营业时段外自动）、已关闭；状态只存一份，下单、支付、入场、设备与外卖平台都读它。暂停与休息时不可下单、购卡与入场，关闭前需处理有效会员卡。"
     },
     {
       "name": "实时人数",
@@ -27,6 +27,14 @@
     {
       "name": "附近门店",
       "description": "按定位距离排序，显示营业状态与人数档位。"
+    },
+    {
+      "name": "一键开业与停业",
+      "description": "后台顶栏与门店列表一键切换，可批量；停业前预览影响（进行中订单、待支付订单、将切换的设备），选择在途订单处理与储值、买卡、续费、积分兑换是否同时暂停；开业前做开业检查，阻断项不通过不能开业；每次切换写营业日志。"
+    },
+    {
+      "name": "停业联动",
+      "description": "创建订单、发起支付、支付回调三处都校验营业状态；设备按登记的停业动作统一下发并逐台回报；外卖平台门店同步置休；营业时段到点自动进入休息中并恢复。"
     }
   ],
   "flows": [
@@ -43,6 +51,39 @@
       "steps": [
         "业务代码按 key 读取配置：先取门店覆盖值，没有则取全局默认值，再没有使用代码内默认值。",
         "配置缓存在 Redis，后台修改写库后删除对应缓存。"
+      ]
+    },
+    {
+      "name": "一键停业",
+      "steps": [
+        "后台调用 `GET /api/v1/admin/stores/{id}/close-preview`，服务端统计进行中订单、待支付订单与该店设备，返回影响与默认选项。",
+        "店长在确认框选择原因、恢复方式、在途订单处理与暂停范围后调用 `POST /api/v1/admin/stores/{id}/close`（带 `Idempotency-Key` 与读到的 `status_version`）。",
+        "服务端在一个事务里用条件更新把状态改为 paused、写 `store_status_logs` 与停业公告，并在 Outbox 写入设备指令与外卖平台置休任务；事务提交即停业生效。",
+        "待支付订单按策略处理：默认关闭并释放库存与券；进行中订单默认继续制作，选择退款时逐单原路退款。",
+        "Outbox 投递设备指令 `store/{id}/business-state`，逐台记录回执；失败重试 3 次后告警，不回滚停业。"
+      ]
+    },
+    {
+      "name": "一键开业",
+      "steps": [
+        "后台调用 `GET /api/v1/admin/stores/{id}/open-check`：支付通道、收银与打印、关键设备在线、售罄与库存、营业时段逐项检查并返回 `check_id`。",
+        "阻断项全部通过后调用 `POST /api/v1/admin/stores/{id}/open`（带 `check_id`），条件更新为 open、写营业日志、下发恢复指令。",
+        "检查结果超过 5 分钟或期间状态变化时要求重新检查。"
+      ]
+    },
+    {
+      "name": "停业后的下单与支付",
+      "steps": [
+        "`POST /api/v1/app/orders` 与 `POST /api/v1/app/payments` 先读门店营业状态，非营业中返回 STORE_NOT_OPEN（附恢复时间与可预约时段），不创建订单、不发起预支付。",
+        "支付回调到达时再查一次：停业前已发起、停业后到账的支付按停业时选择的在途订单处理执行，继续制作或自动原路退款并通知用户。",
+        "允许预约时，只接受落在营业时段内的预约单。"
+      ]
+    },
+    {
+      "name": "营业时段自动开关",
+      "steps": [
+        "定时任务每分钟按门店时区与营业时段（含节假日例外）计算应处状态，open 与 resting 互相切换。",
+        "人工停业（paused）的门店不被定时任务恢复；到达 `resume_at` 时先做开业检查，通过才恢复，不通过则保持停业并告警。"
       ]
     }
   ],
@@ -166,6 +207,69 @@
       "request": "store_id（可选），value",
       "response": "生效后的值",
       "errors": "VALIDATION_FAILED"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/stores/{id}/close-preview",
+      "caller": "后台",
+      "purpose": "停业影响预览",
+      "request": "无",
+      "response": "inflight_orders，pending_payments，devices[{device_id，name，close_action}]，status_version，默认选项",
+      "errors": "FORBIDDEN"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/stores/{id}/close",
+      "caller": "后台",
+      "purpose": "一键停业",
+      "request": "reason，resume_at（可选），inflight_policy（finish 或 refund），allow_reservation，pause_scopes（wallet，card，renewal，points），notice_text，status_version",
+      "response": "status，log_id，device_tasks",
+      "errors": "STATUS_CHANGED，STORE_NOT_OPEN，FORBIDDEN"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/stores/{id}/open-check",
+      "caller": "后台",
+      "purpose": "开业检查",
+      "request": "无",
+      "response": "check_id，checks[{item，ok，blocking，reason，fix_route}]",
+      "errors": "FORBIDDEN"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/stores/{id}/open",
+      "caller": "后台",
+      "purpose": "一键开业",
+      "request": "check_id，status_version",
+      "response": "status，log_id，device_tasks",
+      "errors": "OPEN_CHECK_FAILED，OPEN_CHECK_EXPIRED，STATUS_CHANGED"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/stores/{id}/status-logs",
+      "caller": "后台",
+      "purpose": "营业日志",
+      "request": "分页参数",
+      "response": "时间、操作人或定时任务、原因、前后状态、受影响订单数、设备结果",
+      "errors": "—"
+    },
+    {
+      "method": "MQTT",
+      "path": "store/{id}/business-state",
+      "caller": "设备",
+      "purpose": "下发营业状态",
+      "request": "command_id，state，issued_at，签名",
+      "response": "回执：command_id，result，error",
+      "errors": "超时视为失败并重试"
+    },
+    {
+      "method": "TASK",
+      "path": "store-business-hours",
+      "caller": "定时任务",
+      "purpose": "营业时段自动开关与定时恢复",
+      "request": "每分钟",
+      "response": "切换的门店与结果",
+      "errors": "—"
     }
   ],
   "results": [
@@ -183,6 +287,16 @@
       "case": "门店暂停营业",
       "page": "门店详情页",
       "display": "顶部显示暂停原因与预计恢复时间，购卡与入场按钮不可用。"
+    },
+    {
+      "case": "停业后打开小程序",
+      "page": "门店栏与菜单页",
+      "display": "门店栏显示暂停营业与恢复时间，菜单顶部停业公告，首次进入弹一次强公告；菜单可浏览，加购与结算按钮为不可点的“暂停营业”。"
+    },
+    {
+      "case": "后台停业完成",
+      "page": "后台顶栏与营业日志",
+      "display": "状态胶囊变为暂停营业；设备逐台显示已切换、重试中或失败，失败项可重试。"
     }
   ],
   "writes": [
@@ -200,6 +314,16 @@
       "when": "修改门店或配置",
       "table": "audit_logs",
       "content": "修改前后的值。"
+    },
+    {
+      "when": "停业或开业",
+      "table": "stores、store_status_logs、outbox_events、audit_logs",
+      "content": "新状态与 status_version；切换原因、选项与影响；设备与外卖平台任务；操作人。"
+    },
+    {
+      "when": "设备回执",
+      "table": "store_device_commands",
+      "content": "command_id 对应的结果、次数与错误。"
     }
   ],
   "tables": [
@@ -298,6 +422,27 @@
           "required": false,
           "default": "—",
           "comment": "暂停原因"
+        },
+        {
+          "name": "resume_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "定时恢复营业的时间"
+        },
+        {
+          "name": "status_version",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "状态版本，切换用条件更新防并发"
+        },
+        {
+          "name": "pause_scopes",
+          "type": "JSONB",
+          "required": false,
+          "default": "—",
+          "comment": "停业时同时暂停的业务：储值、买卡、续费、积分兑换"
         }
       ],
       "indexes": [
@@ -343,6 +488,132 @@
       "indexes": [
         "UNIQUE(store_id, key) NULLS NOT DISTINCT"
       ]
+    },
+    {
+      "name": "store_status_logs",
+      "label": "营业日志",
+      "purpose": "每次营业状态切换的原因、选项与影响",
+      "fields": [
+        {
+          "name": "store_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "门店"
+        },
+        {
+          "name": "from_status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "切换前状态"
+        },
+        {
+          "name": "to_status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "切换后状态"
+        },
+        {
+          "name": "source",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "manual、schedule 或 platform"
+        },
+        {
+          "name": "operator_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "操作人；定时任务为空"
+        },
+        {
+          "name": "reason",
+          "type": "VARCHAR(200)",
+          "required": false,
+          "default": "—",
+          "comment": "停业原因"
+        },
+        {
+          "name": "options",
+          "type": "JSONB",
+          "required": true,
+          "default": "{}",
+          "comment": "恢复时间、在途订单处理、暂停范围、公告文案"
+        },
+        {
+          "name": "impact",
+          "type": "JSONB",
+          "required": true,
+          "default": "{}",
+          "comment": "受影响的订单数与设备结果汇总"
+        }
+      ],
+      "indexes": [
+        "INDEX(store_id, created_at)"
+      ]
+    },
+    {
+      "name": "store_device_commands",
+      "label": "设备指令",
+      "purpose": "营业状态下发到每台设备的指令与回执",
+      "fields": [
+        {
+          "name": "store_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "门店"
+        },
+        {
+          "name": "device_id",
+          "type": "BIGINT",
+          "required": true,
+          "default": "—",
+          "comment": "设备"
+        },
+        {
+          "name": "command_id",
+          "type": "UUID",
+          "required": true,
+          "default": "—",
+          "comment": "指令编号，设备按它去重"
+        },
+        {
+          "name": "target_state",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "open 或 paused 等"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "pending",
+          "comment": "pending、acked、failed"
+        },
+        {
+          "name": "attempts",
+          "type": "SMALLINT",
+          "required": true,
+          "default": "0",
+          "comment": "已尝试次数"
+        },
+        {
+          "name": "last_error",
+          "type": "VARCHAR(200)",
+          "required": false,
+          "default": "—",
+          "comment": "最后一次失败原因"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(command_id)",
+        "INDEX(store_id, status)"
+      ]
     }
   ],
   "states": [
@@ -356,23 +627,51 @@
     {
       "entity": "门店",
       "from": "open",
-      "event": "暂停",
-      "to": "paused",
-      "condition": "填写原因"
-    },
-    {
-      "entity": "门店",
-      "from": "paused",
-      "event": "恢复",
-      "to": "open",
-      "condition": "—"
+      "event": "关闭",
+      "to": "closed",
+      "condition": "没有有效会员卡或已完成迁移与退卡"
     },
     {
       "entity": "门店",
       "from": "open",
-      "event": "关闭",
-      "to": "closed",
-      "condition": "没有有效会员卡或已完成迁移与退卡"
+      "event": "一键停业",
+      "to": "paused",
+      "condition": "填写原因并确认影响；条件更新 status_version"
+    },
+    {
+      "entity": "门店",
+      "from": "paused",
+      "event": "一键开业或到达恢复时间",
+      "to": "open",
+      "condition": "开业检查的阻断项全部通过"
+    },
+    {
+      "entity": "门店",
+      "from": "open",
+      "event": "营业时段结束",
+      "to": "resting",
+      "condition": "定时任务"
+    },
+    {
+      "entity": "门店",
+      "from": "resting",
+      "event": "营业时段开始",
+      "to": "open",
+      "condition": "定时任务；人工停业的门店不自动恢复"
+    },
+    {
+      "entity": "设备指令",
+      "from": "pending",
+      "event": "设备回执成功",
+      "to": "acked",
+      "condition": "command_id 匹配"
+    },
+    {
+      "entity": "设备指令",
+      "from": "pending",
+      "event": "重试 3 次仍失败",
+      "to": "failed",
+      "condition": "告警并可手动重试"
     }
   ],
   "exceptions": [
@@ -391,6 +690,30 @@
     {
       "case": "配置值非法",
       "handling": "按配置定义的类型与上下限校验，返回 VALIDATION_FAILED。"
+    },
+    {
+      "case": "停业时有进行中与待支付订单",
+      "handling": "待支付订单关闭并释放库存与券；进行中订单按 inflight_policy 继续制作或原路退款，并逐单通知用户。"
+    },
+    {
+      "case": "停业后才到账的支付",
+      "handling": "支付回调校验营业状态：按停业时的处理继续制作或自动原路退款，不能出现付款后无人制作。"
+    },
+    {
+      "case": "两人同时切换营业状态",
+      "handling": "条件更新 status_version，后到的返回 STATUS_CHANGED 与最新状态，界面刷新后再操作。"
+    },
+    {
+      "case": "设备下发失败",
+      "handling": "重试 3 次后告警，设备列表标出失败并可手动重试；停业与支付暂停已经生效，不回滚。"
+    },
+    {
+      "case": "开业检查不通过",
+      "handling": "返回 OPEN_CHECK_FAILED 与每一项的原因和处理入口；阻断项（支付通道、收银）不通过不能开业。"
+    },
+    {
+      "case": "定时恢复时检查不通过",
+      "handling": "保持停业，通知店长并写营业日志，不自动开业。"
     }
   ]
 }

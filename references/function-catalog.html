@@ -2269,6 +2269,148 @@ footer.catalog-footer{padding:20px 2px 4px;color:var(--ink-3);font-size:11px}
           ]
         }
       ]
+    },
+    {
+      "id": "store",
+      "name": "门店营业状态",
+      "backendModule": "02-store",
+      "status": "design",
+      "description": "营业状态只存一份；一键开业与停业、开业检查、停业后下单与支付校验、设备与外卖平台联动、营业日志。",
+      "sourceRefs": [
+        "references/module-specs/store.json",
+        "references/standards.json"
+      ],
+      "functions": [
+        {
+          "id": "store.open-close",
+          "name": "一键开业与停业",
+          "status": "design",
+          "rows": [
+            {
+              "label": "业务场景",
+              "value": "店长在后台顶栏或门店列表一键停业（临时检修、缺料、天气）或开业；多店可批量。"
+            },
+            {
+              "label": "触发与输入",
+              "value": "停业：reason、resume_at、inflight_policy、allow_reservation、pause_scopes、notice_text、status_version；开业：check_id、status_version。"
+            },
+            {
+              "label": "核心逻辑",
+              "value": "停业前预览影响；一个事务内条件更新状态、写营业日志与公告、在 Outbox 写设备与外卖平台任务；开业前逐项开业检查，阻断项不通过不能开业。"
+            },
+            {
+              "label": "接口与路由",
+              "value": "GET close-preview、POST close、GET open-check、POST open、GET status-logs，均在 /api/v1/admin/stores/{id} 下。"
+            },
+            {
+              "label": "数据与并发",
+              "value": "stores.status 与 status_version 条件更新；store_status_logs 只追加；写请求带 Idempotency-Key。"
+            },
+            {
+              "label": "权限与安全",
+              "value": "仅店长与总部运营；按门店范围授权；每次切换进入审计。"
+            },
+            {
+              "label": "状态与失败",
+              "value": "open、paused、resting、closed；并发返回 STATUS_CHANGED；开业检查失败返回 OPEN_CHECK_FAILED；检查超过 5 分钟返回 OPEN_CHECK_EXPIRED。"
+            },
+            {
+              "label": "验证与证据",
+              "value": "并发切换只有一个成功；无权限 403；开业检查不通过不能开业；营业日志完整。"
+            },
+            {
+              "label": "复用提示",
+              "value": "营业状态是门店的唯一事实，下单、支付、入场、设备、外卖平台都读它，不各自另存。"
+            }
+          ]
+        },
+        {
+          "id": "store.order-gate",
+          "name": "停业后的下单与支付校验",
+          "status": "design",
+          "rows": [
+            {
+              "label": "业务场景",
+              "value": "停业期间用户打开旧页面或缓存页面继续下单，或停业瞬间支付到账。"
+            },
+            {
+              "label": "触发与输入",
+              "value": "创建订单、发起支付、支付回调三处。"
+            },
+            {
+              "label": "核心逻辑",
+              "value": "三处都读营业状态；非营业中拒绝新订单与预支付；停业后到账的支付按停业时选择的在途订单处理继续制作或原路退款。"
+            },
+            {
+              "label": "接口与路由",
+              "value": "POST /api/v1/app/orders、POST /api/v1/app/payments、支付回调；错误 STORE_NOT_OPEN 附恢复时间与可预约时段。"
+            },
+            {
+              "label": "数据与并发",
+              "value": "状态读取不走可能过期的缓存，或缓存在切换时同步失效；退款带幂等键。"
+            },
+            {
+              "label": "权限与安全",
+              "value": "用户只能为营业中门店下单；退款走原路并写资金流水。"
+            },
+            {
+              "label": "状态与失败",
+              "value": "停业时待支付订单关闭并释放库存与券；回调与停业并发时以支付成功事实为准执行策略。"
+            },
+            {
+              "label": "验证与证据",
+              "value": "停业后下单与支付返回 STORE_NOT_OPEN；停业瞬间到账的支付有制作或退款记录，没有悬空订单。"
+            },
+            {
+              "label": "复用提示",
+              "value": "前端置灰只是提示，校验必须在服务端三处都做。"
+            }
+          ]
+        },
+        {
+          "id": "store.device-sync",
+          "name": "营业状态的设备联动",
+          "status": "design",
+          "rows": [
+            {
+              "label": "业务场景",
+              "value": "停业后门禁只放行员工、取餐柜与储物柜停止新分配、打印机停止接单、点单屏显示停业画面；开业时恢复。"
+            },
+            {
+              "label": "触发与输入",
+              "value": "营业状态切换后由 Outbox 投递；每类设备登记停业与开业动作。"
+            },
+            {
+              "label": "核心逻辑",
+              "value": "下发带 command_id 的签名指令（主题 store/{id}/business-state），设备去重并回执；超时视为失败，重试 3 次后告警。"
+            },
+            {
+              "label": "接口与路由",
+              "value": "MQTT store/{id}/business-state；后台可查看与手动重试失败指令。"
+            },
+            {
+              "label": "数据与并发",
+              "value": "store_device_commands 以 command_id 唯一；回执幂等更新。"
+            },
+            {
+              "label": "权限与安全",
+              "value": "指令签名、限时、防重放（IOT-001）；设备只执行，不判断业务。"
+            },
+            {
+              "label": "状态与失败",
+              "value": "pending、acked、failed；设备失败不回滚停业，也不阻挡支付暂停生效。"
+            },
+            {
+              "label": "验证与证据",
+              "value": "停业后每类设备按登记动作切换并有回执；一台设备离线时停业照常生效并告警。"
+            },
+            {
+              "label": "复用提示",
+              "value": "设备联动与营业状态解耦：状态先生效，设备异步追平。"
+            }
+          ]
+        }
+      ]
     }
   ]
 }</script>

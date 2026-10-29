@@ -1318,6 +1318,45 @@
       ]
     },
     {
+      "id": "ORDER-010",
+      "domain": "order",
+      "level": "MUST",
+      "platforms": [
+        "miniprogram",
+        "backend"
+      ],
+      "modules": [
+        "order",
+        "payment",
+        "store"
+      ],
+      "title": "下单、发起支付与支付回调都校验门店营业状态",
+      "rule": "门店营业状态只存一份。创建订单、发起支付与支付回调三处都由服务端读取营业状态：非营业中拒绝新订单与预支付并返回 STORE_NOT_OPEN（附恢复时间）；停业前已发起、停业后到账的支付按停业时选择的在途订单处理继续制作或自动原路退款。前端按钮置灰只是提示。",
+      "why": "只在前端拦截时，旧页面、缓存请求或停业瞬间到账的支付会产生付了钱却无人制作的订单。",
+      "do": [
+        "停业时关闭待支付订单并释放库存与券",
+        "允许预约时只接受营业时段内的预约单"
+      ],
+      "dont": [
+        "靠前端隐藏按钮代替服务端校验",
+        "支付回调里不再检查营业状态"
+      ],
+      "verify": [
+        "停业后下单与发起支付返回 STORE_NOT_OPEN",
+        "停业瞬间到账的支付按策略制作或退款，没有悬空订单"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 门店模块详设",
+          "url": "file:///D:/Codes/Luz-Dev/references/module-specs/store.json"
+        },
+        {
+          "title": "Luz System · 交易与营销界面规范 营业状态与一键开停业",
+          "url": "https://github.com/luzern0414/Luz-System/blob/master/references/commerce-design.html"
+        }
+      ]
+    },
+    {
       "id": "RSV-001",
       "domain": "booking",
       "level": "MUST",
@@ -1556,6 +1595,39 @@
         {
           "title": "Luz Dev · 无人值守场馆门禁与设备接入做法",
           "url": "file:///D:/Codes/Luz-Dev/references/patterns/access-control.md"
+        }
+      ]
+    },
+    {
+      "id": "IOT-004",
+      "domain": "iot",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "iot",
+        "store"
+      ],
+      "title": "营业状态变化统一下发设备指令并逐台回报",
+      "rule": "每类设备登记停业与开业时的动作；营业状态切换后经 Outbox 下发带 command_id 的签名指令，设备按 command_id 去重并回执；超时视为失败，重试 3 次后告警并可手动重试。设备失败不影响停业与支付暂停生效，也不回滚状态。",
+      "why": "设备与营业状态不同步时，停业门店的门禁仍放行、打印机仍接单；把设备成功当成停业前提又会让一台离线设备拦住整店停业。",
+      "do": [
+        "后台逐台显示已切换、重试中或失败",
+        "开业时按相反动作恢复"
+      ],
+      "dont": [
+        "在切换状态的事务里同步调用设备",
+        "设备失败时回滚营业状态"
+      ],
+      "verify": [
+        "停业后各类设备按登记动作切换并有回执",
+        "一台设备离线时停业照常生效并告警"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 门店模块详设",
+          "url": "file:///D:/Codes/Luz-Dev/references/module-specs/store.json"
         }
       ]
     },
@@ -3491,6 +3563,45 @@
         {
           "title": "OWASP CSRF Prevention Cheat Sheet",
           "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html"
+        }
+      ]
+    },
+    {
+      "id": "ADMIN-004",
+      "domain": "admin",
+      "level": "MUST",
+      "platforms": [
+        "admin",
+        "backend"
+      ],
+      "modules": [
+        "store",
+        "admin-rbac"
+      ],
+      "title": "一键开业与停业：影响预览、开业检查、权限与营业日志",
+      "rule": "有门店的系统提供一键开业与停业：只有店长与总部运营有权限；停业前返回影响预览（进行中订单、待支付订单、设备），开业前做开业检查且阻断项不通过不能开业；切换用条件更新防并发；每次切换写营业日志（时间、操作人或定时任务、原因、选项、影响）。营业时段到点自动进入休息中并恢复，人工停业的门店不被定时任务恢复。",
+      "why": "停业是影响收入与在途订单的高风险操作，需要先看到后果；开业时支付或设备没准备好会直接产生失败订单。",
+      "do": [
+        "顶栏显示当前门店营业状态并可一键切换",
+        "外卖平台门店同步置休与恢复"
+      ],
+      "dont": [
+        "无确认直接停业",
+        "营业状态在多个表或服务里各存一份"
+      ],
+      "verify": [
+        "无权限角色调用开停业接口返回 403",
+        "开业检查不通过时开业返回 OPEN_CHECK_FAILED",
+        "营业日志记录每次切换"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 门店模块详设",
+          "url": "file:///D:/Codes/Luz-Dev/references/module-specs/store.json"
+        },
+        {
+          "title": "Luz System · 交易与营销界面规范 营业状态与一键开停业",
+          "url": "https://github.com/luzern0414/Luz-System/blob/master/references/commerce-design.html"
         }
       ]
     },
