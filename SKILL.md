@@ -106,7 +106,7 @@ The paired Design package is resolved by `--design-root`, then `LUZ_DESIGN_ROOT`
 
 Read `references/design-integration.md`. In short:
 
-1. `design_intake.py inspect <会话> --require architecture,system_design,prototype` — approvals and SHA-256 must match.
+1. `design_intake.py inspect <会话> --require architecture,system_design,prototype` — approvals and SHA-256 must match. A platform demo session (`approval_mode authorization`, signed once before generation) is for sales only and is refused; development starts from a session approved stage by stage.
 2. `design_intake.py bind <会话> --out <项目>/packages/contracts/design-bindings.json` — one row per action (`A-`), entity (`D-`), integration (`I-`), page (`P-`); fill API routes together with the OpenAPI contract.
 3. Build the production pages from the approved prototype: keep `data-page-id` / `data-action-id`, replace every fixture with real API data, implement every state, use design tokens.
 4. `design_intake.py check <绑定表> --frontend <apps/miniprogram> --frontend <apps/admin>` — 100% action and page coverage, no prototype data or mock imports, no undesigned actions.

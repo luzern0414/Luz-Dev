@@ -134,6 +134,10 @@ def inspect_session(session: Path) -> dict[str, Any]:
     if not manifest_path.is_file():
         raise DesignError(f"不是 Luz System 会话目录（缺少 raw/99-delivery/MANIFEST.json）: {session}")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("approval_mode") == "authorization":
+        # A platform demo signed once before generation (Luz System SKILL.md 调用协议 6) is for sales only.
+        raise DesignError("这是平台按一次授权生成的演示会话（approval_mode authorization），只用于销售演示，不转入开发；"
+                          f"正式开发请新建逐阶段人工批准的 Luz System 会话: {session}")
     approvals_path = work / manifest.get("approvals_file", "99-delivery/APPROVALS.json")
     approvals = json.loads(approvals_path.read_text(encoding="utf-8")) if approvals_path.is_file() else {}
     stages: dict[str, dict[str, Any]] = {}

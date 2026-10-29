@@ -69,6 +69,21 @@ def run(*argv: str) -> tuple[int, dict]:
 
 
 class DesignIntakeTests(unittest.TestCase):
+    def test_authorized_demo_sessions_are_not_taken_into_development(self) -> None:
+        # A platform demo signed once before generation (Luz System approval_mode authorization) is for sales only.
+        with tempfile.TemporaryDirectory() as temporary:
+            session = make_session(Path(temporary))
+            manifest_path = session / "99-delivery" / "MANIFEST.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["approval_mode"] = "authorization"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaises(design_intake.DesignError) as caught:
+                design_intake.inspect_session(session)
+            self.assertIn("只用于销售演示", str(caught.exception))
+            manifest["approval_mode"] = "per_stage"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            self.assertEqual(design_intake.inspect_session(session)["counts"]["actions"], 2)
+
     def test_inspect_extracts_ids_and_verifies_hashes(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             session = make_session(Path(temporary))
