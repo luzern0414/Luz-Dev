@@ -115,5 +115,30 @@ class RuleCardTests(unittest.TestCase):
             self.assertTrue(any("context.py" in line for line in head), rel)
 
 
+class ExperienceStoreOverrideTests(unittest.TestCase):
+    """LUZ_EXPERIENCE_STORE (tests and rehearsals only) takes note writes and feeds the rule card; the skill's own files stay untouched."""
+
+    def test_override_store_takes_writes_and_feeds_the_card(self) -> None:
+        import os
+        import subprocess
+        skill_root = Path(__file__).resolve().parents[1]
+        experience = {p: p.read_bytes() for p in (skill_root / "experience").iterdir() if p.is_file()}
+        with tempfile.TemporaryDirectory() as tmp:
+            store = Path(tmp) / "notes.json"
+            env = {**os.environ, "LUZ_EXPERIENCE_STORE": str(store)}
+
+            def run(*args: str) -> subprocess.CompletedProcess:
+                return subprocess.run([sys.executable, "-X", "utf8", *args], cwd=skill_root, env=env, text=True,
+                                      capture_output=True, encoding="utf-8", errors="replace", check=False)
+
+            noted = run("scripts/record_experience.py", "note", "--kind", "preference", "--key", "override-probe", "--text", "探针偏好，只写测试库")
+            self.assertEqual(noted.returncode, 0, noted.stderr)
+            self.assertTrue(store.is_file())
+            card = run("scripts/context.py", "tech-plan")
+            self.assertEqual(card.returncode, 0, card.stderr)
+            self.assertIn("探针偏好", card.stdout)
+        self.assertEqual({p: p.read_bytes() for p in (skill_root / "experience").iterdir() if p.is_file()}, experience)
+
+
 if __name__ == "__main__":
     unittest.main()

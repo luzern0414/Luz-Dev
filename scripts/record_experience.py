@@ -216,7 +216,7 @@ def rebuild_index(experience_root: Path) -> Path:
         + "<!-- EXPERIENCE_ROWS_END -->"
     )
     updated_text = marker.sub(lambda _: table, text, count=1)
-    notes_block = f"{NOTES_START}\n{render_notes_table(load_notes(notes_path(experience_root))['notes'])}{NOTES_END}"
+    notes_block = f"{NOTES_START}\n{render_notes_table(load_notes(experience_root / NOTES_FILE)['notes'])}{NOTES_END}"
     notes_marker = re.compile(re.escape(NOTES_START) + r".*?" + re.escape(NOTES_END), re.DOTALL)
     if notes_marker.search(updated_text):
         updated_text = notes_marker.sub(lambda _: notes_block, updated_text, count=1)
@@ -511,7 +511,9 @@ def note_counts(doc: dict) -> str:
 
 
 def notes_path(experience_root: Path) -> Path:
-    return experience_root / NOTES_FILE
+    """The notes store; LUZ_EXPERIENCE_STORE names another file for tests and rehearsals (INDEX.md keeps the skill's own notes)."""
+    override = os.environ.get("LUZ_EXPERIENCE_STORE")
+    return Path(override) if override else experience_root / NOTES_FILE
 
 
 def check_notes_file(experience_root: Path) -> tuple[list[str], list[str]]:

@@ -124,6 +124,15 @@
       "last_confirmed": "2026-10-28"
     },
     {
+      "key": "revise-before-fix-in-e2e",
+      "kind": "lesson",
+      "text": "真实链路验证中发现的缺陷也要先修订方案并经用户确认，再改代码和推送；不要先推送再补修订",
+      "why": "DealRadar 接入方案中，模型预算等修复在用户确认修订前已推送",
+      "uses": 1,
+      "first_seen": "2026-10-29",
+      "last_confirmed": "2026-10-29"
+    },
+    {
       "key": "standards-rule-id-format",
       "kind": "lesson",
       "text": "standards.json 的规则编号必须是 前缀-三位数字（如 AGENT-002），build_standards.py 用 ^[A-Z]+-\\d{3}$ 校验；AGENT-SSE-001 这类分段编号会被拒，主题写进标题而不是编号",

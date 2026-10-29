@@ -49,6 +49,7 @@
 | 教训 | more-sources-need-read-priority | 获客类系统扩充数据源后，结果数受阅读原文名额限制而非检索；同一公告应优先读官方平台原文，聚合站转载正文常删减、核验率低 | 1 | 2026-10-29 |
 | 教训 | plan-spec-sync-readd | spec --file 会按方案模块重新同步库内详设，替换自定义详设后要再逐个 spec --remove 不适用的库内详设并确认 moduleSpecs；方案页面避免 哈希、sha256、数据来源、输出目录 等被 check_document 拦截的词 | 1 | 2026-10-28 |
 | 教训 | research-source-recheck-before-publish | 平台驱动 Luz-System 会话时，调研来源可能在调研后被站点临时封锁（如 HTTP 423），发布前要复核来源、失败重试一次、仍不可达则从经验库替换同类来源再跑 strict 校验 | 1 | 2026-10-28 |
+| 教训 | revise-before-fix-in-e2e | 真实链路验证中发现的缺陷也要先修订方案并经用户确认，再改代码和推送；不要先推送再补修订 | 1 | 2026-10-29 |
 | 教训 | standards-rule-id-format | standards.json 的规则编号必须是 前缀-三位数字（如 AGENT-002），build_standards.py 用 ^[A-Z]+-\d{3}$ 校验；AGENT-SSE-001 这类分段编号会被拒，主题写进标题而不是编号 | 1 | 2026-10-29 |
 | 有效信息 | agent-foundation-pipeline | 智能体服务按 references/agent-foundation.md 的固定流水线实现：接入（SSE、排队、幂等）→ 输入护栏（先于主模型）→ 意图路由（规则→语义路由→小模型，置信度 0.75/0.5，低于阈值追问不猜）→ LangGraph 工作流 → 工具契约（Pydantic 参数与返回、副作用级别、超时、幂等键、错误三分类）→ 结构化输出（校验失败重试 1 次后降级）→ 记忆（检查点 + Store，可看可删）→ 知识库（上下文前缀、向量+BM25+RRF、权限预过滤、引用）→ 输出护栏与审批 → 追踪与评测回归；超时与上限统一见底座 §16 | 1 | 2026-10-29 |
 | 有效信息 | browser-in-docker-handover | 容器内需人工验证的浏览器：Xvfb + 有界面 Chromium + x11vnc + noVNC，经应用自身登录的同源 WebSocket 代理暴露，shm 至少 1–2GB，--init，非 root + seccomp；WebRTC（n.eko）延迟低但需 UDP | 1 | 2026-10-28 |

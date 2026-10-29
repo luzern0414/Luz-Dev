@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 from datetime import date
@@ -28,7 +29,8 @@ from pathlib import Path
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 CARDS_FILE = SKILL_ROOT / "references" / "cards.json"
-NOTES_FILE = SKILL_ROOT / "experience" / "notes.json"
+# LUZ_EXPERIENCE_STORE names another notes file for tests and rehearsals; the skill's own notes and catalog stay untouched.
+NOTES_FILE = Path(os.environ.get("LUZ_EXPERIENCE_STORE") or SKILL_ROOT / "experience" / "notes.json")
 HEADING = re.compile(r"h([1-6])$")
 SKIP_TAGS = {"script", "style", "svg", "template", "noscript", "head"}
 BLOCK_TAGS = {"p", "div", "section", "article", "header", "footer", "main", "figure", "figcaption", "blockquote", "pre", "dl", "dt", "dd", "details", "summary", "nav", "aside", "ul", "ol", "table", "thead", "tbody", "tfoot"}

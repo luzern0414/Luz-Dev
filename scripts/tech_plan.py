@@ -54,7 +54,8 @@ STANDARDS = ROOT / "references" / "standards.json"
 STANDARD_MODULES = ROOT / "references" / "standard-modules.json"
 RESEARCH_SOURCES = ROOT / "references" / "research-sources.json"
 CATALOG = ROOT / "references" / "function-catalog.json"
-NOTES_FILE = ROOT / "experience" / "notes.json"  # record_experience.py note writes here; 本次沉淀 keys are checked against it
+# LUZ_EXPERIENCE_STORE names another notes file for tests and rehearsals; the skill's own notes and catalog stay untouched.
+NOTES_FILE = Path(os.environ.get("LUZ_EXPERIENCE_STORE") or ROOT / "experience" / "notes.json")  # record_experience.py note writes here; 本次沉淀 keys are checked against it
 SCHEMA = "luz-dev-plan/2"
 CRAWL_BATCH = 30
 LOGIN_GATED_PLATFORMS = {"zhihu", "xhs", "xiaohongshu", "douyin", "weibo"}  # often stop for a login or verification
@@ -625,6 +626,8 @@ def sediment_problems(plan: Mapping[str, Any], stage: str = "review") -> list[st
     Submit: at least one note key, each in experience/notes.json and written or confirmed on or after the plan's creation date.
     Delivery: the build and launch leave their own note too — at least one key confirmed on or after the approval date.
     """
+    if os.environ.get("LUZ_EXPERIENCE_STORE"):
+        print(f"注意：LUZ_EXPERIENCE_STORE 已设置，本次沉淀按 {NOTES_FILE} 核对，经验不会进入技能（只用于测试和演练，正式交付不要设置）", file=sys.stderr)
     number = plan.get("number") or "NN"
     record = (f'python -X utf8 scripts/record_experience.py note --kind preference|lesson|fact --key <主题> --text "<一句话原则>"，'
               f"再 python -X utf8 scripts/tech_plan.py sediment {number} --key <主题>")
