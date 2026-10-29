@@ -41,6 +41,7 @@
 | 偏好 | base-then-custom-features | 方案页在结论之后先列这类系统的基础功能（逐项标注包含或不适用），再列本项目的定制功能，然后才是调研、设计和架构。 | 1 | 2026-10-28 |
 | 偏好 | html-tab-icon-required | 每个生成的 HTML 页面都必须有贴合主题的标签页图标，不能空白：模板放 {{FAVICON}}，生成器调用 luz_shell.favicon_for_tokens(kind, tokens) 输出内联 SVG（主题主色线稿 + 浅色圆角底；技术方案=文档、规范=盾牌、知识库=书本、功能目录=宫格），新增页面类型时同步新增图标。 | 1 | 2026-10-28 |
 | 偏好 | one-task-one-folder | 一个需求只建一个项目文件夹（skill输出/Luz-Dev/序号-主题/，成品 HTML 加 raw/）；后续修改用 revise 修订同一方案，只告诉用户一个要打开的 HTML。 | 1 | 2026-10-28 |
+| 偏好 | photo-upload-no-size-limit | 用户无法自行改小的文件（系统相机拍的照片、相册原图）上传时不限制大小、不提示过大：前端先压缩（长边约 2048），服务端再统一缩放与重新编码，只留远高于手机原图的防滥用上限；能换文件的合同与文档才限制大小并在选择前写明 | 1 | 2026-10-29 |
 | 偏好 | plan-approved-before-build | 任何代码、数据、配置或部署改动之前，技术方案必须得到用户明确批准；批准绑定方案内容哈希，内容变化后要重新提交、重新批准。 | 1 | 2026-10-28 |
 | 偏好 | process-info-off-page | 页面只放内容；来源与调研统计、审批状态与哈希、修订记录、时间戳、文件路径留在 raw/plan.json 和对话里，待决问题在对话里直接问用户。 | 1 | 2026-10-28 |
 | 偏好 | reading-page-check-document | 方案页、规范页和知识库页按 Luz Design 阅读页规则生成，标题在首行、无应用外壳、字号只用 14/16/20/24/32，并通过 Luz Design 的 check_document.py，有 ERROR 不能提交。 | 1 | 2026-10-28 |
@@ -54,6 +55,7 @@
 | 教训 | research-source-recheck-before-publish | 平台驱动 Luz-System 会话时，调研来源可能在调研后被站点临时封锁（如 HTTP 423），发布前要复核来源、失败重试一次、仍不可达则从经验库替换同类来源再跑 strict 校验 | 1 | 2026-10-28 |
 | 教训 | revise-before-fix-in-e2e | 真实链路验证中发现的缺陷也要先修订方案并经用户确认，再改代码和推送；不要先推送再补修订 | 1 | 2026-10-29 |
 | 教训 | standards-rule-id-format | standards.json 的规则编号必须是 前缀-三位数字（如 AGENT-002），build_standards.py 用 ^[A-Z]+-\d{3}$ 校验；AGENT-SSE-001 这类分段编号会被拒，主题写进标题而不是编号 | 1 | 2026-10-29 |
+| 教训 | store-close-all-entrances | 门店停业不能只拦新建订单：已建待付单的调起支付（外呼前后各复核一次营业状态）、已授权未通过的入场会话、抽奖都要拦；已调起并付款的回调照常成交，物理退出不拦 | 1 | 2026-10-29 |
 | 有效信息 | agent-foundation-pipeline | 智能体服务按 references/agent-foundation.md 的固定流水线实现：接入（SSE、排队、幂等）→ 输入护栏（先于主模型）→ 意图路由（规则→语义路由→小模型，置信度 0.75/0.5，低于阈值追问不猜）→ LangGraph 工作流 → 工具契约（Pydantic 参数与返回、副作用级别、超时、幂等键、错误三分类）→ 结构化输出（校验失败重试 1 次后降级）→ 记忆（检查点 + Store，可看可删）→ 知识库（上下文前缀、向量+BM25+RRF、权限预过滤、引用）→ 输出护栏与审批 → 追踪与评测回归；超时与上限统一见底座 §16 | 1 | 2026-10-29 |
 | 有效信息 | browser-in-docker-handover | 容器内需人工验证的浏览器：Xvfb + 有界面 Chromium + x11vnc + noVNC，经应用自身登录的同源 WebSocket 代理暴露，shm 至少 1–2GB，--init，非 root + seccomp；WebRTC（n.eko）延迟低但需 UDP | 1 | 2026-10-28 |
 | 有效信息 | plan-page-banned-words | 方案页正文不能出现“哈希”“SHA-256”字样（被 check_document 当作来源元数据拦截），改写为“不可逆摘要”“密码比对” | 1 | 2026-10-28 |
