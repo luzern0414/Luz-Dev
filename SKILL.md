@@ -39,6 +39,7 @@ Knowledge lives in four places, each with tested or verified content:
 | Module detailed design (features, flows, page inputs, APIs, result pages, data writes, tables and fields, states, exceptions) | `references/module-specs/` (`scripts/module_specs.py`) |
 | Rules and feature baselines (verifiable) | `references/standards.json` → `references/standards.html` |
 | Launch: operations, qualifications, agreements | `references/operations.md`, `references/compliance.md`, `references/legal-documents.md`, templates in `assets/deploy/` and `assets/legal/` |
+| Runtime config files and logging (hot reload, log classes, fields, redaction, retention, log alerts) | `references/config-logging.md` (card `config-logging`) |
 | Frontend integration with Luz System | `references/design-integration.md` + `scripts/design_intake.py` |
 | Everything research found (sources, facts, searches already run) | `knowledge/` → `knowledge/index.html` (`scripts/knowledge.py`) |
 
@@ -144,6 +145,7 @@ To add or correct a rule: edit `references/standards.json` (source + check date 
 | Module catalog | Agents: `references/function-catalog.json`; humans: `references/function-catalog.html` | — |
 | Result pages | `references/result-patterns.md` + catalog module `result-flow` | — |
 | Operations and launch | `references/operations.md` | `assets/deploy/` |
+| Runtime config files, hot reload, logging, log retention | `references/config-logging.md` | `luzback/config.py`, `luzback/logging.py`, module spec `config` |
 | Qualifications and licences | `references/compliance.md` | — |
 | Agreements and consent | `references/legal-documents.md` | `assets/legal/`, `backend/27-legal` |
 | Intelligent agent (the agent foundation is the one canonical spec) | `references/agent-foundation.md` → `agent/README.md` (code gaps) → `agent/backend/SPEC.md` | `agent/shared/protocol.md` |
@@ -182,6 +184,7 @@ The full, verifiable list is `references/standards.json`. The rules that shape e
 - Personal data needs a stated purpose and consent with records; face recognition is never the only option; agreements are versioned and re-consented after material changes.
 - Production runs HTTPS only, with monitoring, backups that have been restored, and a rehearsed rollback.
 - Secrets live in a secret store or restricted files, never in source, logs, screenshots or prompt-visible files.
+- Runtime parameters live in validated config files the server hot-reloads, not in admin pages; logs are one-line JSON with shared fields and trace ids, free of secrets, never block a request, and are kept centrally for the legal periods (`references/config-logging.md`).
 - Done means verified in the target environment, including failure, repeat, concurrency, permission and dependency-outage behavior.
 
 ## Platform defaults

@@ -1,7 +1,7 @@
 # 运维与上线
 
 Luz Dev 负责从开发到上线的全流程。本篇覆盖环境、部署、网关、发布与回滚、监控告警、备份恢复、CI/CD、压测与上线检查；资质与备案见 `compliance.md`，协议见 `legal-documents.md`。
-模板（运维套件，文件清单见 §8）：`assets/deploy/`、`assets/monitoring/`、`assets/ci/`、`assets/loadtest/`，镜像构建 `backend/deploy/Dockerfile`。相关规范：REL-*、OPS-*、DATA-002、DATA-003、OBS-*、SECRET-*、PROC-004。
+模板（运维套件，文件清单见 §8）：`assets/deploy/`、`assets/monitoring/`、`assets/ci/`、`assets/loadtest/`，镜像构建 `backend/deploy/Dockerfile`。相关规范：REL-*、OPS-*、DATA-002、DATA-003、OBS-*、SECRET-*、CONF-*、PROC-004。运行配置文件与日志的写法见 `config-logging.md`。
 
 ## 1. 环境
 
@@ -11,7 +11,7 @@ Luz Dev 负责从开发到上线的全流程。本篇覆盖环境、部署、网
 | 测试 / 预发 | 联调、验收、演练、压测 | 与生产同构（同一 compose 模板、同版本数据库、同配置结构）；微信支付使用独立商户配置或小额真实验证；数据脱敏 |
 | 生产 | 正式 | 只能通过发布流程变更（`release.sh`）；镜像按 digest 部署；秘密只在密钥服务或受限文件 |
 
-每个环境一份配置清单（`config/<env>.md`）：配置项、用途、获取方式、验证方法；秘密只写存放位置（PROC-004、SECRET-001）。
+每个环境一份配置清单（`config/<env>.md`）：配置项、用途、获取方式、验证方法；秘密只写存放位置（PROC-004、SECRET-001）。运行参数（超时、上限、开关）写在 `config/runtime/*.toml`，服务端热加载，不在后台展示（`config-logging.md` §2、OPS-005）。
 
 ## 2. 部署默认方案
 
@@ -91,7 +91,7 @@ Prometheus 抓取 api 各副本（Docker DNS 发现）、sql-exporter（业务�
 | 备份 | 每日备份、基础备份、WAL 外传、WAL 归档、恢复校验 | > 26h；> 8 天；> 15 分钟；归档失败即告警；恢复校验 > 8 天 |
 | 安全 | 登录/短信限流命中、未处理异常 | 持续 > 1/s；10 分钟 > 10 次 |
 
-日志：应用与 nginx 都输出 JSON 到 stdout（带 `request_id`/`trace_id`，OBS-001）；本地 json-file 只做轮转缓冲（api 50m×5、nginx 100m×10）。网络日志（nginx 访问日志、认证/权限/支付回调/管理操作日志、安全事件）由采集器集中存储 **不少于 6 个月**（《网络安全法》网络日志留存要求，2026-01-01 修正后施行，期限不变），存储开启只读或对象锁防删改；保留期限写入方案。
+日志：应用与 nginx 都输出 JSON 到 stdout（带 `request_id`/`trace_id`，OBS-001）；本地 json-file 只做轮转缓冲（api 50m×5、nginx 100m×10）。网络日志（nginx 访问日志、认证/权限/支付回调/管理操作日志、安全事件）由采集器集中存储 **不少于 6 个月**（《网络安全法》第二十三条，2025 年修正、2026-01-01 施行，原第二十一条，期限不变），存储开启只读或对象锁防删改；分类、字段、脱敏、留存期限表与日志告警见 `config-logging.md` §3（OBS-004 至 OBS-008），保留期限写入方案。
 
 ## 5. 备份与恢复
 

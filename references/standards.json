@@ -2959,10 +2959,13 @@
       "why": "秘密一旦进入 Git 历史或前端包就视为已泄露。",
       "do": [
         "提交前秘密扫描",
-        "按环境分离配置"
+        "按环境分离配置",
+        "优先由编排挂载成文件读取，读入后用 SecretStr 一类类型，打印与报错一律打码",
+        "泄露时按吊销、轮换、清除出现过的日志与提交历史处置"
       ],
       "dont": [
-        "把 apikey.txt 之类文件放进项目目录"
+        "把 apikey.txt 之类文件放进项目目录",
+        "把秘密写进镜像的 ENV 或 ARG"
       ],
       "verify": [
         "validate 脚本秘密扫描通过；前端构建产物检索无秘密"
@@ -2995,6 +2998,151 @@
         "轮换演练记录"
       ],
       "sources": []
+    },
+    {
+      "id": "CONF-001",
+      "domain": "secret",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "settings"
+      ],
+      "title": "配置有字段说明，加载时整份校验，未登记的键报错",
+      "rule": "每个运行配置键在字段说明（Pydantic 模型）里登记类型、默认值、范围、单位、作用范围、能否热加载、是否下发客户端、风险与负责人；单位写进键名（`timeout_ms`、`max_mb`）。加载时先解析与类型、再范围与跨字段约束；文件里出现未登记的键一律报错；启动时校验失败逐条打印键、当前值（秘密打码）、原因与允许范围后非零退出。CI 把每个环境文件都加载一遍。",
+      "why": "只做语法检查发现不了大多数配置错误；拼错的键会让默认值悄悄生效；单位误解是常见事故原因。",
+      "do": [
+        "默认值本身也通过校验，新功能开关默认关",
+        "启动时另扫 `LUZ_` 前缀的环境变量，不认识的打警告"
+      ],
+      "dont": [
+        "忽略不认识的键",
+        "在配置文件里写模板、变量插值或条件"
+      ],
+      "verify": [
+        "每个环境文件在 CI 加载通过",
+        "故意写错类型、超范围、拼错键各一次，启动失败并给出键与原因"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 配置文件与日志",
+          "url": "file:///D:/Codes/Luz-Dev/references/config-logging.md"
+        },
+        {
+          "title": "Google SRE Workbook · Configuration Design and Best Practices",
+          "url": "https://sre.google/workbook/configuration-design/"
+        },
+        {
+          "title": "Google SRE Workbook · Configuration Specifics",
+          "url": "https://sre.google/workbook/configuration-specifics/"
+        },
+        {
+          "title": "Pydantic · Settings Management",
+          "url": "https://docs.pydantic.dev/latest/concepts/pydantic_settings/"
+        },
+        {
+          "title": "TOML v1.0.0",
+          "url": "https://toml.io/cn/v1.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CONF-002",
+      "domain": "secret",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "settings"
+      ],
+      "title": "热加载整份替换快照，失败保留旧配置并告警",
+      "rule": "运行配置在文件变化（监听整个目录、防抖 1–2 秒）或内部重载指令时热加载：在旁路整份校验成不可变快照，通过后一次性替换引用；失败时继续用旧快照，写 `config.reload_rejected` 日志并告警。每个请求、任务或智能体运行开始时取一次快照，全程不变。不能热加载的键（端口、进程与并发数、连接池、数据库与存储地址）变化时不应用，列为待重启生效。重载接口只对内网开放并校验令牌。",
+      "why": "逐键修改会出现半新半旧；坏配置直接生效等于线上事故；以为改了就生效、实际没生效会误导排障。",
+      "do": [
+        "加载串行加锁，读取不加锁",
+        "容器编排时整目录挂载配置，子路径挂载与环境变量注入的改动只能滚动重启"
+      ],
+      "dont": [
+        "原地修改正在使用的配置对象",
+        "让公网访问重载接口"
+      ],
+      "verify": [
+        "写坏的文件被拒绝、服务照常、告警送达",
+        "改值后进行中的请求用旧值、新请求用新值",
+        "改不可热加载的键后出现待重启提示"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 配置文件与日志",
+          "url": "file:///D:/Codes/Luz-Dev/references/config-logging.md"
+        },
+        {
+          "title": "nginx · Controlling nginx（重载失败沿用旧配置）",
+          "url": "https://nginx.org/en/docs/control.html"
+        },
+        {
+          "title": "Prometheus · Configuration（不合法的新配置不生效）",
+          "url": "https://prometheus.io/docs/prometheus/latest/configuration/configuration/"
+        },
+        {
+          "title": "watchfiles · watch",
+          "url": "https://watchfiles.helpmanual.io/api/watch/"
+        },
+        {
+          "title": "Kubernetes · ConfigMaps（挂载更新延迟、子路径与环境变量不更新）",
+          "url": "https://kubernetes.io/docs/concepts/configuration/configmap/"
+        }
+      ]
+    },
+    {
+      "id": "CONF-003",
+      "domain": "secret",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "settings"
+      ],
+      "title": "配置版本可观察，灰度用文件覆盖，回滚是还原提交",
+      "rule": "配置版本取合并后内容摘要的前 12 位；每个实例在日志、指标与内部配置接口里带当前版本，并把每次加载写进 `config_loads`；多实例版本不一致超过 5 分钟告警。影响支付、上传、限流的改动先在环境文件里按门店、渠道、客户端版本或用户分桶写覆盖值，观察后再全量；回滚就是还原配置文件的提交并热加载。高风险键要第二人评审。",
+      "why": "配置变更是线上事故的主要来源之一；没有版本就无法确认各实例是否已生效，也无法对照事故时间。",
+      "do": [
+        "“改了什么”看提交，“何时生效”看加载记录",
+        "配置不引用会在外部变化的资源，回滚才可靠"
+      ],
+      "dont": [
+        "一次性全量推送高风险改动",
+        "在服务器上手工改配置文件不提交"
+      ],
+      "verify": [
+        "发布后各实例版本一致的截图或接口输出",
+        "还原提交后版本回到旧值"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 配置文件与日志",
+          "url": "file:///D:/Codes/Luz-Dev/references/config-logging.md"
+        },
+        {
+          "title": "Google SRE Workbook · Configuration Design and Best Practices",
+          "url": "https://sre.google/workbook/configuration-design/"
+        },
+        {
+          "title": "Google SRE Workbook · Configuration Specifics",
+          "url": "https://sre.google/workbook/configuration-specifics/"
+        },
+        {
+          "title": "AWS AppConfig · Deployment strategies",
+          "url": "https://docs.aws.amazon.com/appconfig/latest/userguide/appconfig-creating-deployment-strategy.html"
+        },
+        {
+          "title": "Apollo 配置中心设计（本地缓存兜底、版本与回滚）",
+          "url": "https://github.com/apolloconfig/apollo/blob/master/docs/zh/design/apollo-design.md"
+        }
+      ]
     },
     {
       "id": "RESIL-001",
@@ -3087,22 +3235,43 @@
         "backend"
       ],
       "modules": [],
-      "title": "结构化日志带 trace_id 且脱敏",
-      "rule": "日志为结构化格式，包含 trace_id、用户 ID、接口、耗时与结果；令牌、密钥、密码、完整手机号、身份证号、人脸、支付明文不写入日志。",
-      "why": "没有 trace_id 无法排查；日志中的敏感信息会扩大泄露面。",
+      "title": "结构化日志：统一字段、带 trace_id、脱敏、每个请求一条汇总行",
+      "rule": "日志一行一条 JSON，写 stdout；必带 ts（UTC 毫秒）、level、logger、service、env、version、instance、config_version、event、message、trace_id、request_id，按事件带 user_ref（内部编号）、store_id、http.route（路由模板）、http.status、duration_ms、outcome、reason 与 error.*。每个请求结束写一条汇总行。口令、令牌、密钥、签名、验证码、会话标识、支付私钥与回调明文、银行卡号与安全码、完整手机号与证件号、人脸与其他敏感个人信息、完整请求体不写入日志；格式化前统一脱敏，转义换行与控制字符，用户输入字段截断到 512 字。",
+      "why": "没有统一字段与 trace_id 无法排查；日志中的敏感信息会扩大泄露面；拼接的多行日志可被伪造。",
       "do": [
-        "前端错误页展示 trace_id"
+        "前端错误页展示 request_id",
+        "事件名用小写“领域.动作”并在代码里集中登记，结果放 outcome",
+        "消息模板保持常量，变量走结构化字段"
       ],
       "dont": [
-        "打印整个请求体或回调明文"
+        "打印整个请求体或回调明文",
+        "把用户输入拼进消息字符串",
+        "用 print 或直接输出 traceback"
       ],
       "verify": [
-        "日志抽查无敏感字段"
+        "抽查一天日志字段齐全且无敏感字段",
+        "含换行与控制字符的输入仍记成一行合法 JSON"
       ],
       "sources": [
         {
+          "title": "Luz Dev · 配置文件与日志",
+          "url": "file:///D:/Codes/Luz-Dev/references/config-logging.md"
+        },
+        {
           "title": "OWASP Logging Cheat Sheet",
           "url": "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html"
+        },
+        {
+          "title": "OWASP ASVS 5.0 · V16 Security Logging and Error Handling",
+          "url": "https://github.com/OWASP/ASVS/blob/master/5.0/en/0x25-V16-Security-Logging-and-Error-Handling.md"
+        },
+        {
+          "title": "OpenTelemetry · Logs Data Model",
+          "url": "https://opentelemetry.io/docs/specs/otel/logs/data-model/"
+        },
+        {
+          "title": "Stripe · Fast and flexible observability with canonical log lines",
+          "url": "https://stripe.com/blog/canonical-log-lines"
         }
       ]
     },
@@ -3119,7 +3288,9 @@
       "rule": "退款、改价、改权限、导出、删除、配置变更、查看敏感明文等操作写入只追加的审计记录：操作人、对象、变更前后、原因、时间、来源；后台提供只读审计页。",
       "why": "出现资金或数据问题时需要追溯到人。",
       "do": [
-        "审计记录与业务变更同事务写入"
+        "审计记录与业务变更同事务写入",
+        "数据库账号对审计表只授插入，审计员只读",
+        "审计记录建议留存 1 年，涉及个人信息的批量导出与越权操作建议 3 年"
       ],
       "dont": [
         "允许修改或删除审计记录"
@@ -3131,6 +3302,14 @@
         {
           "title": "界面设计 · 管理后台规范 §13 审计",
           "url": "file:///D:/Codes/Luz-Design/design/admin/SPEC.md"
+        },
+        {
+          "title": "Luz Dev · 配置文件与日志",
+          "url": "file:///D:/Codes/Luz-Dev/references/config-logging.md"
+        },
+        {
+          "title": "美团技术团队 · 如何优雅地记录操作日志",
+          "url": "https://tech.meituan.com/2021/09/16/operational-logbook.html"
         }
       ]
     },
@@ -3159,6 +3338,232 @@
         "故障演练触发告警"
       ],
       "sources": []
+    },
+    {
+      "id": "OBS-004",
+      "domain": "obs",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "agent"
+      ],
+      "modules": [],
+      "title": "日志分类存放，集中留存并按法定期限清理",
+      "rule": "运行、访问、安全事件、审计与业务状态流水分开：前三类写 stdout 由采集器送到集中存储，审计记录写数据库，业务状态变化写业务库流水表。网络与访问日志、安全事件、智能体运行日志集中留存不少于 6 个月；个人信息处理记录（影响评估、委托与对外提供）3 年；交易与订单信息 3 年；留存存储开启只读或对象锁并有备份，到期自动删除或匿名化。方案里写日志清单：各类记什么、存在哪、谁能看、存多久。",
+      "why": "《网络安全法》要求网络日志留存不少于六个月；只存在本机的日志随服务器丢失；混存会让审计记录被普通运维权限改删。",
+      "do": [
+        "热存 30 天供检索，之后归档到期满",
+        "单店小程序按 3 年保存交易信息并写进方案请商户确认"
+      ],
+      "dont": [
+        "把容器本地 json-file 当作留存",
+        "到期不删或法定期限内删除"
+      ],
+      "verify": [
+        "存储保留策略与对象锁截图",
+        "方案上线章节有日志清单与期限"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 配置文件与日志",
+          "url": "file:///D:/Codes/Luz-Dev/references/config-logging.md"
+        },
+        {
+          "title": "《中华人民共和国网络安全法》（2025 年修正）第二十三条",
+          "url": "https://www.cac.gov.cn/2025-12/29/c_1768735112911946.htm"
+        },
+        {
+          "title": "《中华人民共和国个人信息保护法》",
+          "url": "https://www.npc.gov.cn/npc/c2/c30834/202108/t20210820_313088.html"
+        },
+        {
+          "title": "《网络数据安全管理条例》",
+          "url": "https://www.gov.cn/zhengce/content/202409/content_6977766.htm"
+        },
+        {
+          "title": "《中华人民共和国电子商务法》第三十一条",
+          "url": "https://www.npc.gov.cn/zgrdw/npc/lfzt/rlyw/2018-08/31/content_2060827.htm"
+        },
+        {
+          "title": "OWASP ASVS 5.0 · V16 Security Logging and Error Handling",
+          "url": "https://github.com/OWASP/ASVS/blob/master/5.0/en/0x25-V16-Security-Logging-and-Error-Handling.md"
+        }
+      ]
+    },
+    {
+      "id": "OBS-005",
+      "domain": "obs",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "agent"
+      ],
+      "modules": [],
+      "title": "日志级别按后果定，同一异常只记一次",
+      "rule": "生产默认 INFO，日志级别是可热加载的运行参数。预期内的业务失败（库存不足、验证码错误、余额不足）记 WARNING 或 INFO 并带 reason，不记 ERROR；ERROR 表示本次功能没能完成，CRITICAL 表示资金或数据可能出错（回调金额不符、对账差异、审计写入失败）。同一异常只在请求边界或全局异常处理里记一次并带堆栈，中间层处理或包装上抛，不重复打印、不吞掉不记。",
+      "why": "把用户错误记成 ERROR 会让告警被淹没；多层重复打印会放大日志量并误导排障。",
+      "do": [
+        "DEBUG 只在排障时按模块临时打开并自动恢复"
+      ],
+      "dont": [
+        "生产常开 DEBUG",
+        "catch 后只打印不处理也不上抛"
+      ],
+      "verify": [
+        "一次业务失败与一次未处理异常各自只产生预期级别的一条记录"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 配置文件与日志",
+          "url": "file:///D:/Codes/Luz-Dev/references/config-logging.md"
+        },
+        {
+          "title": "Python · Logging HOWTO",
+          "url": "https://docs.python.org/3/howto/logging.html"
+        },
+        {
+          "title": "阿里巴巴 Java 开发手册 · 日志规约",
+          "url": "https://github.com/alibaba/p3c/blob/master/p3c-gitbook/异常日志/日志规约.md"
+        },
+        {
+          "title": "OpenTelemetry · Logs Data Model",
+          "url": "https://opentelemetry.io/docs/specs/otel/logs/data-model/"
+        }
+      ]
+    },
+    {
+      "id": "OBS-006",
+      "domain": "obs",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "agent"
+      ],
+      "modules": [],
+      "title": "日志能按 trace 串起入口、下游、消息与定时任务",
+      "rule": "请求入口沿用合法的 W3C traceparent 或新建 trace，并生成 request_id；上下文放 contextvars，由过滤器注入每条日志；响应头与错误响应返回 X-Request-Id。调用下游 HTTP、写消息与发件箱事件时带上 traceparent，消费端继续同一 trace；定时任务每次运行新建 trace 并记 job 与 run_id。传播头里不放个人信息与凭据，公网请求的采样标志不盲从。",
+      "why": "跨服务与异步链路断开后，一个用户报障要翻多处日志才能对上。",
+      "do": [
+        "用户报障时凭 request_id 一次查到全链路"
+      ],
+      "dont": [
+        "在 traceparent 或 baggage 里放手机号、用户名或令牌"
+      ],
+      "verify": [
+        "一个下单请求从入口、支付回调到通知消费可按 trace_id 串起的截图"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 配置文件与日志",
+          "url": "file:///D:/Codes/Luz-Dev/references/config-logging.md"
+        },
+        {
+          "title": "W3C · Trace Context",
+          "url": "https://www.w3.org/TR/trace-context/"
+        },
+        {
+          "title": "OpenTelemetry · Context propagation",
+          "url": "https://opentelemetry.io/docs/concepts/context-propagation/"
+        },
+        {
+          "title": "Python · Logging Cookbook（QueueHandler、上下文注入）",
+          "url": "https://docs.python.org/3/howto/logging-cookbook.html"
+        }
+      ]
+    },
+    {
+      "id": "OBS-007",
+      "domain": "obs",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "agent"
+      ],
+      "modules": [],
+      "title": "日志不影响业务：非阻塞、有上限、可降级",
+      "rule": "日志写入用有上限的队列（QueueHandler 与 QueueListener），不阻塞事件循环；队列满时丢 DEBUG 与 INFO 并计数，WARNING 以上与安全事件不丢；日志调用自身的异常不向业务抛出，生产设 raiseExceptions 为 False。采样只用于高频成功的 INFO 并按 trace 决定。每个 Docker 服务设 max-size 与 max-file；索引标签只用服务、环境、级别、类别等低基数字段。合规必需的日志不能被配置整体关闭。",
+      "why": "日志平台故障或磁盘写满不能拖垮下单与支付；Docker 默认不轮转会写满磁盘；高基数标签会拖垮日志库。",
+      "do": [
+        "监控日志丢弃计数与各服务最近一条日志时间"
+      ],
+      "dont": [
+        "同步写网络日志",
+        "把 trace_id、订单号、用户编号做成索引标签"
+      ],
+      "verify": [
+        "关掉日志平台或塞满队列时接口照常返回"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 配置文件与日志",
+          "url": "file:///D:/Codes/Luz-Dev/references/config-logging.md"
+        },
+        {
+          "title": "Python · Logging Cookbook（QueueHandler、上下文注入）",
+          "url": "https://docs.python.org/3/howto/logging-cookbook.html"
+        },
+        {
+          "title": "OWASP Logging Cheat Sheet",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html"
+        },
+        {
+          "title": "Docker · JSON File logging driver（默认不轮转）",
+          "url": "https://docs.docker.com/engine/logging/drivers/json-file/"
+        },
+        {
+          "title": "Grafana Loki · Label best practices",
+          "url": "https://grafana.com/docs/loki/latest/get-started/labels/bp-labels/"
+        },
+        {
+          "title": "Stripe · Fast and flexible observability with canonical log lines",
+          "url": "https://stripe.com/blog/canonical-log-lines"
+        }
+      ]
+    },
+    {
+      "id": "OBS-008",
+      "domain": "obs",
+      "level": "MUST",
+      "platforms": [
+        "backend",
+        "admin"
+      ],
+      "modules": [],
+      "title": "安全事件单独成流并告警",
+      "rule": "登录失败与锁定、越权、令牌重放或异常、支付回调验签失败、限流命中、输入校验失败激增、管理员敏感操作记为安全事件：事件名用 security. 前缀加 OWASP 日志词汇表名称（security.authn_login_fail、security.authz_fail 等），带 category=security、来源 IP、用户内部编号与结果。突增超过基线、任何 CRITICAL、配置热加载失败、服务 10 分钟无日志都要告警，每条告警写明负责人与处理手册。",
+      "why": "没有安全事件日志与告警，撞库、越权与伪造回调发生时无人知道；告警过多又会淹没真实事件。",
+      "do": [
+        "安全扫描时应能触发告警，作为演练"
+      ],
+      "dont": [
+        "只记日志不设告警",
+        "保留告不出行动的告警规则"
+      ],
+      "verify": [
+        "演练触发每类安全告警并送达"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 配置文件与日志",
+          "url": "file:///D:/Codes/Luz-Dev/references/config-logging.md"
+        },
+        {
+          "title": "OWASP Logging Vocabulary Cheat Sheet",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Vocabulary_Cheat_Sheet.html"
+        },
+        {
+          "title": "OWASP Top 10 2025 · A09 Security Logging and Alerting Failures",
+          "url": "https://top10.owasp.org/2025/A09_2025-Security_Logging_and_Alerting_Failures/"
+        },
+        {
+          "title": "OWASP ASVS 5.0 · V16 Security Logging and Error Handling",
+          "url": "https://github.com/OWASP/ASVS/blob/master/5.0/en/0x25-V16-Security-Logging-and-Error-Handling.md"
+        },
+        {
+          "title": "Google SRE Workbook · Alerting on SLOs",
+          "url": "https://sre.google/workbook/alerting-on-slos/"
+        }
+      ]
     },
     {
       "id": "JOB-001",
@@ -5219,34 +5624,44 @@
       "modules": [
         "settings"
       ],
-      "title": "运行参数集中配置：注册表、校验、灰度、回滚与客户端兜底",
-      "rule": "会变的数字、开关与名单（上传上限、超时、轮询间隔、功能开关、最低可用版本、智能体上限）进配置中心，不写死在客户端或服务端代码里。每个键登记类型、默认值、范围、作用范围、生效方式、可见端与风险；同一参数全系统只存一份，客户端只用来显示与预检查，服务端按同一值执行。发布有版本、可灰度、可一键回滚、有审计；客户端内置默认值，启动先用缓存、异步拉新，失败照常使用；密钥不下发客户端。",
-      "why": "写死的参数每次调整都要发版，紧急情况下来不及；前后端各存一份会出现前端放行、后端拒收；没有回滚的配置改错就是线上事故。",
+      "title": "运行参数写在配置文件里，服务端热加载，不在后台展示",
+      "rule": "会变的数字、开关与名单（上传上限、超时与重试、轮询间隔、限流阈值、功能开关、最低可用版本、智能体上限、日志级别）写在代码仓库的运行配置文件里（`config/runtime/base.toml` 与各环境文件），不写死在客户端或服务端代码里，也不在后台展示或做配置中心页面，除非用户另行要求。秘密、部署参数与经营内容分开放：秘密在密钥服务或受限文件，部署参数在环境变量，营业时间、起送价、公告等经营内容在后台。同一参数全系统只存一份：客户端只用来显示与预检查，服务端按同一值执行；客户端内置默认值，启动先用缓存、异步拉新，失败照常使用；密钥不下发客户端。",
+      "why": "写死的参数每次调整都要发版，紧急情况下来不及；前后端各存一份会出现前端放行、后端拒收；运行参数放进后台会让非技术人员误改线上行为，用户已决定不在后台展示。",
       "do": [
+        "改配置走代码评审，提交说明写原因",
         "按客户端版本下发新键",
         "全量后清理临时的发布开关"
       ],
       "dont": [
+        "把运行参数做成后台页面或存进业务表",
         "把密钥或内部地址放进下发配置",
         "结算或支付进行中切换配置"
       ],
       "verify": [
-        "改一项配置后前端显示与后台执行同时变化",
-        "配置服务不可用时客户端用默认值照常使用",
-        "回滚后客户端拿到旧值"
+        "改配置文件并热加载后，前端显示与服务端执行同时变化",
+        "配置接口不可用时客户端用默认值照常使用",
+        "还原提交后各实例回到旧版本"
       ],
       "sources": [
+        {
+          "title": "Luz Dev · 配置文件与日志",
+          "url": "file:///D:/Codes/Luz-Dev/references/config-logging.md"
+        },
         {
           "title": "Luz System · 远程配置规范",
           "url": "https://github.com/luzern0414/Luz-System/blob/master/references/config-design.html"
         },
         {
-          "title": "Firebase · Remote Config 加载策略",
-          "url": "https://firebase.google.com/docs/remote-config/loading"
+          "title": "Google SRE Workbook · Configuration Design and Best Practices",
+          "url": "https://sre.google/workbook/configuration-design/"
         },
         {
-          "title": "Apollo 配置中心介绍",
-          "url": "https://www.apolloconfig.com/#/zh/design/apollo-introduction"
+          "title": "OpenFeature · Flag Evaluation API",
+          "url": "https://openfeature.dev/specification/sections/flag-evaluation"
+        },
+        {
+          "title": "Apollo 配置中心设计（本地缓存兜底、版本与回滚）",
+          "url": "https://github.com/apolloconfig/apollo/blob/master/docs/zh/design/apollo-design.md"
         }
       ]
     }

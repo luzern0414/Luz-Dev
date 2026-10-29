@@ -26,6 +26,7 @@ The Design package is resolved by `--design-root`, then `LUZ_DESIGN_ROOT`, then 
 | WeChat Pay, refund, reconciliation | `backend/09-wechat-pay/MODULE.md` (rules `PAY-*`, `RFD-*`) |
 | Frontend from Luz System | `references/design-integration.md` |
 | Operations and launch | `references/operations.md` + `assets/deploy/` |
+| Runtime config files and logging | `references/config-logging.md` |
 | Qualifications, filings, licences | `references/compliance.md` |
 | Agreements and consent | `references/legal-documents.md` + `assets/legal/` + `backend/27-legal` |
 | Mini-program implementation | `references/miniprogram.md` |

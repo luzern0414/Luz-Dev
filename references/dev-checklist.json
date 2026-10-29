@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "updatedAt": "2026-10-28",
+  "updatedAt": "2026-10-29",
   "title": "后端开发到运营清单",
   "description": "每个 Luz 项目从方案到运营逐项核对。标准模块已经满足的项写在“底座”列，项目只需核对定制部分。",
   "stages": [
@@ -46,8 +46,10 @@
         ["COD-02", "跨模块副作用走发件箱", "与业务写同事务 enqueue_event；订阅者在 events.py 声明，幂等且不提交", "python -m jobs list", "25-jobs"],
         ["COD-03", "外部调用", "经 resilient：超时、熔断、只对幂等调用重试；每个外部平台有假服务", "外部失败、超时、重复通知测试", "luzback.resilience"],
         ["COD-04", "定时任务", "超时关单、查单、过期、补偿、对账注册为 JOBS，幂等可重跑", "python -m jobs list", "25-jobs"],
-        ["COD-05", "配置与密钥", "全部来自环境变量；生产启动时拒绝开发默认值；仓库与镜像中没有密钥", "Settings.assert_production_safe", "luzback.config"],
-        ["COD-06", "审计", "后台写操作与敏感查看同事务写审计（操作人、对象、前后值、IP）", "审计测试", "luzback.audit"]
+        ["COD-05", "密钥与部署参数", "秘密由编排挂载成文件读取，部署参数来自环境变量；生产启动时拒绝开发默认值；仓库、镜像与前端包中没有密钥", "Settings.assert_production_safe、秘密扫描", "luzback.config"],
+        ["COD-06", "审计", "后台写操作与敏感查看同事务写审计（操作人、对象、前后值、IP）", "审计测试", "luzback.audit"],
+        ["COD-07", "运行配置文件", "运行参数写在 config/runtime/*.toml，字段说明登记类型、范围、单位、能否热加载与是否下发；未登记的键报错；热加载整份替换快照，失败保留旧配置；不做后台配置页", "配置校验与热加载测试", "references/config-logging.md §2"],
+        ["COD-08", "日志写法", "统一字段与事件名；预期内失败不记 ERROR；同一异常只记一次；格式化前脱敏并转义控制字符；队列写入不阻塞；传播 traceparent", "日志单元测试与抽查", "references/config-logging.md §3"]
       ]
     },
     {
@@ -98,9 +100,10 @@
       "name": "监控与运维",
       "items": [
         ["OPS-01", "告警", "错误预算燃烧率、5xx、P95、饱和度、发件箱积压、任务失败、支付待确认、证书 21/7 天、备份超时", "告警规则加载无误", "assets/monitoring/rules"],
-        ["OPS-02", "日志", "结构化 JSON、带 trace_id、脱敏；网络日志留存不少于 6 个月", "抽查日志", "references/operations.md"],
+        ["OPS-02", "日志", "结构化 JSON、带 trace_id、脱敏；分类存放；网络与安全日志集中留存不少于 6 个月，交易 3 年，存储防删改，到期自动删除", "抽查日志、存储策略截图", "references/config-logging.md §3"],
         ["OPS-03", "备份与恢复", "每日逻辑备份 + WAL 时间点恢复；加密异地；每季度恢复演练", "verify-restore.sh", "assets/deploy/backup.sh"],
-        ["OPS-04", "对账", "每日下载微信支付账单并对账，差异进入处理列表", "wechat_pay.reconcile 任务结果", "09-wechat-pay"]
+        ["OPS-04", "对账", "每日下载微信支付账单并对账，差异进入处理列表", "wechat_pay.reconcile 任务结果", "09-wechat-pay"],
+        ["OPS-05", "配置与日志告警", "热加载失败、实例配置版本不一致、CRITICAL、安全事件突增、服务无日志、日志丢弃都会告警并送达", "告警演练记录", "references/config-logging.md §3.11"]
       ]
     },
     {

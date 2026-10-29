@@ -47,6 +47,7 @@ REQUIRED = [
     "references/agent.md",
     "references/quality.md",
     "references/delivery.md",
+    "references/config-logging.md",
     "references/api-bindings.md",
     "references/index.md",
     "references/function-catalog.json",

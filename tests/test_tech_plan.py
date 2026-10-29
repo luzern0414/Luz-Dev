@@ -223,7 +223,7 @@ class RuleCardGateTests(unittest.TestCase):
 
     def test_new_plan_saves_the_cards_of_its_mode_and_project_types(self) -> None:
         payload = self.new("小程序商城", "--mode", "implementation", "--project-type", "miniprogram,backend", "--modules", "payment")
-        expected = ["tech-plan", "backend-module", "frontend-integration", "launch-compliance"]
+        expected = ["tech-plan", "backend-module", "frontend-integration", "config-logging", "launch-compliance"]
         self.assertEqual(load(self.output)["ruleCards"], expected)
         self.assertEqual([Path(p).stem for p in payload["ruleCards"]], expected)
         self.assertEqual(sorted(p.stem for p in self.rules_dir().glob("*.md")), sorted(expected))

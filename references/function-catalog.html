@@ -2414,12 +2414,13 @@ footer.catalog-footer{padding:20px 2px 4px;color:var(--ink-3);font-size:11px}
     },
     {
       "id": "config",
-      "name": "远程配置",
+      "name": "运行配置",
       "backendModule": "23-app-settings",
       "status": "design",
-      "description": "运行参数与功能开关集中配置：注册表、校验、发布版本、灰度、回滚、客户端下发与兜底。",
+      "description": "运行参数与功能开关写在配置文件里：字段说明、加载校验、热加载、版本观察、文件内灰度与还原回滚、客户端下发与兜底；不在后台展示。",
       "sourceRefs": [
         "references/module-specs/config.json",
+        "references/config-logging.md",
         "references/standards.json"
       ],
       "functions": [
@@ -2438,7 +2439,7 @@ footer.catalog-footer{padding:20px 2px 4px;color:var(--ink-3);font-size:11px}
             },
             {
               "label": "核心逻辑",
-              "value": "按灰度规则选出用户命中的版本；只下发可见键；版本相同返回未修改。"
+              "value": "从内存快照里取客户端可见键，按端、客户端版本与文件里的覆盖规则算值；版本相同返回未修改。"
             },
             {
               "label": "接口与路由",
@@ -2446,11 +2447,11 @@ footer.catalog-footer{padding:20px 2px 4px;color:var(--ink-3);font-size:11px}
             },
             {
               "label": "数据与并发",
-              "value": "读缓存；发布后失效；按 client_version 过滤新键。"
+              "value": "只读内存快照，不查库；热加载整份替换快照，请求中途不变。"
             },
             {
               "label": "权限与安全",
-              "value": "不下发密钥与内部地址；按渠道与门店范围过滤。"
+              "value": "不下发密钥、内部地址与服务端专用键；按渠道与门店范围过滤。"
             },
             {
               "label": "状态与失败",
@@ -2458,7 +2459,7 @@ footer.catalog-footer{padding:20px 2px 4px;color:var(--ink-3);font-size:11px}
             },
             {
               "label": "验证与证据",
-              "value": "断网启动照常可用；改配置后客户端下次拉取得到新值；旧客户端拿不到新键。"
+              "value": "断网启动照常可用；改配置文件热加载后客户端下次拉取得到新值；旧客户端拿不到新键。"
             },
             {
               "label": "复用提示",
@@ -2467,45 +2468,45 @@ footer.catalog-footer{padding:20px 2px 4px;color:var(--ink-3);font-size:11px}
           ]
         },
         {
-          "id": "config.publish-rollback",
-          "name": "配置发布、灰度与回滚",
+          "id": "config.file-reload",
+          "name": "配置文件热加载、灰度与回滚",
           "status": "design",
           "rows": [
             {
               "label": "业务场景",
-              "value": "运维调整超时或开关，先给部分门店试用，没问题再全量，有问题一键回滚。"
+              "value": "运维调整超时或开关：改配置文件、评审合并、同步后服务端热加载，不重启、不发版；有问题还原提交即回滚。"
             },
             {
               "label": "触发与输入",
-              "value": "后台修改草稿、查看差异、发布（可带灰度规则）、扩大或回滚。"
+              "value": "配置目录的文件变化（防抖 1 秒），或内部 POST /internal/config/reload；启动时加载一次。"
             },
             {
               "label": "核心逻辑",
-              "value": "按注册表校验；发布生成版本快照；高风险键两人审批；回滚生成指向旧快照的新版本。"
+              "value": "合并默认文件与环境文件，按字段说明整份校验；通过后一次性替换只读快照，失败保留旧快照并告警；要重启才生效的键记下不应用。"
             },
             {
               "label": "接口与路由",
-              "value": "PUT /api/v1/admin/config/{key}、GET diff、POST releases、POST releases/{id}/rollback。"
+              "value": "POST /internal/config/reload、GET /internal/config，只对内网开放并校验运维令牌；后台不提供配置页面。"
             },
             {
               "label": "数据与并发",
-              "value": "config_releases 只追加；config_version 单调递增。"
+              "value": "快照不可变，替换是一次引用赋值；config_loads 记录每个实例每次加载；配置版本取内容摘要。"
             },
             {
               "label": "权限与安全",
-              "value": "按配置分组授权；全部操作进审计。"
+              "value": "修改走代码评审与 CI 校验、秘密扫描；配置文件不含秘密；内部接口不返回值。"
             },
             {
               "label": "状态与失败",
-              "value": "draft、gray、full、rolled_back；超范围返回 CONFIG_VALUE_OUT_OF_RANGE。"
+              "value": "loaded、unchanged、rejected；启动时校验失败进程退出；多实例版本不一致超过 5 分钟告警。"
             },
             {
               "label": "验证与证据",
-              "value": "灰度只影响命中的用户；回滚后客户端拿到旧值；审计记录完整。"
+              "value": "写错的文件被拒且服务照常；改值后各实例版本一致且行为变化；还原提交后回到旧值。"
             },
             {
               "label": "复用提示",
-              "value": "发布开关全量后按期清理。"
+              "value": "灰度用环境文件里的覆盖值，全量后删除覆盖；发布开关全量后按期清理。"
             }
           ]
         }

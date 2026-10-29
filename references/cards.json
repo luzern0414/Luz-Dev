@@ -84,6 +84,31 @@
         "`python -X utf8 scripts/tech_plan.py check NN --stage delivery` 零错误（含规则卡未过期、`adoptedRules` 非空、`sediment` 里有批准日之后写入或确认的经验）"
       ]
     },
+    "config-logging": {
+      "title": "配置文件与日志（运行配置、热加载、日志分类字段级别、脱敏、追踪、留存、告警）",
+      "summary": "运行参数写在配置文件里由服务端热加载、不在后台展示；日志一行一条 JSON、统一字段与事件名、脱敏、按 trace 串起、不影响业务、分类集中留存（网络日志 6 个月、交易 3 年）、日志告警",
+      "keywords": ["配置", "配置文件", "热加载", "热更新", "TOML", "Pydantic", "灰度", "回滚", "日志", "结构化日志", "trace", "脱敏", "留存", "审计", "告警", "级别", "logging", "config"],
+      "sections": [
+        {"page": "config-logging.md", "title": "配置文件与日志", "path": ["1. 四类设置分开放"], "label": "config-logging.md › 1. 四类设置分开放"},
+        {"page": "config-logging.md", "title": "配置文件与日志", "path": ["2. 运行配置文件"], "label": "config-logging.md › 2. 运行配置文件"},
+        {"page": "config-logging.md", "title": "配置文件与日志", "path": ["3. 日志"], "label": "config-logging.md › 3. 日志"},
+        {"page": "config-logging.md", "title": "配置文件与日志", "path": ["4. Luz 骨架现状与接入"], "label": "config-logging.md › 4. Luz 骨架现状与接入"},
+        {"page": "config-logging.md", "title": "配置文件与日志", "path": ["5. 开发与验收检查"], "label": "config-logging.md › 5. 开发与验收检查"}
+      ],
+      "tools": [
+        "规则：`OPS-005`、`CONF-001` 至 `CONF-003`、`SECRET-*`、`OBS-001` 至 `OBS-008`；方案核对表会自动带上，逐条写落地方式",
+        "运行配置的接口、表与异常：模块详设 config（`python -X utf8 scripts/module_specs.py list`）；客户端拉取与兜底、哪些参数要可配置见 Luz System `references/config-design.html`",
+        "骨架：`backend/00-framework/code/luzback/config.py`、`logging.py`、`app.py` 请求中间件、`audit.py`；缺的部分按本卡 §4 在项目里补，不改技能里的 `backend/`",
+        "法规期限只引用调研读过的原文：本卡 §6 的来源来自 Luz-Crawl 029；项目调研可 `tech_plan.py research NN --run --topics deploy,compliance` 复核",
+        "部署与告警模板：`assets/deploy/docker-compose.prod.yml`（日志轮转）、`assets/monitoring/rules/`；日志告警规则按本卡 §3.11 补"
+      ],
+      "checks": [
+        "方案写明：四类设置各放哪里、运行配置的键清单（类型、默认、范围、能否热加载、是否下发）、日志清单（各类记什么、存在哪、谁能看、存多久）与采集存储选型",
+        "没有用户要求时，后台没有运行参数页面或配置表",
+        "本卡 §5 每项有测试名或演练记录；坏配置被拒、日志平台故障时业务照常两项必须实测",
+        "`python -X utf8 scripts/tech_plan.py check NN --stage delivery` 零错误（含 `adoptedRules` 与本次沉淀）"
+      ]
+    },
     "frontend-integration": {
       "title": "前端接入（Luz System 设计 → 小程序 / 管理后台 / App）",
       "summary": "核验已批准的设计会话、生成绑定表、用真实接口替换原型数据、实现每个状态与结果页",
@@ -133,7 +158,8 @@
         "协议正文由 Luz-Writing 起草或润色（`D:\\Codes\\Luz-Writing`，先读它的规则卡），`assets/legal/` 只是骨架；版本、同意记录、重新同意与撤回由本技能实现（参考 `backend/27-legal`），商户确认、建议律师审核",
         "资质与备案由商户办理、耗时长：在方案第一周列出（事项、是否适用及理由、负责方、进度、证据、对排期的影响）",
         "法规与平台规则只引用本次调研读过的官方页面：`tech_plan.py research NN --run --topics compliance,legal,deploy` 或 `--add-link <模块>|<官方 URL>`",
-        "第三方许可写进项目的 `config/third-party-licenses.md`"
+        "第三方许可写进项目的 `config/third-party-licenses.md`",
+        "运行配置文件与日志（分类、字段、脱敏、留存期限、日志告警）的细则在 `context.py config-logging`"
       ],
       "checks": [
         "`assets/deploy/LAUNCH-CHECKLIST.md` 逐项完成并留证据（HTTPS 与响应头实测、恢复演练、回滚演练、告警演练、外网看不到内部端点）",
@@ -171,7 +197,8 @@
         "建方案：`python -X utf8 scripts/create_tech_plan.py \"<主题>\" --mode review|diagnosis|analysis|operations --project-type <类型> --modules <模块>`；只读模式不需要批准就能查，但仍要建方案并记录发现；operations 改动线上必须先批准并过 `gate`",
         "按规范逐条对照：`python -X utf8 scripts/tech_plan.py check NN` 列出适用规则，规则原文按编号查 `references/standards.json`；查到的问题写进 findings 章节，核对表用 `tech_plan.py mark` 标状态",
         "排查顺序：复现 → 收集证据（日志、请求、数据、配置、版本）→ 定位到代码或配置行 → 给出修复方案和回归测试；不在批准前改代码或线上",
-        "先查经验与知识：`python -X utf8 scripts/record_experience.py search <关键词>`、`python -X utf8 scripts/knowledge.py search <关键词>`；review 方案调研覆盖安全类必查主题"
+        "先查经验与知识：`python -X utf8 scripts/record_experience.py search <关键词>`、`python -X utf8 scripts/knowledge.py search <关键词>`；review 方案调研覆盖安全类必查主题",
+        "运行配置文件与日志（分类、字段、脱敏、留存期限、日志告警）的细则在 `context.py config-logging`"
       ],
       "checks": [
         "每条发现写明证据位置（文件:行、请求、日志片段、配置项）、影响、严重程度和建议；没有证据的只能写成待核实",

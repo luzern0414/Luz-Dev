@@ -528,9 +528,11 @@ def card_kinds_for(mode: str, project_types: list[str], chosen: list[str] | None
                 kinds.append("frontend-integration")
             if "agent" in types:
                 kinds += ["agent-service", "agent-runtime"]
+            if "backend-module" in kinds or "agent" in types:
+                kinds.append("config-logging")
             kinds.append("launch-compliance")
         elif mode == "operations":
-            kinds += ["launch-compliance", "review-diagnose"]
+            kinds += ["launch-compliance", "config-logging", "review-diagnose"]
         else:
             kinds.append("review-diagnose")
     kinds = list(dict.fromkeys(kinds))
