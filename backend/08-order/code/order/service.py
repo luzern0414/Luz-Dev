@@ -160,20 +160,19 @@ def _line_view(ln: ResolvedLine, campaign: int, coupon: int, paid: int) -> dict[
     return {"kind": ln.kind, "product_id": ln.product_id, "sku_id": ln.sku_id, "name": ln.name, "spec": ln.spec,
             "image": ln.image, "unit_price_cents": ln.unit_price_cents, "qty": ln.qty, "gross_cents": ln.gross_cents,
             "campaign_alloc_cents": campaign, "coupon_alloc_cents": coupon, "paid_cents": paid,
-            "goods_kind": ln.goods_kind, "returnable": ln.returnable}
+            "goods_kind": ln.goods_kind, "returnable": ln.returnable, "price_tier": ln.price_tier}
 
 
-def _purchase_groups(lines: list[ResolvedLine], store_id: int | None, now: datetime) -> dict[str, purchase.Group]:
+def _apply_purchase_rules(db: Session, user_id: int, store_id: int | None, lines: list[ResolvedLine],
+                          now: datetime) -> tuple[list[ResolvedLine], dict[str, purchase.Group], str | None]:
+    """解析购买规则 → 按需取手机号哈希 → 超出部分按原价的行拆成活动价与原价两行 → 按计数键分组。"""
     for ln in lines:
         ln.rule = purchase.PurchaseRule.parse(ln.purchase_rule, default_key=ln.product_key, legacy_limit=ln.limit_per_user)
-    return purchase.group_lines(lines, store_id, now, get_config().timezone)
-
-
-def _phone_hash(db: Session, user_id: int, groups: dict[str, purchase.Group]) -> str | None:
-    if not any(g.rule.needs_phone or g.rule.identity == "member_phone" or g.rule.new_customer_only
-               for g in groups.values()):
-        return None
-    return _buyer(db, user_id)[1]
+    rules = [ln.rule for ln in lines if ln.rule is not None]
+    phone = _buyer(db, user_id)[1] if any(r.needs_phone or r.new_customer_only for r in rules) else None
+    tz = get_config().timezone
+    lines = purchase.split_regular_price(db, user_id, phone, lines, store_id, now, tz)
+    return lines, purchase.group_lines(lines, store_id, now, tz), phone
 
 
 def preview(db: Session, user_id: int, body: dict[str, Any], now: datetime | None = None) -> dict[str, Any]:
@@ -187,13 +186,13 @@ def preview(db: Session, user_id: int, body: dict[str, Any], now: datetime | Non
     items = _normalize_items(body.get("items"))
     coupon_ids = [int(i) for i in (body.get("coupon_ids") or [])]
     lines = _resolve(db, user_id, store_id, items, now)
+    lines, groups, phone = _apply_purchase_rules(db, user_id, store_id, lines, now)
     issues: list[dict[str, Any]] = []
     for ln in lines:
         if ln.stock_qty is not None and ln.stock_qty < ln.qty:
             issues.append({"reason": "out_of_stock", "product_id": ln.product_id, "sku_id": ln.sku_id,
                            "available": max(0, ln.stock_qty)})
-    groups = _purchase_groups(lines, store_id, now)
-    rule_issues, rule_views = purchase.check(db, user_id, _phone_hash(db, user_id, groups), groups)
+    rule_issues, rule_views = purchase.check(db, user_id, phone, groups)
     issues.extend(rule_issues)
     coupon_error = None
     try:
@@ -233,8 +232,8 @@ def purchase_status(db: Session, user_id: int, body: dict[str, Any], now: dateti
     now = _now(now)
     store_id = body.get("store_id")
     lines = _resolve(db, user_id, store_id, _normalize_items(body.get("items")), now)
-    groups = _purchase_groups(lines, store_id, now)
-    issues, views = purchase.check(db, user_id, _phone_hash(db, user_id, groups), groups)
+    lines, groups, phone = _apply_purchase_rules(db, user_id, store_id, lines, now)
+    issues, views = purchase.check(db, user_id, phone, groups)
     return {"rules": list(views.values()), "issues": issues}
 
 
@@ -275,7 +274,7 @@ def _create(db: Session, user_id: int, request: dict[str, Any], now: datetime, *
     store_id = request.get("store_id")
     items = _normalize_items(request.get("items"))
     lines = _resolve(db, user_id, store_id, items, now)
-    groups = _purchase_groups(lines, store_id, now)
+    lines, groups, _phone = _apply_purchase_rules(db, user_id, store_id, lines, now)
     priced = _price(db, user_id, store_id, lines, [int(i) for i in request.get("coupon_ids") or []], now)
     if quote is not None:
         expected = json.loads(quote.result_json)["fingerprint"]
@@ -312,6 +311,9 @@ def _create(db: Session, user_id: int, request: dict[str, Any], now: datetime, *
     rows: list[OrderItem] = []
     for ln, campaign, coupon, paid, line_quotas in zip(lines, priced.campaign, priced.coupon, priced.paid, quotas):
         snap = {"snapshot": ln.snapshot, "category_id": ln.category_id, "quotas": line_quotas}
+        if ln.price_tier:
+            snap["price_tier"] = ln.price_tier
+            snap["regular_price_cents"] = ln.regular_price_cents
         if ln.rule is not None:
             snap["purchase_rule"] = ln.rule.view()
         row = OrderItem(order_id=order.id, user_id=user_id, kind=ln.kind, goods_kind=ln.goods_kind,
@@ -341,6 +343,9 @@ def _line_quotas(lines: list[ResolvedLine], groups: dict[str, purchase.Group],
     out: list[list[dict[str, Any]]] = []
     for ln in lines:
         mine: list[dict[str, Any]] = []
+        if not ln.counts_quota:  # 原价部分不计名额
+            out.append(mine)
+            continue
         for ck, g in groups.items():
             if not any(x is ln for x in g.lines):
                 continue

@@ -1,0 +1,180 @@
+{
+  "id": "business",
+  "order": 23,
+  "name": "经营设置",
+  "modules": [
+    "business",
+    "store",
+    "recharge",
+    "coupon",
+    "membership"
+  ],
+  "summary": "商户日常自己调整的经营规则（退款手续费、储值扣减顺序、退券策略、补卡费、起送价、配送费、包装费……）由运营在后台“经营设置”页维护，保存即生效并写审计；键由各业务模块登记类型、范围、默认值、能否按门店覆盖与风险级别；业务代码读当前生效值。与运行参数（配置文件，开发改）、前台文案与展示（content）分开。",
+  "features": [
+    {
+      "name": "经营设置登记",
+      "description": "每个键由所属业务模块登记：`模块.名称`、给运营看的名称与说明、类型（开关、整数、单选）、单位、范围或选项（带中文名）、默认值、能否按门店覆盖、风险级别（影响资金的为高风险）、是否在后台展示。默认值登记时也校验。"
+    },
+    {
+      "name": "后台维护",
+      "description": "后台“经营设置”页按模块分组列出可见的键：说明、单位、范围、默认值、全局值、门店值、生效值与来源；行内修改，保存即生效；高风险键要求重新验证身份、填写原因并二次确认；可恢复默认或取消门店覆盖。"
+    },
+    {
+      "name": "业务读取",
+      "description": "业务代码按键读取当前生效值：门店值 → 全局值 → 登记的默认值；只影响之后发生的业务，已生成的退款单与已核销的券按当时的规则。"
+    }
+  ],
+  "flows": [
+    {
+      "name": "运营修改经营设置",
+      "steps": [
+        "后台“经营设置”页调用 `GET /api/v1/admin/settings`（可带 store_id）列出可见的键。",
+        "运营修改并填写原因；高风险键先重新验证身份并确认影响。",
+        "调用 `PUT /api/v1/admin/settings/{key}`：按登记的类型与范围校验，按 version 条件更新，同事务写审计（修改前后的值、门店、原因）。",
+        "保存后立即生效；需要撤回时 `POST /api/v1/admin/settings/{key}/reset` 恢复默认或取消门店覆盖。"
+      ]
+    },
+    {
+      "name": "业务代码读取",
+      "steps": [
+        "退款试算、余额扣款、退券、补卡时按键读取当前生效值（门店值优先）。",
+        "读到的值写进业务单据（例如退款单记下手续费比例），之后改设置不影响已生成的单据。"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "page": "经营设置（后台）",
+      "field": "value",
+      "label": "设置值",
+      "type": "按登记类型",
+      "required": true,
+      "rule": "按登记的类型、范围或选项校验；不能按门店的键不能带门店；只显示 admin_visible 的键。"
+    },
+    {
+      "page": "经营设置（后台）",
+      "field": "reason",
+      "label": "修改原因",
+      "type": "文本",
+      "required": false,
+      "rule": "高风险键必填，最多 200 字，写进审计。"
+    }
+  ],
+  "apis": [
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/settings",
+      "caller": "后台",
+      "purpose": "经营设置列表（按模块分组）",
+      "request": "store_id（可选）",
+      "response": "键、名称、说明、单位、范围或选项、默认值、全局值、门店值、生效值与来源、版本、风险级别",
+      "errors": "FORBIDDEN"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/admin/settings/{key}",
+      "caller": "后台",
+      "purpose": "修改经营设置，保存即生效",
+      "request": "store_id（可选），value，version，reason",
+      "response": "生效后的值与来源、新版本",
+      "errors": "VALIDATION_FAILED，STORE_OVERRIDE_NOT_ALLOWED，BUSINESS_KEY_HIDDEN，SETTING_CONFLICT，REAUTH_REQUIRED"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/settings/{key}/reset",
+      "caller": "后台",
+      "purpose": "恢复默认或取消门店覆盖",
+      "request": "store_id（可选）",
+      "response": "生效后的值与来源",
+      "errors": "BUSINESS_KEY_HIDDEN，REAUTH_REQUIRED"
+    }
+  ],
+  "results": [
+    {
+      "case": "保存成功",
+      "page": "经营设置",
+      "display": "行内显示新值、来源与修改时间，提示“已生效，只影响之后的业务”。"
+    },
+    {
+      "case": "值不合法或冲突",
+      "page": "经营设置",
+      "display": "输入框旁写明允许的范围；冲突时显示最新值并请重新确认。"
+    }
+  ],
+  "writes": [
+    {
+      "when": "修改或恢复经营设置",
+      "table": "business_settings、audit_logs",
+      "content": "全局或门店的值与版本；修改前后的值、门店、原因与操作人。"
+    }
+  ],
+  "tables": [
+    {
+      "name": "business_settings",
+      "label": "经营设置",
+      "purpose": "经营设置的全局值与门店覆盖；没有行时用登记的默认值",
+      "fields": [
+        {
+          "name": "store_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "门店；为空表示全局"
+        },
+        {
+          "name": "key",
+          "type": "VARCHAR(64)",
+          "required": true,
+          "default": "—",
+          "comment": "模块.名称，如 wallet.customer_refund_fee_bp"
+        },
+        {
+          "name": "value",
+          "type": "JSONB",
+          "required": true,
+          "default": "—",
+          "comment": "按登记类型保存的值"
+        },
+        {
+          "name": "version",
+          "type": "INTEGER",
+          "required": true,
+          "default": "1",
+          "comment": "条件更新用的版本"
+        },
+        {
+          "name": "updated_by",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "最近修改人"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(store_id, key) NULLS NOT DISTINCT"
+      ]
+    }
+  ],
+  "exceptions": [
+    {
+      "case": "两人同时修改",
+      "handling": "按 version 条件更新，后保存的返回 SETTING_CONFLICT 并显示最新值。"
+    },
+    {
+      "case": "改了手续费或退券策略后，进行中的退款怎么算",
+      "handling": "已生成的退款单与报价按生成时的值；只影响之后的申请。"
+    },
+    {
+      "case": "库里的值被改坏",
+      "handling": "读取时校验，不合法用登记的默认值并记日志，业务不中断。"
+    },
+    {
+      "case": "门店员工修改全局值",
+      "handling": "全局值只有全门店员工能改；门店员工只能改自己门店的覆盖值。"
+    },
+    {
+      "case": "原来写在运行配置文件里的取值",
+      "handling": "改为后台维护后没有行时用登记的默认值（与原配置默认值相同）；项目改过取值的，上线后在后台填一次。"
+    }
+  ]
+}

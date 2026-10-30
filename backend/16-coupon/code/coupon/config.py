@@ -1,6 +1,7 @@
 """coupon 配置与扩展钩子。
 
-配置：部署参数只有时区 COUPON_TIMEZONE（默认 LUZ_TIMEZONE）；运行参数（退券策略、兑换码长度与锁定、批量上限、
+配置：部署参数只有时区 COUPON_TIMEZONE（默认 LUZ_TIMEZONE）；退券策略是经营设置（coupon.return_policy、
+coupon.return_window_hours，后台“经营设置”页维护）；运行参数（兑换码长度与锁定、批量上限、
 提醒时间、每单叠加张数）在 config/runtime 的 `[coupon]`（热加载），类型、范围与默认值登记在
 `luzback/runtime_config.py` 的 CouponSettings，见 MODULE.md §9。`set_config(...)` 只给项目启动与测试用
 （运行参数转成测试用运行配置，生产环境不能用）。
@@ -19,12 +20,23 @@ from datetime import datetime
 from functools import partial
 from typing import Any
 
+from luzback.business import BusinessSetting, declare_business_settings
 from luzback.module_config import ModuleConfig, runtime_default
 
 RETURN_NEVER = "never"                # 退款一律不退券
 RETURN_FULL_REFUND = "full_refund"    # 默认：整单全额退款才退券（七日办法第十五条“按原方式退回”）
 RETURN_ANY_REFUND = "any_refund"      # 任何退款都退券（商户让利）
 RETURN_POLICIES = (RETURN_NEVER, RETURN_FULL_REFUND, RETURN_ANY_REFUND)
+
+declare_business_settings(
+    BusinessSetting("coupon.return_policy", "退款后是否退券", "coupon", "choice", RETURN_FULL_REFUND,
+                    description="订单退款时用过的券怎么处理；退回的券仍在有效期内可再用，已过期的不再可用。退款资金一律原路退回",
+                    choices=((RETURN_NEVER, "不退券"), (RETURN_FULL_REFUND, "整单全额退款才退券"),
+                             (RETURN_ANY_REFUND, "任何退款都退券")), risk="high", sort_order=10),
+    BusinessSetting("coupon.return_window_hours", "退券时限", "coupon", "int", 0, unit="小时",
+                    description="券核销后多少小时内退款才退券；0 表示只看券本身的有效期",
+                    minimum=0, maximum=8_760, sort_order=20),
+)
 
 _rt = partial(runtime_default, "coupon")
 
@@ -35,8 +47,6 @@ class CouponConfig:
     timezone: str = field(default_factory=lambda: os.environ.get("COUPON_TIMEZONE",
                                                                  os.environ.get("LUZ_TIMEZONE", "Asia/Shanghai")))
     # ---- 运行参数（[coupon]）----
-    return_policy: str = field(default_factory=_rt("return_policy"))
-    return_window_hours: int = field(default_factory=_rt("return_window_hours"))  # 0 = 只看有效期
     code_length: int = field(default_factory=_rt("code_length"))
     code_max_failures: int = field(default_factory=_rt("code_max_failures"))
     code_window_seconds: int = field(default_factory=_rt("code_window_seconds"))

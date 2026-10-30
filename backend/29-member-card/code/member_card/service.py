@@ -17,6 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from luzback import AppError, ErrorCode, enqueue_event, utcnow, write_audit
+from luzback.business import business_value
 from luzback.security import mask_phone
 from wallet import (
     CATEGORY_COUNT, CATEGORY_PERIOD, PaidEvent, RefundResultEvent, find_member, parse_paid, parse_refund_result,
@@ -968,7 +969,7 @@ def replace_card(db: Session, staff_id: int, card: MemberCard, reason: str, at: 
     old_no = card.card_no
     _cas(db, card, (MemberCard.status == S_LOST,), status=card.prev_status or S_ACTIVE, prev_status=None, card_no=_card_no())
     _ledger(db, card, "replace", f"replace:{card.id}:{card.version}", operator=f"staff:{staff_id}",
-            note=f"{old_no} -> {card.card_no}; fee={cfg().replace_fee_cents}")
+            note=f"{old_no} -> {card.card_no}; fee={business_value(db, 'member_card.replace_fee_cents', card.store_id)}")
     write_audit(db, "staff", staff_id, "member_card.replace", "member_card", card.id, before={"card_no": old_no},
                 after={"card_no": card.card_no}, reason=reason)
     enqueue_event(db, "member_card.replaced", {"card_id": card.id, "user_id": card.user_id}, "member_card", card.id)

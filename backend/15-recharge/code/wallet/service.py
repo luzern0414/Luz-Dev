@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from luzback import AppError, ErrorCode, enqueue_event, utcnow, write_audit
+from luzback.business import business_value
 
 from . import config as _config
 from .models import (
@@ -207,7 +208,7 @@ def consume(db: Session, user_id: int, ref: str, amount_cents: int, policy: str 
         return found
     account = get_account(db, user_id)
     _require_active(account)
-    principal, bonus = split(amount_cents, account.principal_cents, account.bonus_cents, policy or cfg().split_policy)
+    principal, bonus = split(amount_cents, account.principal_cents, account.bonus_cents, policy or business_value(db, "wallet.split_policy"))
     entry = _move(db, account, L_CONSUME, ref, -principal, -bonus, store_id=store_id)
     _debit_batches(db, entry, user_id, principal, bonus)
     enqueue_event(db, "balance.consumed", {"user_id": user_id, "ref": ref, "amount_cents": amount_cents,
@@ -679,7 +680,7 @@ def quote_refund(db: Session, batch_id: int, cause: str = CAUSE_CUSTOMER, user_i
                                principal_remaining=batch.principal_remaining_cents,
                                bonus_remaining=batch.bonus_remaining_cents, cause=cause, paid_at=aware(batch.paid_at),
                                at=at, cooling_off_days=policy.cooling_off_days,
-                               fee_bp=cfg().customer_refund_fee_bp if cause == CAUSE_CUSTOMER else 0, lpr_bp=batch.lpr_bp)
+                               fee_bp=business_value(db, "wallet.customer_refund_fee_bp", batch.store_id) if cause == CAUSE_CUSTOMER else 0, lpr_bp=batch.lpr_bp)
     quote["batch_id"] = batch.id
     quote["route"] = _route(batch, at)
     return quote

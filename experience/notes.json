@@ -43,6 +43,15 @@
       "last_confirmed": "2026-10-28"
     },
     {
+      "key": "business-settings-in-admin",
+      "kind": "preference",
+      "text": "商户日常调整的经营规则（退款手续费、储值扣减顺序、退券策略、补卡费、起送价、配送费）放后台“经营设置”：业务模块用 luzback.business 登记类型、范围、默认、能否按门店、风险；值存 business_settings；高风险键改前重新验证并写原因与审计；业务读到的值写进单据。运行参数才放配置文件",
+      "why": "用户 2026-10-30：退款手续费、储值扣减顺序、退券策略、补卡费这几项，从配置文件挪到后台设置",
+      "uses": 1,
+      "first_seen": "2026-10-30",
+      "last_confirmed": "2026-10-30"
+    },
+    {
       "key": "frontend-copy-from-backend",
       "kind": "preference",
       "text": "小程序与 App 的文字提示和展示配置尽量由后端下发：每处文字一个文案键，后端存当前文案，安装包只带默认兜底；后台“文案与展示”页按页面实时维护、保存即生效；有些项存后端但不在后台展示（admin_visible 为否），开发经种子维护；实现在 23-app-settings（content.json、MP-006、ADMIN-005）",
@@ -103,11 +112,15 @@
     {
       "key": "purchase-rules",
       "kind": "preference",
-      "text": "购买规则跟着商品或活动走、后台维护：起售、单笔上限、周期件数与次数限购、共享键、门店范围、手机号维度、新客专享、退款退回；订单模块下单同事务条件自增计数（order_purchase_quotas），行快照记计数键，取消回原周期（patterns/purchase-rules.md，ORDER-011/012、MKT-006）",
-      "why": "用户 2026-10-30：补充业务逻辑，比如限购只能购买一次的配置，认真思考，认真补充相关的系统设计逻辑",
-      "uses": 1,
+      "text": "购买规则跟着商品或活动走、后台维护：起售、单笔上限、周期件数与次数限购、共享键、门店范围、手机号维度、新客专享、退款退回、超出部分按原价（over_limit=regular_price 拆成活动价行与原价行，原价行不计名额）；订单模块同事务条件自增计数（order_purchase_quotas）（patterns/purchase-rules.md，ORDER-011/012、MKT-006）",
+      "why": "用户 2026-10-30：补充限购只能购买一次等业务逻辑；超出限购后按原价购买写成代码",
+      "uses": 2,
       "first_seen": "2026-10-30",
-      "last_confirmed": "2026-10-30"
+      "last_confirmed": "2026-10-30",
+      "previous": {
+        "text": "购买规则跟着商品或活动走、后台维护：起售、单笔上限、周期件数与次数限购、共享键、门店范围、手机号维度、新客专享、退款退回；订单模块下单同事务条件自增计数（order_purchase_quotas），行快照记计数键，取消回原周期（patterns/purchase-rules.md，ORDER-011/012、MKT-006）",
+        "replaced_at": "2026-10-30"
+      }
     },
     {
       "key": "reading-page-check-document",

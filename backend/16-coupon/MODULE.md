@@ -61,7 +61,7 @@
 13. 锁定：下单事务内 `unused → locked`（条件 UPDATE，WHERE 含 user_id 与有效期），写 order_id、discount_cents、alloc_json；同一订单重复锁定幂等；其他订单 4220 unavailable 或 4090。
 14. 核销：支付成功 `locked → used`，模板 used_count + n；锁定时已校验有效期，支付时不因到期拒绝；重复回调幂等。
 15. 解锁：关单 / 超时 `locked → unused`；若此时已过有效期则 `locked → expired`（修复 002Gym 把过期券放回可用的问题）。
-16. 退券：策略 full_refund（默认，仅整单全额退款）/ any_refund / never；`[coupon] return_window_hours > 0` 时核销超过该时长不退；仍在有效期 → unused，已过期 → expired；used_count − n；重复调用幂等。只退券本身，退款资金一律原路退回。
+16. 退券：策略 full_refund（默认，仅整单全额退款）/ any_refund / never；经营设置 `coupon.return_window_hours > 0` 时核销超过该时长不退；仍在有效期 → unused，已过期 → expired；used_count − n；重复调用幂等。只退券本身，退款资金一律原路退回。
 17. 来源收回：`revoke_by_source(source_ref)` 把该来源发出的 unused 券置 revoked；锁定 / 已用的保留并返回，由来源模块决定是否阻止退款。后台作废单张 unused 券须填原因（审计）。
 18. 兑换码：12 位（去掉 I O 0 1 的 32 字符字母表，约 60 位熵），只存 HMAC 与密文；一码一次（条件 UPDATE）；不存在 / 已用 / 作废统一 4040；同一会员每窗口失败达上限后 4290（含 Retry-After），失败计数在业务事务回滚后单独提交；发券失败（限领、售罄）时码保持未使用。生成数量不超过剩余库存减未兑换码数。
 19. 批量发放：创建时校验模板 active、渠道（admin / compensation）、剩余库存，原因必填（审计）；任务逐个会员一个事务，ref_key `batch:{批次}:{会员}` + 明细唯一约束保证幂等；失败写原因；`ignore_limit` 仅用于补偿。
@@ -192,8 +192,6 @@
 
 | 键 | 默认 | 范围 | 热加载 | 下发客户端 | 说明（含单位） |
 |---|---|---|---|---|---|
-| `[coupon] return_policy` | "full_refund" | never / full_refund / any_refund | 是 | 否 | 退款后是否退券：never 不退、full_refund 整单全额退款才退、any_refund 任何退款都退（原 `COUPON_RETURN_POLICY`） |
-| `[coupon] return_window_hours` | 0 | 0–8760 | 是 | 否 | 退券只在下单后多少小时内（小时，0 = 只看券的有效期）（原 `COUPON_RETURN_WINDOW_HOURS`） |
 | `[coupon] code_length` | 12 | 8–32 | 是 | 否 | 兑换码长度（位）（原 `COUPON_CODE_LENGTH`） |
 | `[coupon] code_max_failures` | 5 | 1–100 | 是 | 否 | 兑换码在窗口内输错几次后锁定（原 `COUPON_CODE_MAX_FAILURES`） |
 | `[coupon] code_window_seconds` | 600 | 60–86400 | 是 | 否 | 兑换码输错计数窗口（秒）（原 `COUPON_CODE_WINDOW_SECONDS`） |
@@ -203,6 +201,15 @@
 | `[coupon] remind_before_hours` | 48 | 1–720 | 是 | 否 | 到期前多少小时提醒（小时）（原 `COUPON_REMIND_BEFORE_HOURS`） |
 | `[coupon] issue_job_batch` | 200 | 1–10000 | 是 | 否 | 批量发券任务每批几人（原 `COUPON_ISSUE_JOB_BATCH`） |
 | `[coupon] max_coupons_per_order` | 3 | 1–10 | 是 | 是 | 一单最多叠加几张券（原 `COUPON_MAX_PER_ORDER`） |
+
+### 9.3 经营设置（后台“经营设置”页维护，保存即生效）
+
+键在本模块 `config.py` 用 `luzback.business.declare_business_settings` 登记，值存 23-app-settings 的 `business_settings`，读取用 `business_value(db, key, store_id)`；没有值时用登记的默认值。高风险键修改时要求重新验证身份并写审计。
+
+| 键 | 默认 | 范围 | 按门店 | 说明 |
+|---|---|---|---|---|
+| `coupon.return_policy` | full_refund | never 不退 / full_refund 整单全额退款才退 / any_refund 任何退款都退 | 否 | 订单退款时用过的券怎么处理；退款资金一律原路退回（原运行参数 `[coupon] return_policy`） |
+| `coupon.return_window_hours` | 0 | 0–8760（小时） | 否 | 券核销后多少小时内退款才退券，0 = 只看有效期（原 `[coupon] return_window_hours`） |
 
 定时任务（`jobs.JOBS`）：coupon.expire 300 秒、coupon.remind_expiring 3600 秒、coupon.issue_batches 30 秒。
 

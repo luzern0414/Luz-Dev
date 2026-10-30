@@ -162,3 +162,62 @@ def test_purchase_status_for_product_page(env):
     view = status["rules"][0]
     assert view["bought_qty"] == 1 and view["remaining_qty"] == 1 and status["issues"] == []
     assert order.purchase_status(env.db, USER, {"items": line(2)}, env.now)["issues"][0]["reason"] == "purchase_limit"
+
+
+def regular_catalog(rule: dict, promo: int = 990, regular: int | None = 2800):
+    order.set_service_catalog(lambda db, pid, store: {"name": f"服务{pid}", "price_cents": promo,
+                                                     "regular_price_cents": regular, "purchase_rule": rule}
+                              if pid in (1, 2) else None)
+
+
+def tiers(quote) -> list[tuple[str, int, int]]:
+    return [(ln["price_tier"], ln["qty"], ln["unit_price_cents"]) for ln in quote["lines"]]
+
+
+def test_over_limit_buys_the_rest_at_regular_price(env):
+    regular_catalog({"limit_qty": 2, "window": "day", "over_limit": "regular_price"})
+    q = env.preview(line(3))
+    assert q["submittable"] is True and tiers(q) == [("promo", 2, 990), ("regular", 1, 2800)]
+    assert q["total_cents"] == 2 * 990 + 2800
+    placed = env.submit(q)
+    items = env.items(placed["order_id"])
+    assert sorted((it.qty, it.unit_price_cents) for it in items) == [(1, 2800), (2, 990)]
+    q2 = env.preview(line(1))  # 今日活动价名额已用完：整行按原价，不报限购问题
+    assert q2["submittable"] is True and tiers(q2) == [("regular", 1, 2800)]
+    env.db.expire_all()
+    assert env.db.scalars(select(order.PurchaseQuota)).one().qty == 2  # 原价部分不计名额
+
+
+def test_over_limit_with_buy_once_and_new_customer(env):
+    order.set_buyer_contact_provider(lambda db, uid: None)
+    regular_catalog({"key": "trial", "limit_orders": 1, "over_limit": "regular_price"})
+    env.place(line(2))  # 第一次：整行活动价
+    assert tiers(env.preview(line(1))) == [("regular", 1, 2800)]  # 买过一次后按原价
+    regular_catalog({"key": "newbie", "new_customer_only": True, "over_limit": "regular_price"})
+    q = env.preview(line(1), user=OTHER)
+    assert tiers(q) == [("promo", 1, 990)]  # 新客：活动价
+    env.submit(q, user=OTHER)
+    assert tiers(env.preview(line(1), user=OTHER)) == [("regular", 1, 2800)]  # 新客资格已用（首单待支付也算）
+
+
+def test_over_limit_keeps_minimum_and_order_cap_on_the_whole_quantity(env):
+    regular_catalog({"limit_qty": 1, "max_per_order": 3, "min_qty": 2, "over_limit": "regular_price"})
+    assert reasons(env.preview(line(1))) == ["below_min_qty"]
+    assert reasons(env.preview(line(4))) == ["over_order_limit"]
+    assert tiers(env.preview(line(2))) == [("promo", 1, 990), ("regular", 1, 2800)]
+
+
+def test_over_limit_requires_a_higher_regular_price_and_a_limit(env):
+    regular_catalog({"limit_qty": 1, "over_limit": "regular_price"}, regular=None)
+    assert err(lambda: env.preview(line(2))).data["fields"] == ["regular_price_cents"]
+    with pytest.raises(AppError) as e:
+        purchase.PurchaseRule.parse({"over_limit": "regular_price", "min_qty": 1}, default_key="x")
+    assert "over_limit_without_limit" in e.value.data["fields"]
+
+
+def test_regular_part_is_not_released_and_promo_part_is(env):
+    regular_catalog({"limit_qty": 1, "over_limit": "regular_price"})
+    placed = env.place(line(2))
+    order.cancel(env.db, USER, placed["order_id"], "", env.now)
+    env.db.commit()
+    assert tiers(env.preview(line(2))) == [("promo", 1, 990), ("regular", 1, 2800)]  # 取消后活动价名额回来

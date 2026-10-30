@@ -1,13 +1,14 @@
-"""app_settings 接口（薄层）：运行配置的内部接口与客户端下发、文案与展示的小程序下发与后台维护。
+"""app_settings 接口（薄层）：运行配置的内部接口与客户端下发、文案与展示的小程序下发与后台维护、经营设置的后台维护。
 
 | 接口 | 鉴权 |
 |---|---|
 | `GET /internal/config`、`POST /internal/config/reload` | 内网（含本机回环）+ 运维令牌 `LUZ_OPS_TOKEN`；外网 404，内网缺令牌 403 |
 | `GET /api/v1/app/config`、`GET /api/v1/app/content` | 无；带版本或 If-None-Match 且未变化返回 304 |
 | `/api/v1/admin/content/*`（文案、展示、修改历史） | 后台员工 `settings:read` / `settings:write`；写接口带 Idempotency-Key，审计在 service 同事务完成 |
+| `/api/v1/admin/settings*`（经营设置） | 同上；高风险键（影响资金）还要求最近完成过完整认证（4011 reason=reauth_required） |
 
 文案对全部门店生效，只有全门店员工能改；展示设置的门店覆盖按员工门店范围校验（越界 4031）。
-`/api/v1/admin/settings` 是门店模块的经营设置，不在本模块。
+经营设置的全局值只有全门店员工能改；允许门店覆盖的键按员工门店范围校验。
 """
 from __future__ import annotations
 
@@ -22,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from admin_rbac import Staff, assert_in_scope, require_permission, store_scope
+from admin_rbac import Staff, assert_fresh, assert_in_scope, require_permission, store_scope
 from luzback import AppError, ErrorCode, get_db, idempotency_key, ok, run_idempotent
 from luzback import log_events as ev
 from luzback.app import client_ip, ops_access
@@ -30,7 +31,7 @@ from luzback.logging import log_event
 from luzback.runtime_config import registry
 from luzback.runtime_loader import ConfigStore, config_store, current_snapshot
 
-from . import content
+from . import business, content
 from .models import ContentRevision, UiText
 from .rules import client_values, etag_matches
 
@@ -246,3 +247,52 @@ def admin_reset_display(body: ScopeBody, key: str = Path(max_length=64),
     assert_in_scope(staff, body.store_id)
     return _write(db, f"content.display.reset:{key}", idem, staff, body,
                   lambda: content.reset_display(db, staff.id, key, body.store_id, **_audit(staff)))
+
+
+# ================================================================ 经营设置
+
+
+class BusinessBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    store_id: int | None = Field(default=None, ge=1)          # 空 = 全局
+    value: Any
+    version: int = Field(ge=0)                                # 这一级当前的版本；还没有值时为 0
+    reason: str = Field(default="", max_length=200)           # 修改原因，写进审计
+
+
+def _fresh_if_risky(staff: Staff, key: str) -> None:
+    item = business.get_business_setting(key)
+    if item is not None and item.risk == "high":
+        assert_fresh(staff)
+
+
+@admin_router.get("/settings")
+def admin_business_settings(store_id: int | None = Query(default=None, ge=1),
+                            staff: Staff = Depends(require_permission("settings:read")), db: Session = Depends(get_db)):
+    """经营设置（只列后台可见的键，按模块分组）：说明、单位、范围、默认值、全局值、门店值、生效值与来源、这一级的版本。"""
+    if store_id is not None:
+        assert_in_scope(staff, store_id)
+    return ok(jsonable_encoder({"store_id": store_id, "items": business.list_settings(db, store_id)}))
+
+
+@admin_router.put("/settings/{key}")
+def admin_update_business_setting(body: BusinessBody, key: str = Path(max_length=64),
+                                  staff: Staff = Depends(require_permission("settings:write")),
+                                  idem: str = Depends(idempotency_key), db: Session = Depends(get_db)):
+    assert_in_scope(staff, body.store_id)
+    _fresh_if_risky(staff, key)
+    return _write(db, f"business.setting.update:{key}", idem, staff, body,
+                  lambda: business.update_setting(db, staff.id, key, body.value, body.version, body.store_id,
+                                                  reason=body.reason or None, **_audit(staff)))
+
+
+@admin_router.post("/settings/{key}/reset")
+def admin_reset_business_setting(body: ScopeBody, key: str = Path(max_length=64),
+                                 staff: Staff = Depends(require_permission("settings:write")),
+                                 idem: str = Depends(idempotency_key), db: Session = Depends(get_db)):
+    """全局：恢复登记的默认值；门店：取消门店覆盖，回到全局值。"""
+    assert_in_scope(staff, body.store_id)
+    _fresh_if_risky(staff, key)
+    return _write(db, f"business.setting.reset:{key}", idem, staff, body,
+                  lambda: business.reset_setting(db, staff.id, key, body.store_id, **_audit(staff)))

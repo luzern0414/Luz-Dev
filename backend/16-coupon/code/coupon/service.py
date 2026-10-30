@@ -20,6 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from luzback import AppError, ErrorCode, Field, ListSpec, StateMachine, enqueue_event, get_settings, utcnow, write_audit
+from luzback.business import business_value
 from luzback.audit import diff
 from luzback.crypto import FieldCipher
 
@@ -785,15 +786,16 @@ def return_on_refund(db: Session, order_id: int, full_refund: bool, now: datetim
                      policy: str | None = None) -> dict[str, Any]:
     """退款后按策略退券（七日办法第十五条：券按原方式退回，另有约定除外）。
 
-    - policy（默认取配置 COUPON_RETURN_POLICY）：full_refund 只在整单全额退款时退；any_refund 任何退款都退；never 不退。
-    - COUPON_RETURN_WINDOW_HOURS > 0 时，核销超过该小时数后不退。
+    - policy（默认取经营设置 coupon.return_policy）：full_refund 只在整单全额退款时退；any_refund 任何退款都退；never 不退。
+    - 经营设置 coupon.return_window_hours > 0 时，核销超过该小时数后不退。
     - 退回时券仍在有效期 → unused；已过有效期 → expired（不再可用）。
     - 退的是券本身；退款资金一律原路退回，不得折成券（微信小程序运营规范 §2.14 第 6 条），本模块不提供“退款转券”。
     不 commit；重复调用幂等。
     """
     now = _now(now)
     cfg = get_config()
-    policy = policy or cfg.return_policy
+    policy = policy or business_value(db, "coupon.return_policy")
+    window_hours = business_value(db, "coupon.return_window_hours")
     used = _order_coupons(db, order_id, STATUS_USED)
     result: dict[str, Any] = {"returned": [], "expired": [], "kept": []}
     if not used:
@@ -804,7 +806,7 @@ def return_on_refund(db: Session, order_id: int, full_refund: bool, now: datetim
         return result
     counts: dict[int, int] = {}
     for c in used:
-        if cfg.return_window_hours and c.used_at and now - aware(c.used_at) > timedelta(hours=cfg.return_window_hours):
+        if window_hours and c.used_at and now - aware(c.used_at) > timedelta(hours=window_hours):
             result["kept"].append({"user_coupon_id": c.id, "reason": "return_window_passed"})
             continue
         expired = now >= aware(c.valid_to)

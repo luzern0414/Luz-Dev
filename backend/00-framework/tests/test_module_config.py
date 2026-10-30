@@ -23,9 +23,7 @@ class DemoConfig:
     region: str = field(default_factory=lambda: os.getenv("DEMO_REGION", "cn"))  # 部署参数
     pay_timeout_minutes: int = field(default_factory=_rt("pay_timeout_minutes"))
     custom_amount_enabled: bool = field(default_factory=_rt("custom_amount_enabled"))
-    split_policy: str = field(default_factory=_rt("split_policy"))
     adjust_max_cents: int = field(default_factory=_rt("adjust_max_cents"))
-    customer_refund_fee_bp: int = field(default_factory=_rt("customer_refund_fee_bp"))
     refund_requires_approval: bool = field(default_factory=_rt("refund_requires_approval"))
     custom_amount_min_cents: int = field(default_factory=_rt("custom_amount_min_cents"))
     original_refund_max_days: int = field(default_factory=_rt("original_refund_max_days"))

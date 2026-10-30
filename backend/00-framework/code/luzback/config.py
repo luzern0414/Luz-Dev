@@ -141,6 +141,12 @@ class Settings:
 # 框架里已迁到运行配置文件或已删除的变量 → 去处。各模块迁走的变量登记在字段说明的 legacy_env 里（runtime_config.py），
 # env_warnings 两处一起查。
 MOVED_ENV: dict[str, str] = {
+    # 经营规则：后台“经营设置”页维护（luzback.business，见 references/config-logging.md §1）
+    "WALLET_SPLIT_POLICY": "后台经营设置 wallet.split_policy",
+    "WALLET_CUSTOMER_REFUND_FEE_BP": "后台经营设置 wallet.customer_refund_fee_bp",
+    "MEMBER_CARD_REPLACE_FEE_CENTS": "后台经营设置 member_card.replace_fee_cents",
+    "COUPON_RETURN_POLICY": "后台经营设置 coupon.return_policy",
+    "COUPON_RETURN_WINDOW_HOURS": "后台经营设置 coupon.return_window_hours",
     "LOG_LEVEL": "config/runtime [logging] level",
     "LUZ_DB_STATEMENT_TIMEOUT_MS": "config/runtime [db] statement_timeout_ms",
     "LUZ_MAX_BODY_BYTES": "config/runtime [http] max_body_kb",

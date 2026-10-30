@@ -155,14 +155,21 @@
 | `[prepaid] policy` | "conservative" | conservative / shanghai_fitness_2025 / shanghai_fitness_draft_2026 / beijing_2022 / national_single_use_card / unlimited | 是 | 否 | 预付卡监管口径预设（单次、累计上限与冷静期等）；连锁跨城市可按门店另行注入（原 `LUZ_PREPAID_POLICY`） |
 | `[prepaid] lpr_1y_bp` | 300 | 0–2000 | 是 | 否 | 合同成立时一年期 LPR（万分比），退款补偿利息按它计算；按公布值更新（原 `LUZ_LPR_1Y_BP`） |
 | `[prepaid] stop_prepaid` | false | true / false | 是 | 是 | 停止收取预付款（经营风险时）：储值与会员卡都停售，客户端隐藏入口（原 `LUZ_STOP_PREPAID`） |
-| `[wallet] split_policy` | "proportional" | proportional / principal_first | 是 | 否 | 消费时本金与赠送金的扣减顺序（原 `WALLET_SPLIT_POLICY`） |
 | `[wallet] pay_timeout_minutes` | 15 | 1–1440 | 是 | 否 | 充值待支付自动关闭（分钟）（原 `WALLET_PAY_TIMEOUT_MINUTES`） |
 | `[wallet] refund_requires_approval` | true | true / false | 是 | 否 | 储值退款需要后台审批（原 `WALLET_REFUND_REQUIRES_APPROVAL`） |
-| `[wallet] customer_refund_fee_bp` | 0 | 0–10000 | 是 | 否 | 顾客原因退款的手续费（万分比）（原 `WALLET_CUSTOMER_REFUND_FEE_BP`） |
 | `[wallet] adjust_max_cents` | 50_000 | 0–10000000 | 是 | 否 | 后台单次手工调整余额上限（分）（原 `WALLET_ADJUST_MAX_CENTS`） |
 | `[wallet] custom_amount_enabled` | false | true / false | 是 | 是 | 允许顾客输入自定义充值金额（原 `WALLET_CUSTOM_AMOUNT`） |
 | `[wallet] custom_amount_min_cents` | 100 | 1–10000000 | 是 | 是 | 自定义充值最低金额（分）（原 `WALLET_CUSTOM_AMOUNT_MIN_CENTS`） |
 | `[wallet] original_refund_max_days` | 365 | 1–365 | 是 | 否 | 支付后多少天内可以原路退回（天）（原 `WALLET_ORIGINAL_REFUND_MAX_DAYS`） |
+
+### 9.3 经营设置（后台“经营设置”页维护，保存即生效）
+
+键在本模块 `config.py` 用 `luzback.business.declare_business_settings` 登记，值存 23-app-settings 的 `business_settings`，读取用 `business_value(db, key, store_id)`；没有值时用登记的默认值。高风险键修改时要求重新验证身份并写审计。
+
+| 键 | 默认 | 范围 | 按门店 | 说明 |
+|---|---|---|---|---|
+| `wallet.split_policy` | proportional | proportional 按比例 / principal_first 先本金 | 否 | 余额消费时本金与赠送金的扣减顺序；只影响之后的消费（原运行参数 `[wallet] split_policy`） |
+| `wallet.customer_refund_fee_bp` | 0 | 0–10000（万分比） | 是（按充值门店） | 顾客原因退储值的手续费，商户原因不收；须与储值协议一致（原 `[wallet] customer_refund_fee_bp`） |
 
 `[prepaid]` 由储值与 29-member-card 共用，只存一份。按门店不同的监管口径用 `set_policy_resolver` 注入。
 

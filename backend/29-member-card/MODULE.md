@@ -168,10 +168,17 @@ active|inactive|frozen*|used_up|expired|lost ─(申请退卡)→ refunding ─(
 | `[member_card] original_refund_max_days` | 365 | 1–365 | 是 | 否 | 支付后多少天内可以原路退回（天）（原 `MEMBER_CARD_ORIGINAL_REFUND_MAX_DAYS`） |
 | `[member_card] adjust_max_sessions` | 50 | 1–10000 | 是 | 否 | 后台单次手工调整次数上限（次）（原 `MEMBER_CARD_ADJUST_MAX_SESSIONS`） |
 | `[member_card] adjust_max_days` | 366 | 1–3650 | 是 | 否 | 后台单次手工调整有效期上限（天）（原 `MEMBER_CARD_ADJUST_MAX_DAYS`） |
-| `[member_card] replace_fee_cents` | 0 | 0–100000 | 是 | 否 | 补卡工本费（分）（原 `MEMBER_CARD_REPLACE_FEE_CENTS`） |
 | `[prepaid] policy` | "conservative" | conservative / shanghai_fitness_2025 / shanghai_fitness_draft_2026 / beijing_2022 / national_single_use_card / unlimited | 是 | 否 | 预付卡监管口径预设（单次、累计上限与冷静期等）；连锁跨城市可按门店另行注入（原 `LUZ_PREPAID_POLICY`） |
 | `[prepaid] lpr_1y_bp` | 300 | 0–2000 | 是 | 否 | 合同成立时一年期 LPR（万分比），退款补偿利息按它计算；按公布值更新（原 `LUZ_LPR_1Y_BP`） |
 | `[prepaid] stop_prepaid` | false | true / false | 是 | 是 | 停止收取预付款（经营风险时）：储值与会员卡都停售，客户端隐藏入口（原 `LUZ_STOP_PREPAID`） |
+
+### 9.3 经营设置（后台“经营设置”页维护，保存即生效）
+
+键在本模块 `config.py` 用 `luzback.business.declare_business_settings` 登记，值存 23-app-settings 的 `business_settings`，读取用 `business_value(db, key, store_id)`；没有值时用登记的默认值。高风险键修改时要求重新验证身份并写审计。
+
+| 键 | 默认 | 范围 | 按门店 | 说明 |
+|---|---|---|---|---|
+| `member_card.replace_fee_cents` | 0 | 0–100000（分） | 是（按开卡门店） | 挂失后补办新卡的工本费，0 = 免费（原运行参数 `[member_card] replace_fee_cents`） |
 
 卡种级规则（冻结、转让、手续费、防借卡、激活、适用门店、限购）在卡种上配置，并随卡快照（改卡种不影响已售卡）；`[prepaid]` 与 15-recharge 共用。
 

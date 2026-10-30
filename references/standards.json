@@ -194,6 +194,11 @@
       "backend": "backend/23-app-settings"
     },
     {
+      "id": "business",
+      "name": "经营设置",
+      "backend": "backend/23-app-settings"
+    },
+    {
       "id": "seckill",
       "name": "高并发抢购与热点库存",
       "pattern": "references/patterns/seckill.md"
@@ -4208,6 +4213,47 @@
         {
           "title": "Luz System · 界面通用规范“内容来源与维护闭环”",
           "url": "https://github.com/luzern0414/Luz-System/blob/master/references/ui-standards.html"
+        }
+      ]
+    },
+    {
+      "id": "ADMIN-006",
+      "domain": "admin",
+      "level": "MUST",
+      "platforms": [
+        "admin",
+        "backend"
+      ],
+      "modules": [
+        "business",
+        "recharge",
+        "coupon",
+        "membership",
+        "store"
+      ],
+      "title": "经营规则在后台“经营设置”维护：登记、校验、审计、即时生效",
+      "rule": "退款手续费、储值扣减顺序、退券策略、补卡费、起送价、配送费这类商户日常调整的经营规则，由业务模块登记为经营设置（类型、范围或选项、默认值、能否按门店覆盖、风险级别），运营在后台“经营设置”页修改：按版本条件更新、保存即生效、同事务写审计（修改前后的值与原因）；影响资金的高风险键要求重新验证身份。业务代码读当前生效值并写进单据，改设置不影响已生成的单据。不放运行配置文件，也不写死在代码里。",
+      "why": "经营规则写在配置文件里，商户每次调整都要找开发、走发布；写死在代码里则无法调整。",
+      "do": [
+        "读到的手续费比例、起送价写进退款单或订单快照",
+        "高风险键修改时提示影响范围"
+      ],
+      "dont": [
+        "把经营规则放进运行配置文件",
+        "让门店员工改全局值"
+      ],
+      "verify": [
+        "后台改手续费后新的退款试算按新值，已生成的退款单不变",
+        "高风险键在认证过期后修改返回 reauth_required"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 模块详设 business（经营设置）",
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/module-specs/business.json"
+        },
+        {
+          "title": "Luz Dev · 配置文件与日志 §1",
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/config-logging.md"
         }
       ]
     },

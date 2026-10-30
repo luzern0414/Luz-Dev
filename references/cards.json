@@ -72,7 +72,7 @@
         "标准模块只作参考与复用起点：目录 `references/standard-modules.json`、总览 `backend/MODULES.md`、各模块 `backend/NN-名称/MODULE.md`；与标准不同的行为走 MODULE.md §13 定制点，不改库里的规则；方案里用 `tech_plan.py standard NN --set/--deviation` 记录取值与差异",
         "业务模式：按方案模块读 `references/patterns/<模块>.md`（inventory、order、pricing、coupon、accounts、reservation、after-sales、seckill、jobs、cache、catalog-cart、purchase-rules、multi-store、access-control；有起售、限购、只能买一次或新客专享时必读 purchase-rules），再按调研结论调整并写明差异",
         "没有标准模块的模块：`python -X utf8 scripts/module_specs.py list` 看模块库，`tech_plan.py spec NN --file adapted.json` 换成本项目的详细设计；每张被写入的表都要定义",
-        "可复用功能逻辑：查 `references/function-catalog.json`（按模块 id 与功能 id），改写后再用，不照抄路由和状态词；前台文案与展示配置用模块详设 content（MP-006、ADMIN-005），运行参数用模块详设 config",
+        "可复用功能逻辑：查 `references/function-catalog.json`（按模块 id 与功能 id），改写后再用，不照抄路由和状态词；前台文案与展示配置用模块详设 content（MP-006、ADMIN-005），商户日常调整的经营规则（手续费、扣减顺序、退券策略、补卡费、起送价）用模块详设 business（ADMIN-006），运行参数用模块详设 config",
         "支付、退款、对账读 `backend/09-wechat-pay/MODULE.md`（规则 `PAY-*`、`RFD-*`）；规则原文按编号查 `references/standards.json`",
         "契约先行：OpenAPI 与 `packages/contracts/design-bindings.json` 先于两端改动；状态只经 `luzback.StateMachine` 改变"
       ],

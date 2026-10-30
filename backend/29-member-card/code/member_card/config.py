@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from functools import partial
 from typing import Any
 
+from luzback.business import BusinessSetting, declare_business_settings
 from luzback.module_config import ModuleConfig, runtime_default
 
 _rt = partial(runtime_default, "member_card")
@@ -27,7 +28,6 @@ class CardConfig:
     original_refund_max_days: int = field(default_factory=_rt("original_refund_max_days"))
     adjust_max_sessions: int = field(default_factory=_rt("adjust_max_sessions"))
     adjust_max_days: int = field(default_factory=_rt("adjust_max_days"))
-    replace_fee_cents: int = field(default_factory=_rt("replace_fee_cents"))
     # ---- 共用（[prepaid]）----
     lpr_1y_bp: int = field(default_factory=_prepaid("lpr_1y_bp"))
     stop_prepaid: bool = field(default_factory=_prepaid("stop_prepaid"))
@@ -47,3 +47,10 @@ def set_config(config: CardConfig | None = None, **overrides: Any) -> CardConfig
 
 def reset_config() -> None:
     _module.reset()
+
+
+declare_business_settings(
+    BusinessSetting("member_card.replace_fee_cents", "补卡工本费", "member_card", "int", 0, unit="分",
+                    description="挂失后补办新卡收取的工本费；0 表示免费。可按开卡门店分别设置",
+                    minimum=0, maximum=100_000, store_scope=True, risk="high", sort_order=10),
+)

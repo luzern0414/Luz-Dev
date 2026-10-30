@@ -229,14 +229,10 @@ stop_prepaid = false
 
 # ---------------------------------------------------------------- 15-recharge 储值
 [wallet]
-# 消费时本金与赠送金的扣减顺序。范围 proportional | principal_first；高风险
-split_policy = "proportional"
 # 充值待支付自动关闭（分钟）。范围 1–1440
 pay_timeout_minutes = 15
 # 储值退款需要后台审批。范围 true | false；高风险
 refund_requires_approval = true
-# 顾客原因退款的手续费（万分比）。范围 0–10000；高风险
-customer_refund_fee_bp = 0
 # 后台单次手工调整余额上限（分）。范围 0–10000000；高风险
 adjust_max_cents = 50_000
 # 允许顾客输入自定义充值金额。范围 true | false；下发客户端
@@ -264,15 +260,9 @@ original_refund_max_days = 365
 adjust_max_sessions = 50
 # 后台单次手工调整有效期上限（天）。范围 1–3650；高风险
 adjust_max_days = 366
-# 补卡工本费（分）。范围 0–100000；高风险
-replace_fee_cents = 0
 
 # ---------------------------------------------------------------- 16-coupon 优惠券
 [coupon]
-# 退款后是否退券：never 不退、full_refund 整单全额退款才退、any_refund 任何退款都退。范围 never | full_refund | any_refund；高风险
-return_policy = "full_refund"
-# 退券只在下单后多少小时内（小时，0 = 只看券的有效期）。范围 0–8760
-return_window_hours = 0
 # 兑换码长度（位）。范围 8–32
 code_length = 12
 # 兑换码在窗口内输错几次后锁定。范围 1–100；高风险

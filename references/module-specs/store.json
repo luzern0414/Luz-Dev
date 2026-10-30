@@ -21,7 +21,7 @@
     },
     {
       "name": "经营设置",
-      "description": "全局默认值与门店覆盖值：起送价、配送费、包装费等门店经营参数。每个键在代码里登记类型、范围、默认值与 admin_visible；后台只列 admin_visible 的键，实时维护，修改即时生效并审计。展示配置与前台文案在模块详设 content；待支付时长、在场超时、预约取消时限这类运行参数写在配置文件里（模块详设 config）。"
+      "description": "起送价、配送费、包装费等门店经营参数登记为经营设置（`store.*`，允许按门店覆盖），在后台“经营设置”页维护，保存即生效并审计；存储、接口与校验见模块详设 business。待支付时长、在场超时、预约取消时限这类运行参数写在配置文件里（模块详设 config）；展示配置与前台文案在模块详设 content。"
     },
     {
       "name": "附近门店",
@@ -46,10 +46,10 @@
       ]
     },
     {
-      "name": "读取经营与展示设置",
+      "name": "读取经营设置",
       "steps": [
-        "业务代码按 key 读取设置：先取门店覆盖值，没有则取全局值，再没有使用代码登记的默认值。",
-        "设置缓存在 Redis，后台修改写库后删除对应缓存。"
+        "业务代码按键读取（`business_value`）：先取门店覆盖值，没有则取全局值，再没有用登记的默认值（模块详设 business）。",
+        "读到的起送价、配送费写进订单快照，之后改设置不影响已下的单。"
       ]
     },
     {
@@ -142,14 +142,6 @@
       "type": "文本",
       "required": true,
       "rule": "对会员公开的客服电话。"
-    },
-    {
-      "page": "门店编辑页（后台）",
-      "field": "value",
-      "label": "经营与展示设置",
-      "type": "按登记类型",
-      "required": true,
-      "rule": "按登记的类型与范围校验；只显示 admin_visible 的键。"
     }
   ],
   "apis": [
@@ -188,24 +180,6 @@
       "request": "需修改的字段",
       "response": "门店资料",
       "errors": "STORE_HAS_ACTIVE_CARDS（关闭时）"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v1/admin/settings",
-      "caller": "后台",
-      "purpose": "经营设置列表",
-      "request": "store_id（可选）",
-      "response": "key，value，默认值，覆盖来源（只含 admin_visible 的键）",
-      "errors": "—"
-    },
-    {
-      "method": "PUT",
-      "path": "/api/v1/admin/settings/{key}",
-      "caller": "后台",
-      "purpose": "修改经营设置",
-      "request": "store_id（可选），value",
-      "response": "生效后的值",
-      "errors": "VALIDATION_FAILED，FORBIDDEN（隐藏键）"
     },
     {
       "method": "GET",
@@ -305,9 +279,9 @@
       "content": "门店资料与状态。"
     },
     {
-      "when": "修改经营与展示设置",
-      "table": "store_settings",
-      "content": "store_id、key、value、updated_by。"
+      "when": "修改门店的经营设置（起送价、配送费、包装费）",
+      "table": "business_settings",
+      "content": "门店覆盖值与版本；审计记修改前后的值（模块详设 business）。"
     },
     {
       "when": "修改门店或设置",
@@ -448,44 +422,6 @@
         "UNIQUE(code)",
         "INDEX(city_code, status)",
         "CHECK(current_occupancy >= 0)"
-      ]
-    },
-    {
-      "name": "store_settings",
-      "label": "经营设置",
-      "purpose": "门店与全局的经营设置（起送价、配送费、包装费等门店经营参数）；键在代码里登记类型、范围、默认值与 admin_visible。展示配置在模块详设 content 的 display_settings",
-      "fields": [
-        {
-          "name": "store_id",
-          "type": "BIGINT",
-          "required": false,
-          "default": "—",
-          "comment": "门店；为空表示全局默认"
-        },
-        {
-          "name": "key",
-          "type": "VARCHAR(64)",
-          "required": true,
-          "default": "—",
-          "comment": "设置键，如 delivery.min_order_cents"
-        },
-        {
-          "name": "value",
-          "type": "JSONB",
-          "required": true,
-          "default": "—",
-          "comment": "设置值"
-        },
-        {
-          "name": "updated_by",
-          "type": "BIGINT",
-          "required": true,
-          "default": "—",
-          "comment": "修改人"
-        }
-      ],
-      "indexes": [
-        "UNIQUE(store_id, key) NULLS NOT DISTINCT"
       ]
     },
     {
@@ -688,7 +624,7 @@
     },
     {
       "case": "设置值非法或修改隐藏键",
-      "handling": "按登记的类型与范围校验，返回 VALIDATION_FAILED；admin_visible 为否的键只能由种子与迁移修改，后台接口返回 FORBIDDEN。"
+      "handling": "按登记的类型与范围校验，返回 VALIDATION_FAILED；admin_visible 为否的键不在后台展示，接口返回 BUSINESS_KEY_HIDDEN（模块详设 business）。"
     },
     {
       "case": "停业时有进行中与待支付订单",

@@ -45,6 +45,7 @@ EVENT_SUBSCRIBER_FAILED = "event.subscriber_failed"
 CONTENT_TEXT_UPDATED = "content.text_updated"
 CONTENT_DISPLAY_UPDATED = "content.display_updated"
 CONTENT_SEED_SYNCED = "content.seed_synced"
+BUSINESS_SETTING_UPDATED = "business.setting_updated"
 
 # ---------- 安全事件（OWASP Logging Vocabulary）----------
 SECURITY_AUTHN_LOGIN_SUCCESS = "security.authn_login_success"

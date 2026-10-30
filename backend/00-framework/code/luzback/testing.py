@@ -157,3 +157,21 @@ def reset_runtime_overrides(*groups: str) -> None:
             set_config_store(make_config_store(_dir(), values=copy.deepcopy(_overrides)))
         else:
             set_config_store(_saved.pop())
+
+
+def override_business(**values: Any) -> None:
+    """测试：覆盖经营设置（键为 "模块.名称"，用 dict 解包传入），值按登记的类型与范围校验；backend/conftest.py 每个测试结束后撤销。
+
+        override_business(**{"coupon.return_policy": "never"})
+    """
+    if get_settings().is_prod and "pytest" not in sys.modules:
+        raise RuntimeError("override_business is for tests only; change business settings in the admin console")
+    from . import business  # noqa: PLC0415
+
+    business._set_overrides(values)
+
+
+def reset_business_overrides() -> None:
+    from . import business  # noqa: PLC0415
+
+    business._clear_overrides()

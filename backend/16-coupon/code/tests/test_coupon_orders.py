@@ -15,6 +15,7 @@ from luzback import AppError, ErrorCode, OutboxEvent
 
 from coupon_fixtures import *  # noqa: F401,F403
 from coupon_fixtures import NOW, make_template
+from luzback.testing import override_business
 
 LINES = [CartLine(sku_id=11, product_id=1, qty=2, unit_price_cents=4000, category_id=3),
          CartLine(sku_id=12, product_id=2, qty=1, unit_price_cents=4000, category_id=4)]  # 12000
@@ -199,9 +200,9 @@ def test_partial_refund_keeps_coupon_by_default(db):
 
 def test_never_policy_and_return_window(db):
     c = _used(db)
-    coupon.set_config(return_policy="never")
+    override_business(**{"coupon.return_policy": "never"})
     assert service.return_on_refund(db, 100, True, now=NOW)["kept"][0]["reason"] == "policy"
-    coupon.set_config(return_policy="full_refund", return_window_hours=48)
+    override_business(**{"coupon.return_policy": "full_refund", "coupon.return_window_hours": 48})
     assert service.return_on_refund(db, 100, True, now=NOW + timedelta(hours=49))["kept"][0]["reason"] == \
         "return_window_passed"
     assert service.return_on_refund(db, 100, True, now=NOW + timedelta(hours=47))["returned"] == [c.id]

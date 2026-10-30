@@ -1,9 +1,11 @@
-"""app_settings 数据模型：运行配置加载记录、文案库、展示设置、内容修改历史。
+"""app_settings 数据模型：运行配置加载记录、文案库、展示设置、内容修改历史、经营设置。
 
 - 数组与 JSON 值按全项目惯例存成 Text（`*_json`），SQLite 与 PostgreSQL 一致；详设里的 TEXT[] / JSONB 对应这里的 `*_json`。
 - 内容版本 = content_revisions 的最大 id（每次修改、恢复与种子同步都追加一行）。
 - display_settings：展示设置，store_id 为空 = 全局；全局与门店各自唯一（两个部分唯一索引，等价于 UNIQUE(store_id, key)
-  NULLS NOT DISTINCT）。门店模块的经营设置（store_settings）不在这里。
+  NULLS NOT DISTINCT）。
+- business_settings：经营设置（各业务模块在 luzback.business 登记的键），同样全局一行、允许门店覆盖的键每店一行；
+  修改写审计，不进内容版本（小程序不下发）。
 - 文案与展示设置按 version 条件更新（并发修改后保存的一方返回冲突）。
 """
 from __future__ import annotations
@@ -99,3 +101,20 @@ class ContentRevision(Base, BigIdMixin):
     changed_by: Mapped[int | None] = mapped_column(BigId, nullable=True)     # 种子同步时为空
     source: Mapped[str] = mapped_column(String(16), default=SOURCE_ADMIN)    # admin | migration | restore
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class BusinessSettingValue(Base, BigIdMixin, TimestampMixin):
+    """经营设置的全局值（store_id 为空）与门店覆盖；键与类型在 luzback.business 登记，没有行时用登记的默认值。"""
+
+    __tablename__ = "business_settings"
+    __table_args__ = (
+        Index("uq_business_settings_global_key", "key", unique=True, sqlite_where=_GLOBAL, postgresql_where=_GLOBAL),
+        Index("uq_business_settings_store_key", "store_id", "key", unique=True, sqlite_where=_STORE,
+              postgresql_where=_STORE),
+    )
+
+    store_id: Mapped[int | None] = mapped_column(BigId, nullable=True)
+    key: Mapped[str] = mapped_column(String(64))
+    value_json: Mapped[str] = mapped_column(Text)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    updated_by: Mapped[int | None] = mapped_column(BigId, nullable=True)

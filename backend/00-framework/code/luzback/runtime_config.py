@@ -311,14 +311,10 @@ class PrepaidSettings(_Group):
 
 
 class WalletSettings(_Group):
-    split_policy: Literal["proportional", "principal_first"] = setting(
-        "proportional", "消费时本金与赠送金的扣减顺序", risk="high", owner="wallet", legacy_env="WALLET_SPLIT_POLICY")
     pay_timeout_minutes: int = setting(15, "充值待支付自动关闭（分钟）", ge=1, le=1_440, owner="wallet",
                                        legacy_env="WALLET_PAY_TIMEOUT_MINUTES")
     refund_requires_approval: bool = setting(True, "储值退款需要后台审批", risk="high", owner="wallet",
                                              legacy_env="WALLET_REFUND_REQUIRES_APPROVAL")
-    customer_refund_fee_bp: int = setting(0, "顾客原因退款的手续费（万分比）", ge=0, le=10_000, risk="high", owner="wallet",
-                                          legacy_env="WALLET_CUSTOMER_REFUND_FEE_BP")
     adjust_max_cents: int = setting(50_000, "后台单次手工调整余额上限（分）", ge=0, le=10_000_000, risk="high",
                                     owner="wallet", legacy_env="WALLET_ADJUST_MAX_CENTS")
     custom_amount_enabled: bool = setting(False, "允许顾客输入自定义充值金额", client_visible=True, owner="wallet",
@@ -346,8 +342,6 @@ class MemberCardSettings(_Group):
                                        owner="member_card", legacy_env="MEMBER_CARD_ADJUST_MAX_SESSIONS")
     adjust_max_days: int = setting(366, "后台单次手工调整有效期上限（天）", ge=1, le=3_650, risk="high",
                                    owner="member_card", legacy_env="MEMBER_CARD_ADJUST_MAX_DAYS")
-    replace_fee_cents: int = setting(0, "补卡工本费（分）", ge=0, le=100_000, risk="high", owner="member_card",
-                                     legacy_env="MEMBER_CARD_REPLACE_FEE_CENTS")
 
     @model_validator(mode="after")
     def _sorted_reminders(self) -> "MemberCardSettings":
@@ -358,11 +352,6 @@ class MemberCardSettings(_Group):
 
 
 class CouponSettings(_Group):
-    return_policy: Literal["never", "full_refund", "any_refund"] = setting(
-        "full_refund", "退款后是否退券：never 不退、full_refund 整单全额退款才退、any_refund 任何退款都退", risk="high",
-        owner="coupon", legacy_env="COUPON_RETURN_POLICY")
-    return_window_hours: int = setting(0, "退券只在下单后多少小时内（小时，0 = 只看券的有效期）", ge=0, le=8_760,
-                                       owner="coupon", legacy_env="COUPON_RETURN_WINDOW_HOURS")
     code_length: int = setting(12, "兑换码长度（位）", ge=8, le=32, owner="coupon", legacy_env="COUPON_CODE_LENGTH")
     code_max_failures: int = setting(5, "兑换码在窗口内输错几次后锁定", ge=1, le=100, risk="high", owner="coupon",
                                      legacy_env="COUPON_CODE_MAX_FAILURES")

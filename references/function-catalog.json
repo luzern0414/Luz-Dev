@@ -322,7 +322,7 @@
             },
             {
               "label": "核心逻辑",
-              "value": "按规则键、范围与周期合并本单数量；校验起售、单笔上限、周期件数与次数、新客与手机号；提交时会员与手机号两个主体都条件自增，新客另计每人一单。"
+              "value": "按规则键、范围与周期合并本单数量；校验起售、单笔上限、周期件数与次数、新客与手机号；提交时会员与手机号两个主体都条件自增，新客另计每人一单。超出部分按原价时先拆成活动价行与原价行，原价行不计名额。"
             },
             {
               "label": "接口与路由",
@@ -346,7 +346,7 @@
             },
             {
               "label": "复用提示",
-              "value": "超出限购后按原价购买属于活动价限量（17-campaign），不在购买规则里；会员等级与人群专享由会员模块给出资格。"
+              "value": "规则设“超出部分按原价”（over_limit = regular_price）时，超出限购的件数按原价拆行购买、不计名额；会员等级与人群专享由会员模块给出资格。"
             }
           ]
         },
@@ -2427,6 +2427,62 @@
             {
               "label": "复用提示",
               "value": "新键由开发在种子文件登记并写迁移；运营只能改已有键的文字与值。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "business",
+      "name": "经营设置",
+      "backendModule": "23-app-settings",
+      "status": "implemented",
+      "description": "商户日常调整的经营规则：业务模块登记、后台维护、保存即生效、写审计；与运行参数和前台文案分开。",
+      "sourceRefs": [
+        "references/module-specs/business.json",
+        "references/standards.json"
+      ],
+      "functions": [
+        {
+          "id": "business.admin-edit",
+          "name": "经营设置的登记、维护与读取",
+          "status": "implemented",
+          "rows": [
+            {
+              "label": "业务场景",
+              "value": "商户自己调整退款手续费、储值扣减顺序、退券策略、补卡费、起送价与配送费，不找开发、不发版。"
+            },
+            {
+              "label": "触发与输入",
+              "value": "后台 GET /api/v1/admin/settings；PUT /api/v1/admin/settings/{key}（store_id、value、version、reason）；POST …/{key}/reset。"
+            },
+            {
+              "label": "核心逻辑",
+              "value": "按登记的类型与范围校验；按版本条件更新；同事务写审计；业务代码 business_value 读门店值、全局值或默认值。"
+            },
+            {
+              "label": "接口与路由",
+              "value": "/api/v1/admin/settings*；业务模块经 luzback.business 登记与读取，不依赖 23-app-settings。"
+            },
+            {
+              "label": "数据与并发",
+              "value": "business_settings 全局与门店各自唯一（部分唯一索引）；version 条件更新。"
+            },
+            {
+              "label": "权限与安全",
+              "value": "settings:read / settings:write；高风险键要求重新验证身份；全局值只有全门店员工能改。"
+            },
+            {
+              "label": "状态与失败",
+              "value": "validation_failed、store_override_not_allowed、business_key_hidden、setting_conflict、reauth_required。"
+            },
+            {
+              "label": "验证与证据",
+              "value": "test_app_settings_business.py；储值退款试算按后台手续费计算的测试。"
+            },
+            {
+              "label": "复用提示",
+              "value": "新的经营规则在业务模块 config.py 登记；运行参数仍写配置文件，前台文案与展示用 content。"
             }
           ]
         }

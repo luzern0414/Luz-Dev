@@ -10,11 +10,15 @@
 - 新客专享：下单前查“此前是否有已支付（或保留中的）订单”，并在同一事务里给主体的 `newcomer` 计数行加 1 单（上限 1），
   同一个人并发提交两单新客商品也只成一单。
 - identity=member_phone 时同时按绑定手机号计数，一人多号也只能买到上限；未绑定手机号的不能购买。
+- over_limit=regular_price（超出部分按原价）：限购内的件数按活动价并计入名额，超出的件数按商品的原价
+  （regular_price_cents）照常购买、不计名额；次数用完或不符合新客时整行按原价。由 split_regular_price 在计价前拆行，
+  订单里同一商品出现活动价与原价两行（price_tier = promo / regular）。名额在提交时被别人先用掉时报价不再一致，
+  按“价格变化，请重新确认”处理。
 """
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -31,6 +35,7 @@ WINDOWS = ("all", "day", "week", "month")
 SCOPES = ("chain", "store")
 IDENTITIES = ("member", "member_phone")
 NEWCOMER_BASES = ("never_paid", "no_kept_order")
+OVER_LIMIT = ("block", "regular_price")
 NEWCOMER_KEY = "newcomer|all|all"
 
 
@@ -50,6 +55,7 @@ class PurchaseRule:
     new_customer_only: bool = False        # 新客专享
     new_customer_basis: str = "never_paid"  # never_paid 从未支付过订单；no_kept_order 没有保留中的订单（全额退款的不算）
     requires_phone: bool = False           # 需绑定手机号才能购买
+    over_limit: str = "block"              # block 超出不能买；regular_price 超出部分按原价买（需要商品给出原价）
 
     @property
     def counts(self) -> bool:
@@ -79,14 +85,18 @@ class PurchaseRule:
                    release_on_refund=bool(data.get("release_on_refund", True)),
                    new_customer_only=bool(data.get("new_customer_only", False)),
                    new_customer_basis=str(data.get("new_customer_basis") or "never_paid"),
-                   requires_phone=bool(data.get("requires_phone", False)))
+                   requires_phone=bool(data.get("requires_phone", False)),
+                   over_limit=str(data.get("over_limit") or "block"))
         bad = [name for name, value, allowed in (("window", rule.window, WINDOWS), ("scope", rule.scope, SCOPES),
                                                  ("identity", rule.identity, IDENTITIES),
-                                                 ("new_customer_basis", rule.new_customer_basis, NEWCOMER_BASES))
+                                                 ("new_customer_basis", rule.new_customer_basis, NEWCOMER_BASES),
+                                                 ("over_limit", rule.over_limit, OVER_LIMIT))
                if value not in allowed]
+        if rule.over_limit == "regular_price" and not (rule.limit_qty or rule.limit_orders or rule.new_customer_only):
+            bad.append("over_limit_without_limit")
         if rule.min_qty and rule.max_per_order and rule.min_qty > rule.max_per_order:
             bad.append("min_qty>max_per_order")
-        if rule.min_qty and rule.limit_qty and rule.min_qty > rule.limit_qty:
+        if rule.min_qty and rule.limit_qty and rule.min_qty > rule.limit_qty and rule.over_limit == "block":
             bad.append("min_qty>limit_qty")
         if bad:
             raise AppError(ErrorCode.BAD_REQUEST, "invalid purchase rule", data={"reason": "invalid_purchase_rule",
@@ -128,7 +138,8 @@ class Group:
     rule: PurchaseRule
     counter_key: str
     window_end_at: datetime | None
-    qty: int = 0
+    qty: int = 0                           # 本单该规则下的全部件数（起售与单笔上限按它）
+    counted_qty: int = 0                   # 计入名额的件数（超出部分按原价时只含活动价部分）
     product_ids: list[int] = field(default_factory=list)
     lines: list[Any] = field(default_factory=list, repr=False)
 
@@ -149,6 +160,8 @@ def group_lines(lines: list[Any], store_id: int | None, now: datetime, tz: str) 
             raise AppError(ErrorCode.BAD_REQUEST, "lines sharing a purchase rule key disagree",
                            data={"reason": "invalid_purchase_rule", "key": rule.key})
         group.qty += ln.qty
+        if getattr(ln, "counts_quota", True):
+            group.counted_qty += ln.qty
         group.product_ids.append(ln.product_id)
         group.lines.append(ln)
     return groups
@@ -201,24 +214,27 @@ def check(db: Session, user_id: int, phone_hash: str | None, groups: dict[str, G
         views[ck] = {**base, **rule.view(), "bought_qty": bought_qty, "bought_orders": bought_orders,
                      "remaining_qty": max(0, rule.limit_qty - bought_qty) if rule.limit_qty else None,
                      "remaining_orders": max(0, rule.limit_orders - bought_orders) if rule.limit_orders else None}
-        if rule.needs_phone and not phone_hash:
+        counted = g.counted_qty
+        if (rule.requires_phone or (rule.identity == "member_phone" and counted)) and not phone_hash:
             issues.append({**base, "reason": "phone_required"})
         if rule.min_qty and g.qty < rule.min_qty:
             issues.append({**base, "reason": "below_min_qty", "min_qty": rule.min_qty, "qty": g.qty})
         if rule.max_per_order and g.qty > rule.max_per_order:
             issues.append({**base, "reason": "over_order_limit", "max_per_order": rule.max_per_order, "qty": g.qty})
-        if rule.limit_qty and bought_qty + g.qty > rule.limit_qty:
+        if rule.limit_qty and counted and bought_qty + counted > rule.limit_qty:
             issues.append({**base, "reason": "purchase_limit", "limit": rule.limit_qty, "bought": bought_qty,
                            "remaining": max(0, rule.limit_qty - bought_qty)})
-        if rule.limit_orders and bought_orders + 1 > rule.limit_orders:
+        if rule.limit_orders and counted and bought_orders + 1 > rule.limit_orders:
             issues.append({**base, "reason": "purchase_times_limit", "limit": rule.limit_orders,
                            "bought_orders": bought_orders})
-        if rule.new_customer_only:
+        if rule.new_customer_only and counted:
             basis = rule.new_customer_basis
             if basis not in newcomer_checked:
                 newcomer_checked[basis] = _has_prior_order(db, user_id, phone_hash, basis)
             if newcomer_checked[basis]:
                 issues.append({**base, "reason": "new_customer_only"})
+        if g.qty > counted:
+            views[ck]["regular_qty"] = g.qty - counted
     return issues, views
 
 
@@ -263,15 +279,15 @@ def consume(db: Session, user_id: int, phone_hash: str | None, groups: dict[str,
         g = groups[ck]
         rule = g.rule
         subs = subjects(user_id, phone_hash, rule)
-        if rule.counts:
+        if rule.counts and g.counted_qty:
             for subject in sorted(subs):
-                if not _bump(db, subject, ck, g.qty, 1, rule.limit_qty, rule.limit_orders, g.window_end_at, now):
+                if not _bump(db, subject, ck, g.counted_qty, 1, rule.limit_qty, rule.limit_orders, g.window_end_at, now):
                     raise AppError(ErrorCode.LIMIT_REACHED, "purchase limit reached",
                                    data={"reason": "purchase_limit", "key": rule.key, "limit": rule.limit_qty,
                                          "limit_orders": rule.limit_orders})
-            records[ck] = {"key": ck, "subjects": subs, "qty": g.qty, "orders": 1,
+            records[ck] = {"key": ck, "subjects": subs, "qty": g.counted_qty, "orders": 1,
                            "refund_release": rule.release_on_refund}
-        if rule.new_customer_only:
+        if rule.new_customer_only and g.counted_qty:
             newcomer_subjects.update(subs)
     if newcomer_subjects:
         for subject in sorted(newcomer_subjects):
@@ -280,8 +296,69 @@ def consume(db: Session, user_id: int, phone_hash: str | None, groups: dict[str,
                                data={"reason": "new_customer_only"})
         records[NEWCOMER_KEY] = {"key": NEWCOMER_KEY, "subjects": sorted(newcomer_subjects), "qty": 0, "orders": 1,
                                  "refund_release": all(groups[ck].rule.release_on_refund for ck in groups
-                                                       if groups[ck].rule.new_customer_only)}
+                                                       if groups[ck].rule.new_customer_only and groups[ck].counted_qty)}
     return records
+
+
+def counter_key_of(rule: PurchaseRule, store_id: int | None, now: datetime, tz: str) -> tuple[str, datetime | None]:
+    scope = f"store:{store_id}" if rule.scope == "store" and store_id else "all"
+    wkey, wend = window_key(rule.window, now, tz)
+    return f"{rule.key}|{scope}|{wkey}", wend
+
+
+def _promo_remaining(db: Session, user_id: int, phone_hash: str | None, rule: PurchaseRule, counter_key: str,
+                     newcomer_cache: dict[str, bool]) -> int | None:
+    """本人还能按活动价买几件；None 表示件数不限（只限次数或只限新客时，符合就整行按活动价）。"""
+    if rule.identity == "member_phone" and not phone_hash:
+        return 0  # 核实不了是不是同一个人：按原价
+    subs = subjects(user_id, phone_hash, rule)
+    used = usage(db, [(s, counter_key) for s in subs] + [(s, NEWCOMER_KEY) for s in subs])
+    bought_qty = max(used.get((s, counter_key), (0, 0))[0] for s in subs)
+    bought_orders = max(used.get((s, counter_key), (0, 0))[1] for s in subs)
+    if rule.limit_orders and bought_orders >= rule.limit_orders:
+        return 0
+    if rule.new_customer_only:
+        basis = rule.new_customer_basis
+        if basis not in newcomer_cache:
+            newcomer_cache[basis] = (_has_prior_order(db, user_id, phone_hash, basis)
+                                     or any(used.get((s, NEWCOMER_KEY), (0, 0))[1] for s in subs))
+        if newcomer_cache[basis]:
+            return 0
+    if rule.limit_qty:
+        return max(0, rule.limit_qty - bought_qty)
+    return None
+
+
+def split_regular_price(db: Session, user_id: int, phone_hash: str | None, lines: list[Any], store_id: int | None,
+                        now: datetime, tz: str) -> list[Any]:
+    """超出部分按原价：把行拆成活动价部分（计入名额）与原价部分（不计名额）；其他行原样返回。"""
+    if not any(ln.rule is not None and ln.rule.over_limit == "regular_price" for ln in lines):
+        return lines
+    out: list[Any] = []
+    remaining: dict[str, int | None] = {}
+    newcomer_cache: dict[str, bool] = {}
+    for ln in lines:
+        rule = ln.rule
+        if rule is None or rule.over_limit != "regular_price":
+            out.append(ln)
+            continue
+        regular = ln.regular_price_cents
+        if not regular or regular <= ln.unit_price_cents:
+            raise AppError(ErrorCode.BAD_REQUEST, "regular price must be higher than the limited price",
+                           data={"reason": "invalid_purchase_rule", "key": rule.key, "fields": ["regular_price_cents"]})
+        ck, _ = counter_key_of(rule, store_id, now, tz)
+        if ck not in remaining:
+            remaining[ck] = _promo_remaining(db, user_id, phone_hash, rule, ck, newcomer_cache)
+        left = remaining[ck]
+        promo = ln.qty if left is None else min(ln.qty, left)
+        if left is not None:
+            remaining[ck] = left - promo
+        if promo:
+            out.append(replace(ln, qty=promo, price_tier="promo", counts_quota=True))
+        if ln.qty - promo:
+            out.append(replace(ln, qty=ln.qty - promo, unit_price_cents=regular, price_tier="regular",
+                               counts_quota=False))
+    return out
 
 
 def _decrement(db: Session, subject: str, counter_key: str, qty: int, orders: int) -> None:

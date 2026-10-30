@@ -622,3 +622,14 @@ def test_concurrent_partial_reverse_never_exceeds_consumed(tmp_path):
         acct = s.execute(select(WalletAccount).where(WalletAccount.user_id == 1)).scalar_one()
         assert acct.principal_cents + acct.bonus_cents == 900
         assert svc.ledger_matches_balance(s, 1)
+
+
+def test_refund_fee_and_split_policy_come_from_business_settings(db):
+    from luzback.testing import override_business  # noqa: PLC0415
+
+    batch_id = paid(db, amount=10000, bonus=0)
+    override_business(**{"wallet.customer_refund_fee_bp": 500})  # 后台把顾客原因退款手续费设为 5%
+    quote = svc.quote_refund(db, batch_id, "customer", user_id=1, at=T0 + timedelta(days=30))
+    assert quote["fee_cents"] == 500 and quote["refund_cents"] == 9500
+    override_business(**{"wallet.customer_refund_fee_bp": 0})
+    assert svc.quote_refund(db, batch_id, "customer", user_id=1, at=T0 + timedelta(days=30))["fee_cents"] == 0

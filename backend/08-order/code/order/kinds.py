@@ -45,6 +45,9 @@ class ResolvedLine:
     category_id: int | None = None
     limit_per_user: int | None = None      # 旧字段：不分周期的每人件数上限（= purchase_rule.limit_qty）
     purchase_rule: dict[str, Any] | None = None  # 购买规则（起售、单笔上限、周期限购、新客专享…，见 purchase.py）
+    regular_price_cents: int | None = None  # 原价：购买规则设“超出部分按原价”时，超出的件数按它计价
+    price_tier: str = ""                    # promo 限购内的活动价部分；regular 超出部分按原价；空表示没有拆分
+    counts_quota: bool = True               # 是否计入购买名额（原价部分不计）
     returnable: bool = True                # 是否适用七日无理由（法定除外商品由商品模块标记，购买时提示）
     stock_qty: int | None = None           # 当前可售（试算展示用；None 表示不限）
     snapshot: dict[str, Any] = field(default_factory=dict)
@@ -170,6 +173,7 @@ class GoodsKind(LineKind):
                             goods_kind=sku.get("goods_kind", GOODS_PHYSICAL), spec=sku.get("spec", ""),
                             image=sku.get("image", ""), category_id=sku.get("category_id"),
                             limit_per_user=sku.get("limit_per_user"), purchase_rule=sku.get("purchase_rule"),
+                            regular_price_cents=sku.get("regular_price_cents"),
                             returnable=sku.get("returnable", True), stock_qty=sku.get("stock"), snapshot={"sku": {k: v for k, v in sku.items() if k != "stock"}})
 
     @staticmethod
@@ -207,7 +211,8 @@ _service_catalog: ServiceCatalog | None = None
 
 
 def set_service_catalog(fn: ServiceCatalog | None) -> None:
-    """线下服务价目：fn(db, product_id, store_id) -> {name, price_cents, spec?, image?, purchase_rule?, returnable?} | None。"""
+    """线下服务价目：fn(db, product_id, store_id) -> {name, price_cents, regular_price_cents?, spec?, image?, purchase_rule?,
+    returnable?} | None。"""
     global _service_catalog
     _service_catalog = fn
 
@@ -227,6 +232,7 @@ class ServiceKind(LineKind):
                             goods_kind=data.get("goods_kind", GOODS_OFFLINE_SERVICE), spec=data.get("spec", ""),
                             image=data.get("image", ""), category_id=data.get("category_id"),
                             limit_per_user=data.get("limit_per_user"), purchase_rule=data.get("purchase_rule"),
+                            regular_price_cents=data.get("regular_price_cents"),
                             returnable=data.get("returnable", True), snapshot={"service": data})
 
 

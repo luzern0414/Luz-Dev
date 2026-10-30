@@ -1,4 +1,4 @@
-# 模块：23-app-settings（运行配置接口与加载记录 + 文案与展示配置）`app_settings`
+# 模块：23-app-settings（运行配置接口与加载记录 + 文案与展示配置 + 经营设置）`app_settings`
 
 | 项 | 内容 |
 |---|---|
@@ -6,7 +6,7 @@
 | 代码 | `23-app-settings/code/app_settings/`，测试 `23-app-settings/code/tests/`，文案种子 `23-app-settings/seed/texts.toml` |
 | 依赖 | 00-framework（`luzback.runtime_config` 字段说明、`luzback.runtime_loader` 加载器与热加载）、22-admin-rbac（后台权限 `settings:read` / `settings:write`、门店范围） |
 | 装配 | 基础设施：不受 `LUZ_FEATURES` 影响，总是装配（`app.py` 与 `jobs` 的 `ALWAYS_ON`） |
-| 详设 | 模块详设 config（`references/module-specs/config.json`）、content（`references/module-specs/content.json`）；规范 `references/config-logging.md` §2 |
+| 详设 | 模块详设 config（`references/module-specs/config.json`）、content（`references/module-specs/content.json`）、business（`references/module-specs/business.json`）；规范 `references/config-logging.md` §1、§2 |
 
 ## 0 官方来源
 
@@ -19,18 +19,19 @@
 
 ## 1 职责与边界
 
-三类东西分开放，判断口径：这个值要不要商户运营日常自己改？
+四类东西分开放，判断口径：这个值要不要商户运营日常自己改？
 
 | 类别 | 例子 | 放在哪 | 谁改 | 怎么生效 | 后台展示 |
 |---|---|---|---|---|---|
 | 运行参数 | 超时、请求体与上传上限、限流阈值、熔断、认证时间窗、功能开关、最低可用版本、日志级别 | `backend/config/runtime/*.toml`，字段说明 `luzback/runtime_config.py` | 开发，经代码评审 | 服务端热加载；客户端经 `GET /api/v1/app/config` 拉可见的键 | 不展示（用户 2026-10-29 决定） |
 | 文案与展示 | 提示、空状态、须知、按钮旁说明；首页模块顺序、展示开关、标签名称、数量上限 | 数据库 `ui_texts`、`display_settings` | 运营，在后台“文案与展示”页 | 保存即生效，内容版本加一；小程序下次显示页面时换新 | 展示（只列 `admin_visible` 的键） |
 | 隐藏的文案与展示键 | 通用控件词、系统级提示、法规固定文字、技术性展示配置 | 同上，`admin_visible = false` | 开发：文案改种子 `seed/texts.toml`，展示键改 `display.py` 登记的默认值 | 发布时 `python -m app_settings sync` 写入；照常下发小程序 | 不展示，后台接口返回 `content_key_hidden` |
+| 经营设置 | 退款手续费、储值扣减顺序、退券策略、补卡费；项目的起送价、配送费、包装费等 | 数据库 `business_settings`；键由各业务模块用 `luzback.business` 登记 | 运营，在后台“经营设置”页 | 保存即生效，写审计；高风险键要求重新验证身份 | 是（`admin_visible = false` 的除外） |
 
 | 负责 | 不负责 |
 |---|---|
 | `/internal/config`、`/internal/config/reload`、`/api/v1/app/config`、`config_loads` 加载记录 | 字段说明、文件加载、校验、版本、覆盖规则、热加载与目录监听（框架 `luzback.runtime_config` / `runtime_loader`） |
-| 文案库、展示设置、修改历史与恢复、小程序拉取 `/api/v1/app/content` | 门店经营设置（营业时间、起送价、配送费：门店模块的 `store_settings` 与 `/api/v1/admin/settings`） |
+| 文案库、展示设置、修改历史与恢复、小程序拉取 `/api/v1/app/content`；经营设置的存储与后台维护 `/api/v1/admin/settings` | 门店资料与营业时间（门店模块）；经营设置各键的含义与用法（登记它的业务模块dmin/settings`） |
 | 文案种子校验与同步 | 运营内容（公告、横幅、券、奖品：各自模块） |
 | 内容安全检测钩子 `set_text_checker` | 具体的检测服务 |
 
@@ -44,8 +45,9 @@
 | `ui_texts` | key（`页面.位置`）、page、slot_label、text（空 = 默认文案）、default_text、max_length、variables_json、allow_empty、admin_visible、sort_order、version、updated_by、created_at、updated_at | `UNIQUE(key)`、`(page, sort_order)` | 默认文案与安装包内置值一致 |
 | `display_settings` | store_id（空 = 全局）、key、value_json、admin_visible、version、updated_by、created_at、updated_at | 部分唯一索引 `(key) WHERE store_id IS NULL` + `(store_id, key) WHERE store_id IS NOT NULL`（等价 `UNIQUE(store_id, key) NULLS NOT DISTINCT`） | 没有行时用 `display.py` 登记的默认值；admin_visible 写入时取登记值 |
 | `content_revisions` | target_type（text / display）、target_key、store_id、old_value_json、new_value_json、changed_by、source（admin / migration / restore）、created_at | `(target_type, target_key, created_at)` | 只追加；id 即内容版本 |
+| `business_settings` | store_id（空 = 全局）、key、value_json、version、updated_by、created_at、updated_at | 部分唯一索引 `(key) WHERE store_id IS NULL` + `(store_id, key) WHERE store_id IS NOT NULL` | 经营设置；没有行时用登记的默认值；修改写审计，不进内容版本 |
 
-迁移：`alembic/versions/0002_config_content.py`（只新增表与可空列，属于 expand 迁移；同时给 `outbox_events` 加 `traceparent`、`trace_id`）。
+迁移：`alembic/versions/0002_config_content.py`（只新增表与可空列，属于 expand 迁移；同时给 `outbox_events` 加 `traceparent`、`trace_id`）；`0004_business_settings.py`（经营设置）。
 
 ## 3 运行配置（框架实现，本模块提供接口与记录）
 
@@ -74,6 +76,15 @@
 9. 文案对全部门店生效，只有全门店员工能改（门店员工 4031）；展示设置的门店值按员工门店范围校验。
 10. 种子同步幂等：新增、更新元数据、删除种子里没有的键；隐藏键不保留自定义文案；新上限或变量容纳不下的自定义文案回到默认并记日志；生效文案变化的键各写一条 `source = migration` 的修改记录。
 
+## 4.1 经营设置规则
+
+1. 键为 `模块.名称`（≤ 64 字），由业务模块在导入时 `declare_business_settings(BusinessSetting(...))` 登记：类型（bool / int / choice）、默认值、单位、范围或选项（带中文名）、能否按门店覆盖、风险级别、是否后台可见；默认值登记时也校验。
+2. 生效值：登记的默认值 < 全局值 < 门店值（只对 `store_scope` 的键）；库里的值不合法时用默认值（后台保存时已校验）。
+3. 修改按 version 条件更新（这一级还没有值时为 0），冲突返回 `setting_conflict`（4090）并附最新值；值不合法返回 `validation_failed`；不能按门店的键带了门店返回 `store_override_not_allowed`；隐藏键返回 `business_key_hidden`（4030）。
+4. 高风险键（影响资金：扣减顺序、手续费、退券、补卡费）修改与恢复默认要求最近完成过完整认证（4011 `reauth_required`），并填写原因写进审计。
+5. 每次修改、恢复默认同事务写审计（`business.setting.update / reset`，修改前后的值、门店、原因），记 `business.setting_updated` 日志；只影响之后发生的业务（已生成的退款单、已核销的券按当时的规则）。
+6. 全局值只有全门店员工能改；门店值按员工门店范围校验。
+
 ## 5 关键流程
 
 | 流程 | 步骤 | 失败分支 |
@@ -100,7 +111,9 @@
 | GET | `/api/v1/admin/content/revisions` | 后台 | — | `settings:read` | no | 只含后台可见的键；筛选 `key`、`target_type`、`store_id`、`source`、`created_at`；门店员工只看全局与本门店 |
 | POST | `/api/v1/admin/content/revisions/{id}/restore` | 后台（门店范围） | 必填 | `settings:write` | no | `version`（目标当前版本）；撤销那次修改，生成新版本 |
 
-`/api/v1/admin/settings` 是门店模块的经营设置，不在本模块。
+| GET | `/api/v1/admin/settings` | 后台 | — | `settings:read` | no | `store_id` 可选；只列后台可见的经营设置，按模块分组：说明、单位、范围或选项、默认值、全局值、门店值、生效值与来源、这一级的版本 |
+| PUT | `/api/v1/admin/settings/{key}` | 后台（门店范围；高风险键要求重新验证） | 必填 | `settings:write` | no | `store_id`、`value`、`version`、`reason`；错误 `validation_failed`、`store_override_not_allowed`、`business_key_hidden`、`setting_conflict`、`reauth_required` |
+| POST | `/api/v1/admin/settings/{key}/reset` | 同上 | 必填 | `settings:write` | no | 全局：恢复登记的默认值；门店：取消门店覆盖 |
 
 ## 7 事件
 

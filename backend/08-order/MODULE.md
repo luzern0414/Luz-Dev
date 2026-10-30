@@ -56,7 +56,7 @@
 1. 价格只来自服务端：行种类 `resolve` 取价（goods → SKU，service → 价目提供者，member_card → 卡种）；请求体里的价格字段一律忽略。
 2. 试算顺序：活动（`set_promotions_provider` 返回 `pricing.Promotion`）→ 券（16 在活动后金额上计算，门槛按活动后金额）→ 每项优惠只在适用行之间按金额比例、最大余数法分摊；行实付 = 原价 − 活动 − 券。
 3. 试算不因券不可用失败：返回 `coupon_error`（原因：below_threshold / expired / not_started / no_scope_items / campaign_conflict / stack_conflict …）并按无券计价；同时列出可用 / 不可用券及原因、推荐券。
-4. 试算返回 `quote_token`（`[order] quote_ttl_seconds`，默认 600 秒）；库存不足与购买规则问题写入 `issues`，同时返回 `purchase_rules`（规则、已购、剩余），`submittable=false`。购买规则见 `references/patterns/purchase-rules.md`：商品数据里的 `purchase_rule`（旧字段 `limit_per_user` 等于不分周期的件数上限）。
+4. 试算返回 `quote_token`（`[order] quote_ttl_seconds`，默认 600 秒）；库存不足与购买规则问题写入 `issues`，同时返回 `purchase_rules`（规则、已购、剩余），`submittable=false`。购买规则见 `references/patterns/purchase-rules.md`：商品数据里的 `purchase_rule`（旧字段 `limit_per_user` 等于不分周期的件数上限）。规则设 `over_limit = regular_price` 时，超出限购的件数按商品的 `regular_price_cents` 拆成原价行（`price_tier = regular`，不计名额，不报限购问题），次数用完或不符合新客时整行按原价；名额被别人先用掉时报价不再一致，按价格变化重新确认。
 5. 下单必须带本人未过期的报价令牌；服务端重新计价，任何一行单价 / 数量 / 实付或券集合变化 → 4223 `price_changed`；令牌过期 / 不存在 → 4223；已用 → 4090 `quote_used`（条件 UPDATE `used_at IS NULL`，同一报价并发只成一单）。
 6. 购买条款：`terms_accepted` 必须为 true，客户端版本与 `[order] terms_version` 不一致 → 4220 `terms_outdated`；订单记录生效版本与同意时间（可换成 27-legal 的同意记录：`set_terms_checker`）。
 7. 下单同一事务：写订单与行快照 → 购买规则校验并计入名额（`purchase.consume`：起售、单笔上限、件数与次数按周期条件自增、新客计数行，超出 4225，行快照记下计入的计数键）→ 行种类 `reserve`（实物：07 预占，ref = `order:{id}`，按 sku_id 升序）→ 锁券（16 lock，同券并发只成一单）→ 状态日志 → `order.created`。任一步失败整单回滚。
