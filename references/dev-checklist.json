@@ -49,7 +49,9 @@
         ["COD-05", "密钥与部署参数", "秘密由编排挂载成文件读取，部署参数来自环境变量；生产启动时拒绝开发默认值；仓库、镜像与前端包中没有密钥", "Settings.assert_production_safe、秘密扫描", "luzback.config"],
         ["COD-06", "审计", "后台写操作与敏感查看同事务写审计（操作人、对象、前后值、IP）", "审计测试", "luzback.audit"],
         ["COD-07", "运行配置文件", "运行参数写在 config/runtime/*.toml，字段说明登记类型、范围、单位、能否热加载与是否下发；未登记的键报错；热加载整份替换快照，失败保留旧配置；不做后台配置页", "配置校验与热加载测试", "references/config-logging.md §2"],
-        ["COD-08", "日志写法", "统一字段与事件名；预期内失败不记 ERROR；同一异常只记一次；格式化前脱敏并转义控制字符；队列写入不阻塞；传播 traceparent", "日志单元测试与抽查", "references/config-logging.md §3"]
+        ["COD-08", "日志写法", "统一字段与事件名；预期内失败不记 ERROR；同一异常只记一次；格式化前脱敏并转义控制字符；队列写入不阻塞；传播 traceparent", "日志单元测试与抽查", "references/config-logging.md §3"],
+        ["COD-09", "购买规则", "起售、单笔上限、周期限购、只能买一次、新客专享、超出部分按原价写在商品或活动的 purchase_rule，由后台维护；订单同事务条件自增计数，取消回原周期，退款按规则退回", "test_order_purchase_rules.py 与并发测试", "references/patterns/purchase-rules.md"],
+        ["COD-10", "经营设置", "退款手续费、扣减顺序、退券策略、补卡费、起送价等经营规则用 luzback.business 登记，后台 /api/v1/admin/settings 维护并审计；高风险键要求重新验证；业务读到的值写进单据；不放运行配置文件", "test_app_settings_business.py", "references/module-specs/business.json"]
       ]
     },
     {
