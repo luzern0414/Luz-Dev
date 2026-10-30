@@ -101,6 +101,15 @@
       "last_confirmed": "2026-10-28"
     },
     {
+      "key": "purchase-rules",
+      "kind": "preference",
+      "text": "购买规则跟着商品或活动走、后台维护：起售、单笔上限、周期件数与次数限购、共享键、门店范围、手机号维度、新客专享、退款退回；订单模块下单同事务条件自增计数（order_purchase_quotas），行快照记计数键，取消回原周期（patterns/purchase-rules.md，ORDER-011/012、MKT-006）",
+      "why": "用户 2026-10-30：补充业务逻辑，比如限购只能购买一次的配置，认真思考，认真补充相关的系统设计逻辑",
+      "uses": 1,
+      "first_seen": "2026-10-30",
+      "last_confirmed": "2026-10-30"
+    },
+    {
       "key": "reading-page-check-document",
       "kind": "preference",
       "text": "方案页、规范页和知识库页按 Luz Design 阅读页规则生成，标题在首行、无应用外壳、字号只用 14/16/20/24/32，并通过 Luz Design 的 check_document.py，有 ERROR 不能提交。",
