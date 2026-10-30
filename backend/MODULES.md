@@ -73,7 +73,7 @@
 - **文档**：[MODULE.md](07-inventory/MODULE.md)
 
 ### 08-order 订单 `order` — 标准
-- **覆盖**：服务端报价（活动 + 券）、下单预占、支付钩子成交、履约 / 发货（微信发货信息录入）、自动完成、超时关单、退款额度与结算（供售后）、后台列表导出备注关单。
+- **覆盖**：服务端报价（活动 + 券）、购买规则（起售、单笔上限、按日 / 周 / 月或不分周期的件数与次数限购、共享限额、门店范围、手机号维度、新客专享、退款退回名额，`purchase.py`）、下单预占、支付钩子成交、履约 / 发货（微信发货信息录入）、自动完成、超时关单、退款额度与结算（供售后）、后台列表导出备注关单。
 - **规则**：① 价格只来自服务端，报价令牌 600 秒；② 行种类（实物 / 线下服务 / 会员卡）经 `register_line_kind` 扩展，各自 reserve / fulfil / refund_cap / on_refunded；③ 支付成功钩子在 09 的事务内核对金额与付款人后 `pending_payment → paid`，核销券、确认预占、即时交付行直接 `fulfilled`；④ 超时关单先查支付再关（经 09）并释放库存与券；⑤ 退款额度按累计公式分摊、条件 UPDATE 保证不超实付；余额支付可部分退（`refund_balance(db, order_id, [(item_id, amount)], ref)` → `wallet.reverse` 部分冲回）；⑥ 购买条款由 27-legal 检查。
 - **事件**：发 `order.created` `order.paid` `order.fulfilling` `order.fulfilled` `order.completed` `order.cancelled` `order.refunded`；收 `payment.succeeded`（兜底成交）。
 - **权限码**：`order:read` `order:export` `order:remark` `order:close` `order:fulfil`。

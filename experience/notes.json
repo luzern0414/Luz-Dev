@@ -248,6 +248,15 @@
       }
     },
     {
+      "key": "prod-data-cleanup-transaction",
+      "kind": "lesson",
+      "text": "删除生产数据：先可恢复备份，只读清点全部外键引用与流水和余额一致性，按明确ID清单写单事务脚本，每步ROW_COUNT与清点数比对、不一致时用必然报错的子查询让会话中断回滚，先以ROLLBACK演练再COMMIT，事后核对余额与流水一致、无悬空引用",
+      "why": "清除生产余额支付与后台充值测试数据",
+      "uses": 1,
+      "first_seen": "2026-10-30",
+      "last_confirmed": "2026-10-30"
+    },
+    {
       "key": "revise-before-fix-in-e2e",
       "kind": "lesson",
       "text": "真实链路验证中发现的缺陷也要先修订方案并经用户确认，再改代码和推送；不要先推送再补修订",

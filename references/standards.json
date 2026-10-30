@@ -1368,6 +1368,84 @@
       ]
     },
     {
+      "id": "ORDER-011",
+      "domain": "order",
+      "level": "MUST",
+      "platforms": [
+        "miniprogram",
+        "mobile",
+        "backend"
+      ],
+      "modules": [
+        "order",
+        "catalog",
+        "campaign"
+      ],
+      "title": "购买规则在服务端校验，名额与订单同事务原子计数",
+      "rule": "起售、单笔上限、每人限购件数与次数（不分周期、每日、每周、每月）、统计范围（全部门店或按门店）、共享限额、新客专享、需绑定手机号由服务端在试算与提交时校验；名额在提交时计入（含待支付），用唯一计数行加条件自增（件数 + n ≤ 上限、单数 + 1 ≤ 上限）与订单同一事务，不满足返回 4225 与稳定的原因代码。周期按门店时区计算，订单行快照记下计入的计数键，取消与关单退回到原来的周期。前端的步进器上限与按钮置灰只是提示。",
+      "why": "只在前端限制或先查后写时，并发提交、多端下单和旧页面都能买超；跨天取消若退回到当天会多出额度。",
+      "do": [
+        "商品页用 purchase-status 显示已购与剩余",
+        "同一单里共用一个计数键的行先合并再计",
+        "规则写在商品或活动上，由后台维护并审计"
+      ],
+      "dont": [
+        "用“查已购数量再插订单”判断限购",
+        "把限购写死在代码或运行配置文件里",
+        "用支付时间而不是下单时间决定计入哪个周期"
+      ],
+      "verify": [
+        "限购 3 件 12 线程并发只成 3 单",
+        "只能买一次 10 线程并发只成 1 单",
+        "昨天的单今天取消退回昨天的周期"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 购买规则模式",
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/patterns/purchase-rules.md"
+        },
+        {
+          "title": "Luz Dev · 08-order 购买规则参考代码",
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/backend/08-order/code/order/purchase.py"
+        }
+      ]
+    },
+    {
+      "id": "ORDER-012",
+      "domain": "order",
+      "level": "MUST",
+      "platforms": [
+        "backend"
+      ],
+      "modules": [
+        "order",
+        "refund"
+      ],
+      "title": "名额的退回规则明确：取消退回、退款按规则、改规则不追溯",
+      "rule": "取消与超时关单原数退回件数与次数；退款成功时规则允许才退回（件数按退款件数，次数在该计数键的行全部退完时）；“退款后不退回名额”用于新人福利与一次性体验类，防止买了退、退了再买。改规则只影响之后的订单，调低上限不追溯已下的单；客服调整计数需要权限、原因并写审计。",
+      "why": "退回规则不清会出现退款后买不了、或者反复退款刷优惠两种相反的问题。",
+      "do": [
+        "部分退款只退回已退件数",
+        "换货与补发不计名额"
+      ],
+      "dont": [
+        "直接改计数表"
+      ],
+      "verify": [
+        "规则允许时全额退款后可再买，不允许时仍被拒"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 购买规则模式",
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/patterns/purchase-rules.md"
+        },
+        {
+          "title": "Luz Dev · 08-order 购买规则参考代码",
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/backend/08-order/code/order/purchase.py"
+        }
+      ]
+    },
+    {
       "id": "RSV-001",
       "domain": "booking",
       "level": "MUST",
@@ -2507,6 +2585,42 @@
         {
           "title": "Luz Dev 模式库 · 优惠券",
           "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/patterns/coupon.md"
+        }
+      ]
+    },
+    {
+      "id": "MKT-006",
+      "domain": "mkt",
+      "level": "MUST",
+      "platforms": [
+        "miniprogram",
+        "backend"
+      ],
+      "modules": [
+        "order",
+        "campaign"
+      ],
+      "title": "新客专享与一人一次的福利防一人多号",
+      "rule": "新客专享写明口径（从未支付过订单，或没有保留中的订单）；同一个人的新客单在事务里每人只成一单（首单待支付时也不能再下）。福利只能买一次时按会员与绑定手机号两个主体计数，未绑定手机号的不能买；更严的场景再加微信开放平台统一标识。前台写清资格与口径，不能等付款时才说不符合。",
+      "why": "按会员编号计数时，换号、注销重注册就能重复领取新人价，商家的营销预算被刷走。",
+      "do": [
+        "商品页提前显示“新人专享”与本人是否符合"
+      ],
+      "dont": [
+        "只用设备标识判断新客"
+      ],
+      "verify": [
+        "同一手机号的第二个账号被拒",
+        "新客商品并发提交只成一单"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 购买规则模式",
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/patterns/purchase-rules.md"
+        },
+        {
+          "title": "Luz Dev · 08-order 购买规则参考代码",
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/backend/08-order/code/order/purchase.py"
         }
       ]
     },
@@ -6776,6 +6890,21 @@
       "acceptance": "设计已批准且未改动；操作与页面覆盖 100%；无模拟数据。"
     },
     {
+      "id": "BL-MP-21",
+      "projectType": "miniprogram",
+      "feature": "购买规则提示（起售、限购、新客专享）",
+      "requirement": "conditional",
+      "condition": "有起售、限购、只能买一次或新客专享的商品",
+      "modules": [
+        "order"
+      ],
+      "rules": [
+        "ORDER-011",
+        "MKT-006"
+      ],
+      "acceptance": "商品页显示规则与本人剩余；步进器不超过剩余；已达上限时按钮写明原因；结算页逐条列出不满足的规则与出路。"
+    },
+    {
       "id": "BL-AD-15",
       "projectType": "admin",
       "feature": "接入已批准的 Luz System 设计并通过覆盖检查",
@@ -6804,6 +6933,22 @@
         "LEGAL-002"
       ],
       "acceptance": "新建、发布协议版本写审计；可按用户查询同意记录。"
+    },
+    {
+      "id": "BL-AD-18",
+      "projectType": "admin",
+      "feature": "商品与活动的购买规则设置",
+      "requirement": "conditional",
+      "condition": "有起售、限购、只能买一次或新客专享的商品",
+      "modules": [
+        "catalog",
+        "order"
+      ],
+      "rules": [
+        "ORDER-011",
+        "ORDER-012"
+      ],
+      "acceptance": "商品或活动编辑页可设起售、单笔上限、周期限购件数与次数、范围、共享键、身份维度、退款是否退回、新客专享；保存即生效并审计；可按会员查看计数并在授权下调整。"
     },
     {
       "id": "BL-BE-11",

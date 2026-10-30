@@ -16,6 +16,7 @@ Luz Dev 后端开发的业务逻辑参考。每篇写清：方案对比与默认
 | [jobs.md](jobs.md) | 定时 / 延迟任务、单实例、幂等、分批 | `08-order/jobs.py` | 5 |
 | [cache.md](cache.md) | 缓存读写模式、穿透 / 击穿 / 雪崩 | — | 清单 |
 | [catalog-cart.md](catalog-cart.md) | SPU / SKU、改价、上下架、购物车合并与失效 | — | 清单 |
+| [purchase-rules.md](purchase-rules.md) | 起售、单笔上限、周期限购（件数 / 次数）、只能买一次、共享限额、门店范围、一人多号、新客专享、退款退回名额 | `08-order/purchase.py` | 12 |
 | [multi-store.md](multi-store.md) | 多门店 / 多租户数据隔离 | `22-admin-rbac` | 清单 |
 | [access-control.md](access-control.md) | 无人值守场馆的入场判定、在场管理、设备指令与回执 | — | 清单 |
 

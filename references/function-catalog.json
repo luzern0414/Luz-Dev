@@ -216,8 +216,9 @@
       "status": "implemented",
       "description": "报价、下单、状态机、取消、售后入口。",
       "sourceRefs": [
+        "backend/08-order/MODULE.md",
         "backend/SPEC.md",
-        "backend/08-order/MODULE.md"
+        "references/patterns/purchase-rules.md"
       ],
       "functions": [
         {
@@ -303,6 +304,49 @@
             {
               "label": "复用提示",
               "value": "下单事务清单可作为预约、充值、会员购买等“创建业务单 + 锁定权益”的参考。"
+            }
+          ]
+        },
+        {
+          "id": "order.purchase-rules",
+          "name": "购买规则（起售、限购与资格）",
+          "status": "implemented",
+          "rows": [
+            {
+              "label": "业务场景",
+              "value": "体验课“每人限购 1 次”、新品“每日限购 2 件”、套餐“2 件起售”、新人价“新客专享”、同一活动几件商品“每人共限 3 件”。"
+            },
+            {
+              "label": "触发与输入",
+              "value": "商品页 POST /api/v1/app/orders/purchase-status；试算 POST /api/v1/app/orders/preview；提交 POST /api/v1/app/orders。规则来自商品或活动的 purchase_rule。"
+            },
+            {
+              "label": "核心逻辑",
+              "value": "按规则键、范围与周期合并本单数量；校验起售、单笔上限、周期件数与次数、新客与手机号；提交时会员与手机号两个主体都条件自增，新客另计每人一单。"
+            },
+            {
+              "label": "接口与路由",
+              "value": "POST /api/v1/app/orders/purchase-status；预览返回 purchase_rules 与 issues；不满足返回 4225 与 data.reason。"
+            },
+            {
+              "label": "数据与并发",
+              "value": "order_purchase_quotas 唯一 (subject, counter_key)，条件自增；行快照记计入的计数键，取消回原周期；周期结束 7 天后定时删除。"
+            },
+            {
+              "label": "权限与安全",
+              "value": "规则在后台商品或活动编辑页维护并审计；客服调整计数需要权限与原因。"
+            },
+            {
+              "label": "状态与失败",
+              "value": "below_min_qty、over_order_limit、purchase_limit、purchase_times_limit、new_customer_only、phone_required；前台按代码取文案键并给出出路。"
+            },
+            {
+              "label": "验证与证据",
+              "value": "test_order_purchase_rules.py 与并发测试：限购 3 件 12 线程只成 3 单，只能买一次与新客专享 10 线程只成 1 单。"
+            },
+            {
+              "label": "复用提示",
+              "value": "超出限购后按原价购买属于活动价限量（17-campaign），不在购买规则里；会员等级与人群专享由会员模块给出资格。"
             }
           ]
         },

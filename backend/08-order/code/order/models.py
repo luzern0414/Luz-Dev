@@ -5,7 +5,7 @@
   退款额度计数 `refund_reserved_*`（申请占用）与 `refunded_*`（已退）只由本模块的条件 UPDATE 修改。
 - `order_status_logs`：每次状态变化一行（只追加）。
 - `order_quotes`：试算结果（quote_token，过期时间，一次性使用）。
-- `order_purchase_counters`：每人限购计数（唯一 (user_id, product_key)，条件自增）。
+- `order_purchase_quotas`：购买规则计数（唯一 (subject, counter_key)，条件自增；见 purchase.py）。
 - `order_notes`：后台备注（只对员工可见）。
 """
 from __future__ import annotations
@@ -130,13 +130,18 @@ class OrderQuote(Base, BigIdMixin):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class PurchaseCounter(Base, BigIdMixin):
-    __tablename__ = "order_purchase_counters"
-    __table_args__ = (UniqueConstraint("user_id", "product_key", name="uq_order_purchase_counters_user_product"),)
+class PurchaseQuota(Base, BigIdMixin):
+    __tablename__ = "order_purchase_quotas"
+    __table_args__ = (
+        UniqueConstraint("subject", "counter_key", name="uq_order_purchase_quotas_subject_key"),
+        Index("ix_order_purchase_quotas_window_end", "window_end_at"),
+    )
 
-    user_id: Mapped[int] = mapped_column(BigId)
-    product_key: Mapped[str] = mapped_column(String(64))   # kind:product_id
-    qty: Mapped[int] = mapped_column(Integer, default=0)
+    subject: Mapped[str] = mapped_column(String(80))          # user:<会员> 或 phone:<手机号哈希>
+    counter_key: Mapped[str] = mapped_column(String(160))     # <规则键>|<all 或 store:<门店>>|<周期键>
+    qty: Mapped[int] = mapped_column(Integer, default=0)      # 已计入件数（含待支付）
+    orders: Mapped[int] = mapped_column(Integer, default=0)   # 已计入单数（含待支付）
+    window_end_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 

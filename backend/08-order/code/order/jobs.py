@@ -29,8 +29,17 @@ def shipping_sync_job(db: Session) -> int:
     return service.shipping_sync(db)
 
 
+def purge_purchase_quotas_job(db: Session) -> int:
+    from datetime import datetime, timezone  # noqa: PLC0415
+
+    from . import purchase  # noqa: PLC0415
+
+    return purchase.purge(db, datetime.now(timezone.utc))
+
+
 JOBS = (
     Job("order.close_expired", interval_seconds=60, fn=close_expired_job, lock_ttl=55),
     Job("order.auto_complete", interval_seconds=3600, fn=auto_complete_job, lock_ttl=600),
     Job("order.shipping_sync", interval_seconds=300, fn=shipping_sync_job, lock_ttl=280),
+    Job("order.purge_purchase_quotas", interval_seconds=86400, fn=purge_purchase_quotas_job, lock_ttl=600),
 )

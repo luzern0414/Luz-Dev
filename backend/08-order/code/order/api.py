@@ -77,6 +77,12 @@ def preview(body: PreviewIn, user_id: int = Depends(current_user), db: Session =
     return ok(result)
 
 
+@app_router.post("/purchase-status")
+def purchase_status(body: PreviewIn, user_id: int = Depends(current_user), db: Session = Depends(get_db)):
+    """购买规则与本人已购、剩余（商品页显示“每日限购 2 件，今日还可买 1 件”，步进器上限取剩余数）。"""
+    return ok(service.purchase_status(db, user_id, body.model_dump()))
+
+
 @app_router.post("")
 def submit(body: SubmitIn, user_id: int = Depends(current_user), db: Session = Depends(get_db),
            key: str = Depends(idempotency_key)):

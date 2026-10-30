@@ -76,7 +76,7 @@ def test_purchase_limit_under_concurrency(filedb):
     results = run(12, lambda s, i: order.submit(s, 7, {"quote_token": tokens[i], "terms_accepted": True}, now))
     assert len([r for r in results if isinstance(r, dict)]) == 3
     filedb.expire_all()
-    assert filedb.scalar(select(order.PurchaseCounter.qty)) == 3
+    assert filedb.scalar(select(order.PurchaseQuota.qty)) == 3
 
 
 def test_refund_reservation_never_exceeds_paid(filedb):
@@ -91,3 +91,19 @@ def test_refund_reservation_never_exceeds_paid(filedb):
     item = filedb.get(order.OrderItem, item.id)
     o = filedb.get(order.Order, placed["order_id"])
     assert item.refund_reserved_qty == 50 and item.refund_reserved_cents == 5000 == o.refund_reserved_cents == o.paid_cents
+
+
+def test_buy_once_and_new_customer_hold_under_concurrency(filedb):
+    order.set_service_catalog(lambda db, pid, store: {"name": f"体验{pid}", "price_cents": 100,
+                                                     "purchase_rule": {"limit_orders": 1} if pid == 1 else
+                                                     {"new_customer_only": True}})
+    now = utcnow()
+    for pid in (1, 2):
+        tokens = []
+        for _ in range(10):
+            body = {"items": [{"kind": "service", "product_id": pid, "qty": 1}]}
+            tokens.append(order.preview(filedb, 7, body, now)["quote_token"])
+            filedb.commit()
+        results = run(10, lambda s, i: order.submit(s, 7, {"quote_token": tokens[i], "terms_accepted": True}, now))
+        assert len([r for r in results if isinstance(r, dict)]) == 1  # 只能买一次 / 新客专享：并发只成一单
+        assert all(r.code == 4225 for r in results if isinstance(r, AppError))

@@ -60,3 +60,18 @@ def test_upgrade_check_downgrade_upgrade_and_seed(tmp_path):
         assert conn.execute("select count(*) from content_revisions").fetchone()[0] >= 1
         columns = {r[1] for r in conn.execute("pragma table_info(outbox_events)")}
     assert {"traceparent", "trace_id"} <= columns
+
+
+def test_purchase_counters_are_carried_into_quotas(tmp_path):
+    db = tmp_path / "quota.db"
+    _ok(_run(["-m", "alembic", "upgrade", "0002_config_content"], db))
+    with sqlite3.connect(db) as conn:
+        conn.execute("insert into order_purchase_counters (user_id, product_key, qty, updated_at) "
+                     "values (7, 'service:5', 2, '2026-10-29 10:00:00')")
+    _ok(_run(["-m", "alembic", "upgrade", "head"], db))
+    with sqlite3.connect(db) as conn:
+        rows = conn.execute("select subject, counter_key, qty, orders from order_purchase_quotas").fetchall()
+    assert rows == [("user:7", "service:5|all|all", 2, 0)]
+    _ok(_run(["-m", "alembic", "downgrade", "0002_config_content"], db))
+    with sqlite3.connect(db) as conn:
+        assert conn.execute("select user_id, product_key, qty from order_purchase_counters").fetchall() == [(7, "service:5", 2)]

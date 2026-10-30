@@ -43,10 +43,12 @@ class ResolvedLine:
     spec: str = ""
     image: str = ""
     category_id: int | None = None
-    limit_per_user: int | None = None      # 每人限购（跨订单累计，不含已取消 / 关闭）
+    limit_per_user: int | None = None      # 旧字段：不分周期的每人件数上限（= purchase_rule.limit_qty）
+    purchase_rule: dict[str, Any] | None = None  # 购买规则（起售、单笔上限、周期限购、新客专享…，见 purchase.py）
     returnable: bool = True                # 是否适用七日无理由（法定除外商品由商品模块标记，购买时提示）
     stock_qty: int | None = None           # 当前可售（试算展示用；None 表示不限）
     snapshot: dict[str, Any] = field(default_factory=dict)
+    rule: Any = field(default=None, repr=False)  # 解析后的 PurchaseRule（_resolve 填）
 
     @property
     def gross_cents(self) -> int:
@@ -167,8 +169,8 @@ class GoodsKind(LineKind):
                             name=sku["name"], unit_price_cents=int(sku["price_cents"]), qty=int(item["qty"]),
                             goods_kind=sku.get("goods_kind", GOODS_PHYSICAL), spec=sku.get("spec", ""),
                             image=sku.get("image", ""), category_id=sku.get("category_id"),
-                            limit_per_user=sku.get("limit_per_user"), returnable=sku.get("returnable", True),
-                            stock_qty=sku.get("stock"), snapshot={"sku": {k: v for k, v in sku.items() if k != "stock"}})
+                            limit_per_user=sku.get("limit_per_user"), purchase_rule=sku.get("purchase_rule"),
+                            returnable=sku.get("returnable", True), stock_qty=sku.get("stock"), snapshot={"sku": {k: v for k, v in sku.items() if k != "stock"}})
 
     @staticmethod
     def _items(items) -> dict[int, int]:
@@ -205,7 +207,7 @@ _service_catalog: ServiceCatalog | None = None
 
 
 def set_service_catalog(fn: ServiceCatalog | None) -> None:
-    """线下服务价目：fn(db, product_id, store_id) -> {name, price_cents, spec?, image?, limit_per_user?, returnable?} | None。"""
+    """线下服务价目：fn(db, product_id, store_id) -> {name, price_cents, spec?, image?, purchase_rule?, returnable?} | None。"""
     global _service_catalog
     _service_catalog = fn
 
@@ -224,8 +226,8 @@ class ServiceKind(LineKind):
                             unit_price_cents=int(data["price_cents"]), qty=int(item["qty"]),
                             goods_kind=data.get("goods_kind", GOODS_OFFLINE_SERVICE), spec=data.get("spec", ""),
                             image=data.get("image", ""), category_id=data.get("category_id"),
-                            limit_per_user=data.get("limit_per_user"), returnable=data.get("returnable", True),
-                            snapshot={"service": data})
+                            limit_per_user=data.get("limit_per_user"), purchase_rule=data.get("purchase_rule"),
+                            returnable=data.get("returnable", True), snapshot={"service": data})
 
 
 # ---------------------------------------------------------------- 内置：member_card（29-member-card）

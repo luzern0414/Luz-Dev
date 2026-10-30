@@ -246,7 +246,8 @@ def test_payment_arriving_after_close_is_refunded_not_applied(env):
 
 def test_jobs_and_subscriptions_are_wired():
     from order import events as order_events, jobs
-    assert [j.name for j in jobs.JOBS] == ["order.close_expired", "order.auto_complete", "order.shipping_sync"]
+    assert [j.name for j in jobs.JOBS] == ["order.close_expired", "order.auto_complete", "order.shipping_sync",
+                                          "order.purge_purchase_quotas"]
     assert set(order_events.SUBSCRIPTIONS) == {"payment.succeeded"}
 
 

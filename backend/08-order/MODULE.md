@@ -30,10 +30,10 @@
 
 | 负责 | 不负责 |
 |---|---|
-| 试算（服务端价、活动、券、库存与限购提示、报价令牌） | 商品与价目维护（03-catalog / 行种类的价格来源） |
-| 下单：快照、分摊、锁券、占库存、限购、条款、单号、截止时间 | 券规则本身（16）、活动规则本身（17） |
+| 试算（服务端价、活动、券、库存与购买规则提示、报价令牌） | 商品与价目维护（03-catalog / 行种类的价格来源） |
+| 下单：快照、分摊、锁券、占库存、购买规则校验与计数（起售、单笔上限、周期限购、新客专享）、条款、单号、截止时间 | 券规则本身（16）、活动规则本身（17） |
 | 支付：委托 09 下单 / 复用；余额按行扣款；支付成功流转 | 渠道协议、验签、退款执行（09） |
-| 取消 / 超时关单（先查单再关单）、释放库存 / 券 / 限购 | 售后审批与退款流程（10） |
+| 取消 / 超时关单（先查单再关单）、释放库存 / 券 / 购买名额；退款时按规则退回名额 | 售后审批与退款流程（10） |
 | 履约（发货、履约完成、确认收货、自动完成）与行种类钩子 | 配送调度（11） |
 | 退款额度账本（行级占用 / 已退）与退款结算（回库、退券、全退置 refunded） | 会员卡 / 储值的权益本身（29 / 15） |
 | 顾客端与后台查询、导出、备注、关单 | 报表（24） |
@@ -46,7 +46,7 @@
 | `order_items` | order_id, user_id, kind, goods_kind, product_id, sku_id, name, spec, image, unit_price_cents, qty, gross_cents, campaign_alloc_cents, coupon_alloc_cents, paid_cents, returnable, snapshot_json, fulfil_status, fulfil_ref, fulfilled_at, pay_ref, refund_reserved_qty, refund_reserved_cents, refunded_qty, refunded_cents | ix order_id |
 | `order_status_logs` | order_id, from_status, to_status, actor_type, actor_id, reason, created_at | ix (order_id, id)；只追加 |
 | `order_quotes` | token, user_id, store_id, request_json, request_hash, result_json, total_cents, expires_at, used_at, order_id | uq token；ix (user_id, id) |
-| `order_purchase_counters` | user_id, product_key(kind:product_id), qty | uq (user_id, product_key) |
+| `order_purchase_quotas` | subject(user:会员 / phone:手机号哈希), counter_key(规则键\|范围\|周期键), qty, orders, window_end_at | uq (subject, counter_key)；window_end_at |
 | `order_notes` | order_id, staff_id, text | ix order_id |
 
 不变量：Σ items.paid_cents = orders.total_cents；refunded ≤ refund_reserved ≤ paid（行级与单级都由条件 UPDATE 保证）。
@@ -56,22 +56,22 @@
 1. 价格只来自服务端：行种类 `resolve` 取价（goods → SKU，service → 价目提供者，member_card → 卡种）；请求体里的价格字段一律忽略。
 2. 试算顺序：活动（`set_promotions_provider` 返回 `pricing.Promotion`）→ 券（16 在活动后金额上计算，门槛按活动后金额）→ 每项优惠只在适用行之间按金额比例、最大余数法分摊；行实付 = 原价 − 活动 − 券。
 3. 试算不因券不可用失败：返回 `coupon_error`（原因：below_threshold / expired / not_started / no_scope_items / campaign_conflict / stack_conflict …）并按无券计价；同时列出可用 / 不可用券及原因、推荐券。
-4. 试算返回 `quote_token`（`[order] quote_ttl_seconds`，默认 600 秒）；库存不足、超出限购写入 `issues`，`submittable=false`。
+4. 试算返回 `quote_token`（`[order] quote_ttl_seconds`，默认 600 秒）；库存不足与购买规则问题写入 `issues`，同时返回 `purchase_rules`（规则、已购、剩余），`submittable=false`。购买规则见 `references/patterns/purchase-rules.md`：商品数据里的 `purchase_rule`（旧字段 `limit_per_user` 等于不分周期的件数上限）。
 5. 下单必须带本人未过期的报价令牌；服务端重新计价，任何一行单价 / 数量 / 实付或券集合变化 → 4223 `price_changed`；令牌过期 / 不存在 → 4223；已用 → 4090 `quote_used`（条件 UPDATE `used_at IS NULL`，同一报价并发只成一单）。
 6. 购买条款：`terms_accepted` 必须为 true，客户端版本与 `[order] terms_version` 不一致 → 4220 `terms_outdated`；订单记录生效版本与同意时间（可换成 27-legal 的同意记录：`set_terms_checker`）。
-7. 下单同一事务：写订单与行快照 → 限购计数条件自增（qty + n ≤ limit，超出 4225）→ 行种类 `reserve`（实物：07 预占，ref = `order:{id}`，按 sku_id 升序）→ 锁券（16 lock，同券并发只成一单）→ 状态日志 → `order.created`。任一步失败整单回滚。
+7. 下单同一事务：写订单与行快照 → 购买规则校验并计入名额（`purchase.consume`：起售、单笔上限、件数与次数按周期条件自增、新客计数行，超出 4225，行快照记下计入的计数键）→ 行种类 `reserve`（实物：07 预占，ref = `order:{id}`，按 sku_id 升序）→ 锁券（16 lock，同券并发只成一单）→ 状态日志 → `order.created`。任一步失败整单回滚。
 8. 单号：前缀(≤4) + 北京时间 yyMMddHHmmss + 毫秒 + 6 位随机数字（≤ 25 位，时间有序，可直接做微信 business_no）；唯一约束兜底，碰撞换号重试 3 次。
 9. 支付截止 `pay_deadline_at = 下单时间 + `[order] pay_timeout_minutes``（默认 15）；0 元订单提交即成交（`pay_method=free`），不走微信。
 10. 微信支付：09 `pay_business("order")` 调用本模块解析器（金额 = total_cents，截止 = pay_deadline_at，goods_kind 汇总：含虚拟 → virtual_content，含实物 → physical，否则 offline_service）；同一订单重复“去支付”复用同一支付单。
 11. 余额支付：先查 / 关闭未完成的微信支付单（已付 → 4090 `already_paid`；渠道不可用 → 5020）；再按行 `wallet.consume(ref=order:{id}:item:{item_id})`（余额不足 4224，整笔回滚）并同事务成交。不支持混合支付。
 12. 支付成功（09 `on_paid` 钩子，保存点内）：核对金额与付款人 → `pending_payment → paid` 条件 UPDATE → 核销券 → 确认库存预占 → 行种类 `fulfil`（会员卡同事务发卡，issue_ref = `order_item:{id}`）→ `order.paid`；全部行已即时交付 → `fulfilled` + `order.fulfilled`。钩子抛错（订单已关闭、金额不符）→ 09 记 needs_manual 并自动全额退款，订单不变。
-13. 用户取消仅限 `pending_payment`；先查单再关单（已付 → 4090；渠道不可用 → 5020，订单保持待支付），然后同事务：释放库存、解锁券（券已过期则 → expired，不回 available）、回退限购计数、`order.cancelled`。后台关单同规则，原因必填并审计。
+13. 用户取消仅限 `pending_payment`；先查单再关单（已付 → 4090；渠道不可用 → 5020，订单保持待支付），然后同事务：释放库存、解锁券（券已过期则 → expired，不回 available）、原数退回购买名额（回到下单时的周期）、`order.cancelled`。后台关单同规则，原因必填并审计。
 14. 超时关单任务：`pending_payment` 且 `pay_deadline_at` 已过 → 同规则 13（cancel_type=timeout，状态 closed）；查到已付 → 由支付钩子成交；渠道不可用 → 本轮跳过并保留库存与券；查到渠道已付但订单钩子曾拒绝 → 关闭订单并标 needs_manual（09 已自动退款）。
 15. 履约：实物 `ship`（paid → fulfilling，快递公司与单号必填，有处理中售后时拒绝）；`mark_fulfilled`（paid / fulfilling → fulfilled，待交付行全部标记）；顾客 `confirm_receipt`（fulfilling / fulfilled → completed，未记交付时间时以确认时间为交付时间）。
 16. 自动完成：fulfilled（或已发货 fulfilling）超过 `[order] auto_complete_days`（默认 7）天且无处理中售后 → completed。
 17. 发货信息录入：微信支付订单在发货 / 履约事务提交后调用 09 `request_shipping_upload`（快递 1、无快递实物 4、服务 / 会员卡 3）；失败由 `order.shipping_sync` 补录。
 18. 退款额度（供 10）：`refund_quote` 按累计公式 `paid × (已占 + n) // qty − paid × 已占 // qty`，退完剩余数量时 = 剩余实付；行种类可再设上限（会员卡）；`reserve_refund` 条件 UPDATE 保证 Σ占用 ≤ 行实付、数量 ≤ 行数量、单级占用 ≤ 实付；余额支付订单可部分退：`refund_balance(db, order_id, [(item_id, amount_cents)], ref)` 调 `wallet.reverse(..., amount_cents, reversal_ref="{ref}:item:{id}")` 按金额冲回（按 reversal_ref 幂等，累计不超过原消费）。
-19. 退款结算 `settle_refund`：计入已退 → 行种类 `on_refunded`（实物按售后决定回库）→ 16 `return_on_refund`（是否退券由券模块策略决定）→ 全部实付已退则主状态 → refunded（终态）→ `order.refunded`。`refund_status` 由占用与已退推导：refunding / partially_refunded / refunded / none。
+19. 退款结算 `settle_refund`：计入已退 → 行种类 `on_refunded`（实物按售后决定回库）→ 购买规则允许时退回名额（件数按退款件数，次数在该计数键的行全部退完时）→ 16 `return_on_refund`（是否退券由券模块策略决定）→ 全部实付已退则主状态 → refunded（终态）→ `order.refunded`。`refund_status` 由占用与已退推导：refunding / partially_refunded / refunded / none。
 20. 他人订单一律 4040；后台门店范围外的订单按 4040 处理；列表与导出共用同一 ListSpec；完整手机号关键词按哈希精确匹配，脱敏片段按 LIKE。
 
 ## 5 状态机 / 关键流程
@@ -108,6 +108,7 @@ paid ─ship▶ fulfilling ─fulfil▶ fulfilled ─confirm / auto▶ completed
 | 方法 | 路径 | 鉴权 | 幂等 | 权限码 | agent | 说明 |
 |---|---|---|---|---|---|---|
 | POST | `/api/v1/app/orders/preview` | 会员 | — | — | read | 试算，返回 quote_token |
+| POST | `/api/v1/app/orders/purchase-status` | 会员 | — | — | read | 购买规则与本人已购、剩余（商品页、购物车用，不占名额） |
 | POST | `/api/v1/app/orders` | 会员 | 必须 | — | write_high | 提交订单 `{quote_token, terms_accepted, terms_version?, remark?, address_id?, expected_total_cents?}` |
 | GET | `/api/v1/app/orders` | 会员 | — | — | read | 我的订单：`tab`=all/unpaid/to_fulfil/to_receive/completed/closed，游标分页，附各页签数量 |
 | GET | `/api/v1/app/orders/{id}` | 会员（他人 4040） | — | — | read | 详情：行、时间线、地址（本人明文）、可操作标记 |
@@ -125,7 +126,7 @@ paid ─ship▶ fulfilling ─fulfil▶ fulfilled ─confirm / auto▶ completed
 
 后台列表 ListSpec：筛选 `status`、`refund_status`、`kind`、`goods_kind`、`pay_method`、`store_id`、`user_id`、`needs_manual`、`total_cents_min/max`、`created_at_from/to`、`paid_at_from/to`、`paid_at_null`；关键词：订单号、脱敏手机号片段、完整 11 位手机号（哈希精确匹配）；排序 `total_cents`、`created_at`、`paid_at`；未声明参数 4001。
 
-内部函数（其他模块调用）：preview、submit、pay、cancel、admin_close、close_expired、ship、mark_fulfilled、confirm_receipt、auto_complete、refund_quote、reserve_refund、release_refund、settle_refund、refund_balance、get_owned、admin_get、order_view；v1 兼容 create_order、mark_paid、cancel_order。
+内部函数（其他模块调用）：preview、purchase_status、submit、pay、cancel、admin_close、close_expired、ship、mark_fulfilled、confirm_receipt、auto_complete、refund_quote、reserve_refund、release_refund、settle_refund、refund_balance、get_owned、admin_get、order_view；v1 兼容 create_order、mark_paid、cancel_order。
 
 ## 7 事件
 
@@ -150,11 +151,11 @@ paid ─ship▶ fulfilling ─fulfil▶ fulfilled ─confirm / auto▶ completed
 ## 8 并发与一致性
 
 - 所有状态变化 `StateMachine.advance`（`UPDATE … WHERE id AND status = 旧状态`，rowcount）；version 自增。
-- 库存：07 条件扣减（不超卖，30 线程抢 5 件只成 5 单）；限购：条件自增 + 唯一计数行；报价：`used_at IS NULL` 条件更新（20 线程同一报价只成 1 单）。
+- 库存：07 条件扣减（不超卖，30 线程抢 5 件只成 5 单）；购买规则：条件自增 + 唯一计数行（会员与手机号两个主体都要满足），新客专享另有每人一单的计数行；报价：`used_at IS NULL` 条件更新（20 线程同一报价只成 1 单）。
 - 退款额度：行级 `refund_reserved_* + n ≤ 行数量 / 行实付` 与单级 `refund_reserved_cents + n ≤ paid_cents` 两条条件 UPDATE（60 线程抢 50 件，恰好 50 成功，占用 = 实付）。
 - 渠道调用不在业务事务内：取消 / 关单 / 余额支付先经 09 查单关单（09 内部提交），再在新事务内改订单；支付成功钩子在 09 的保存点内执行，失败不影响支付事实。
 - 跨模块副作用：券、库存、钱包、发卡都在订单同一事务内经对方导出函数完成；其余经发件箱事件。
-- 补偿：`order.close_expired`、`order.auto_complete`、`order.shipping_sync`（`jobs.JOBS`，逐单提交，可重跑）。
+- 补偿：`order.close_expired`、`order.auto_complete`、`order.shipping_sync`、`order.purge_purchase_quotas`（周期结束 7 天后删计数行）（`jobs.JOBS`，逐单提交，可重跑）。
 
 ## 9 配置
 
@@ -197,7 +198,7 @@ paid ─ship▶ fulfilling ─fulfil▶ fulfilled ─confirm / auto▶ completed
 | 条款未同意 / 版本过期、券不可用、虚拟商品不能微信支付 | 4220 | 422 |
 | 报价过期 / 价格变化 | 4223 | 422 |
 | 余额不足 | 4224 | 422 |
-| 超出限购 | 4225 | 422 |
+| 不满足购买规则（`data.reason`：below_min_qty / over_order_limit / purchase_limit / purchase_times_limit / new_customer_only / phone_required，`data.issues` 列全部） | 4225 | 422 |
 | 支付渠道不可用（取消 / 关单 / 余额支付前关单失败） | 5020 | 502 |
 
 ## 11 测试清单（`08-order/code/tests/`）
@@ -207,14 +208,15 @@ paid ─ship▶ fulfilling ─fulfil▶ fulfilled ─confirm / auto▶ completed
 | `test_order_service.py` | 活动 + 券分摊与余数；不可用券原因；参数与库存提示；快照 / 占库存 / 锁券 / order.created；报价令牌（他人、过期、已用）；改价 4223；条款与库存回滚；限购与取消释放；线下服务人工履约；会员卡发卡与退款上限；0 元单；状态机全边；发货 / 确认收货边与日志；自动完成任务；退款累计公式、占用、释放、结算、全退置 refunded 与退券；v1 兼容；地址加密与脱敏 |
 | `test_order_payment.py` | 微信支付成功（复用支付单、券核销、库存确认、事件、重复回调、订阅兜底）；拒绝场景（他人、方式、过期、虚拟商品）；钩子拒绝自动退款；余额支付成功 / 不足回滚 / 先关微信单 / 渠道已付；取消（释放、他人 4040、过期券、渠道不可用 5020、已付 4090）；后台关单审计；超时关单四条分支与幂等；渠道故障保留资源；关单后到账自动退款；任务与订阅接线；发货信息录入 |
 | `test_order_http.py` | 4010 / 4001 / 信封 / 忽略客户端价格；幂等重放、缺键、短键、4093；我的订单页签、游标、计数、详情 4040、取消、支付、确认收货 4090；后台 4010 / 4030、筛选、手机号哈希与片段关键词、区间、未知参数、导出与审计、备注、关单、门店范围、权限码登记 |
-| `test_order_concurrency.py` | 文件 SQLite + 50 线程：不超卖、同一报价一单、限购、退款占用不超过实付 |
+| `test_order_concurrency.py` | 文件 SQLite + 50 线程：不超卖、同一报价一单、限购、只能买一次与新客专享并发只成一单、退款占用不超过实付 |
+| `test_order_purchase_rules.py` | 规则解析与非法值；门店时区周期键；起售与单笔上限；只能买一次（取消退回）；每日限购跨天与退回原周期；共享键；门店范围；手机号维度与需绑定手机号；新客专享（待支付占用、老客拦截、全额退款后的两种口径）；退款是否退回；计数行；商品页状态 |
 
 ## 12 前端对接
 
 | 页面 | 接口 | 行为 |
 |---|---|---|
 | 确认订单 | `POST /app/orders/preview` | 进入页面与改数量 / 换券时调用；展示行实付、优惠明细、不可用券原因；`issues` 非空时禁用提交；条款勾选框不得默认勾选 |
-| 提交 | `POST /app/orders` | 带 Idempotency-Key（一次提交一个键，重试复用）；4223 → 提示价格变化并重新试算；4091 / 4225 → 提示后返回 |
+| 提交 | `POST /app/orders` | 带 Idempotency-Key（一次提交一个键，重试复用）；4223 → 提示价格变化并重新试算；4091 → 提示后返回；4225 → 按 `data.reason` 取文案键提示（见 purchase-rules.md §5）并给出改数量或去绑定的出路 |
 | 收银台 | `POST /app/orders/{id}/payments` | wechat → `wx.requestPayment`，随后进入 09 的支付结果确认页轮询；balance → 直接显示成功 |
 | 我的订单 | `GET /app/orders?tab=` | 页签角标用 `counts`；游标翻页 |
 | 订单详情 | `GET /app/orders/{id}` | 按 can_pay / can_cancel / can_confirm 显示按钮；倒计时用 pay_deadline_at |

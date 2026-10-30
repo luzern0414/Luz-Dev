@@ -25,7 +25,8 @@ from luzback.security import mask_address, mask_name, mask_phone
 from . import ports
 from .config import get_config
 from .kinds import ResolvedLine, get_line_kind, snapshot_json
-from .models import Order, OrderItem, OrderNote, OrderQuote, OrderStatusLog, PurchaseCounter
+from . import purchase
+from .models import Order, OrderItem, OrderNote, OrderQuote, OrderStatusLog
 from .rules import (
     ACTIVE_AFTER_PAY, CANCEL_ADMIN, CANCEL_TIMEOUT, CANCEL_USER, CANCELLED, CLOSED, COMPLETED, FULFILLED, FULFILLING,
     GOODS_KINDS, GOODS_PHYSICAL, ORDER_FLOW, PAID, PAY_BALANCE, PAY_FREE, PAY_METHODS, PAY_WECHAT, PENDING, REFUND_DONE,
@@ -162,12 +163,17 @@ def _line_view(ln: ResolvedLine, campaign: int, coupon: int, paid: int) -> dict[
             "goods_kind": ln.goods_kind, "returnable": ln.returnable}
 
 
-def _purchased(db: Session, user_id: int, keys: list[str]) -> dict[str, int]:
-    if not keys:
-        return {}
-    rows = db.execute(select(PurchaseCounter.product_key, PurchaseCounter.qty)
-                      .where(PurchaseCounter.user_id == user_id, PurchaseCounter.product_key.in_(keys))).all()
-    return {k: q for k, q in rows}
+def _purchase_groups(lines: list[ResolvedLine], store_id: int | None, now: datetime) -> dict[str, purchase.Group]:
+    for ln in lines:
+        ln.rule = purchase.PurchaseRule.parse(ln.purchase_rule, default_key=ln.product_key, legacy_limit=ln.limit_per_user)
+    return purchase.group_lines(lines, store_id, now, get_config().timezone)
+
+
+def _phone_hash(db: Session, user_id: int, groups: dict[str, purchase.Group]) -> str | None:
+    if not any(g.rule.needs_phone or g.rule.identity == "member_phone" or g.rule.new_customer_only
+               for g in groups.values()):
+        return None
+    return _buyer(db, user_id)[1]
 
 
 def preview(db: Session, user_id: int, body: dict[str, Any], now: datetime | None = None) -> dict[str, Any]:
@@ -186,11 +192,9 @@ def preview(db: Session, user_id: int, body: dict[str, Any], now: datetime | Non
         if ln.stock_qty is not None and ln.stock_qty < ln.qty:
             issues.append({"reason": "out_of_stock", "product_id": ln.product_id, "sku_id": ln.sku_id,
                            "available": max(0, ln.stock_qty)})
-    bought = _purchased(db, user_id, [ln.product_key for ln in lines if ln.limit_per_user])
-    for ln in lines:
-        if ln.limit_per_user and bought.get(ln.product_key, 0) + ln.qty > ln.limit_per_user:
-            issues.append({"reason": "purchase_limit", "product_id": ln.product_id, "limit": ln.limit_per_user,
-                           "bought": bought.get(ln.product_key, 0)})
+    groups = _purchase_groups(lines, store_id, now)
+    rule_issues, rule_views = purchase.check(db, user_id, _phone_hash(db, user_id, groups), groups)
+    issues.extend(rule_issues)
     coupon_error = None
     try:
         priced = _price(db, user_id, store_id, lines, coupon_ids, now)
@@ -217,10 +221,21 @@ def preview(db: Session, user_id: int, body: dict[str, Any], now: datetime | Non
         "lines": [_line_view(ln, c, k, p) for ln, c, k, p in zip(lines, priced.campaign, priced.coupon, priced.paid)],
         **priced.totals(), "promotions": priced.promotions_applied, "promotions_rejected": priced.promotions_rejected,
         "coupons": coupons_view, "coupon_error": coupon_error, "issues": issues,
+        "purchase_rules": list(rule_views.values()),
         "goods_kind": order_goods_kind([ln.goods_kind for ln in lines]),
         "terms": {"required": cfg.terms_required, "version": cfg.terms_version},
         "submittable": not issues,
     }
+
+
+def purchase_status(db: Session, user_id: int, body: dict[str, Any], now: datetime | None = None) -> dict[str, Any]:
+    """商品页与购物车用：每件商品的购买规则与本人已购、剩余（不写报价、不占名额；下单时仍以试算与提交为准）。"""
+    now = _now(now)
+    store_id = body.get("store_id")
+    lines = _resolve(db, user_id, store_id, _normalize_items(body.get("items")), now)
+    groups = _purchase_groups(lines, store_id, now)
+    issues, views = purchase.check(db, user_id, _phone_hash(db, user_id, groups), groups)
+    return {"rules": list(views.values()), "issues": issues}
 
 
 # ================================================================ 下单
@@ -238,37 +253,6 @@ def _event(db: Session, topic: str, order: Order, **extra: Any) -> None:
     enqueue_event(db, topic, payload, "order", order.id)
 
 
-def _bump_limit(db: Session, user_id: int, key: str, qty: int, limit: int) -> None:
-    """限购：条件自增 qty + n <= limit；首次插入计数行（唯一约束裁决并发首行）。"""
-    for _ in range(2):
-        changed = db.execute(update(PurchaseCounter).where(
-            PurchaseCounter.user_id == user_id, PurchaseCounter.product_key == key,
-            PurchaseCounter.qty + qty <= limit).values(qty=PurchaseCounter.qty + qty)).rowcount
-        if changed == 1:
-            return
-        exists = db.scalar(select(PurchaseCounter.id).where(PurchaseCounter.user_id == user_id,
-                                                            PurchaseCounter.product_key == key))
-        if exists:
-            break
-        if qty > limit:
-            break
-        try:
-            with db.begin_nested():
-                db.add(PurchaseCounter(user_id=user_id, product_key=key, qty=qty))
-            return
-        except IntegrityError:
-            continue
-    raise AppError(ErrorCode.LIMIT_REACHED, "purchase limit reached", data={"reason": "purchase_limit",
-                                                                           "product_key": key, "limit": limit})
-
-
-def _unbump_limits(db: Session, order: Order, items: list[OrderItem]) -> None:
-    for it in items:
-        snap = json.loads(it.snapshot_json or "{}")
-        if snap.get("limit_per_user"):
-            db.execute(update(PurchaseCounter).where(
-                PurchaseCounter.user_id == order.user_id, PurchaseCounter.product_key == f"{it.kind}:{it.product_id}",
-                PurchaseCounter.qty >= it.qty).values(qty=PurchaseCounter.qty - it.qty))
 
 
 def _insert_order(db: Session, values: dict[str, Any], now: datetime) -> Order:
@@ -291,6 +275,7 @@ def _create(db: Session, user_id: int, request: dict[str, Any], now: datetime, *
     store_id = request.get("store_id")
     items = _normalize_items(request.get("items"))
     lines = _resolve(db, user_id, store_id, items, now)
+    groups = _purchase_groups(lines, store_id, now)
     priced = _price(db, user_id, store_id, lines, [int(i) for i in request.get("coupon_ids") or []], now)
     if quote is not None:
         expected = json.loads(quote.result_json)["fingerprint"]
@@ -322,9 +307,13 @@ def _create(db: Session, user_id: int, request: dict[str, Any], now: datetime, *
         quote_token=quote.token if quote else None, created_at=now, updated_at=now), now)
     if quote is not None:
         db.execute(update(OrderQuote).where(OrderQuote.id == quote.id).values(order_id=order.id))
+    records = purchase.consume(db, user_id, phone_hash, groups, now)  # 名额与订单同事务：超限整单回滚
+    quotas = _line_quotas(lines, groups, records)
     rows: list[OrderItem] = []
-    for ln, campaign, coupon, paid in zip(lines, priced.campaign, priced.coupon, priced.paid):
-        snap = {"snapshot": ln.snapshot, "category_id": ln.category_id, "limit_per_user": ln.limit_per_user}
+    for ln, campaign, coupon, paid, line_quotas in zip(lines, priced.campaign, priced.coupon, priced.paid, quotas):
+        snap = {"snapshot": ln.snapshot, "category_id": ln.category_id, "quotas": line_quotas}
+        if ln.rule is not None:
+            snap["purchase_rule"] = ln.rule.view()
         row = OrderItem(order_id=order.id, user_id=user_id, kind=ln.kind, goods_kind=ln.goods_kind,
                         product_id=ln.product_id, sku_id=ln.sku_id, name=ln.name[:128], spec=ln.spec[:128],
                         image=ln.image[:500], unit_price_cents=ln.unit_price_cents, qty=ln.qty,
@@ -333,13 +322,6 @@ def _create(db: Session, user_id: int, request: dict[str, Any], now: datetime, *
         db.add(row)
         rows.append(row)
     db.flush()
-    limits: dict[str, tuple[int, int]] = {}
-    for ln in lines:
-        if ln.limit_per_user:
-            qty, _ = limits.get(ln.product_key, (0, ln.limit_per_user))
-            limits[ln.product_key] = (qty + ln.qty, ln.limit_per_user)
-    for key in sorted(limits):
-        _bump_limit(db, user_id, key, *limits[key])
     for kind in kinds:
         get_line_kind(kind).reserve(db, order, [r for r in rows if r.kind == kind], now)
     if priced.coupon_ids:
@@ -350,6 +332,30 @@ def _create(db: Session, user_id: int, request: dict[str, Any], now: datetime, *
         _settle_paid(db, order, method=PAY_FREE, amount_cents=0, paid_at=now, actor=("system", "free"))
     db.flush()
     return order_summary(order)
+
+
+def _line_quotas(lines: list[ResolvedLine], groups: dict[str, purchase.Group],
+                 records: dict[str, dict]) -> list[list[dict[str, Any]]]:
+    """每行记下计入的名额：件数记本行数量，单数只记在同一计数键的第一行（退回时据此回到原周期）。"""
+    seen: set[str] = set()
+    out: list[list[dict[str, Any]]] = []
+    for ln in lines:
+        mine: list[dict[str, Any]] = []
+        for ck, g in groups.items():
+            if not any(x is ln for x in g.lines):
+                continue
+            for key in (ck, purchase.NEWCOMER_KEY if g.rule.new_customer_only else None):
+                record = records.get(key) if key else None
+                if record is None:
+                    continue
+                first = key not in seen
+                seen.add(key)
+                mine.append({"key": key, "subjects": record["subjects"],
+                             "qty": ln.qty if key != purchase.NEWCOMER_KEY else 0,
+                             "orders": record["orders"] if first else 0, "refund_release": record["refund_release"]})
+            break
+        out.append(mine)
+    return out
 
 
 def _buyer(db: Session, user_id: int) -> tuple[str | None, str | None]:
@@ -543,7 +549,7 @@ def _close_order(db: Session, order: Order, target: str, cancel_type: str, reaso
         get_line_kind(kind).release(db, order, [it for it in items if it.kind == kind], now)
     if json.loads(order.coupon_ids_json or "[]"):
         ports.coupon_port().unlock(db, order.id, now)
-    _unbump_limits(db, order, items)
+    purchase.release_all(db, order, items)
     _event(db, "order.cancelled", order, cancel_type=cancel_type, reason=reason)
     return order
 
@@ -864,6 +870,7 @@ def settle_refund(db: Session, order_id: int, lines: list[tuple[int, int, int, b
     if order is None:
         raise AppError(ErrorCode.NOT_FOUND, "order not found")
     total = 0
+    refunded_items: list[tuple[OrderItem, int]] = []
     for item_id, qty, amount, restock in sorted(lines):
         changed = db.execute(update(OrderItem).where(
             OrderItem.id == item_id, OrderItem.order_id == order_id,
@@ -873,7 +880,9 @@ def settle_refund(db: Session, order_id: int, lines: list[tuple[int, int, int, b
         if changed != 1:
             raise AppError(ErrorCode.CONFLICT, "refund exceeds reservation", data={"item_id": item_id})
         item = db.get(OrderItem, item_id)
+        db.refresh(item)
         get_line_kind(item.kind).on_refunded(db, order, item, qty, amount, restock, now)
+        refunded_items.append((item, qty))
         total += amount
     changed = db.execute(update(Order).where(Order.id == order_id, Order.refunded_cents + total <= Order.paid_cents)
                          .values(refunded_cents=Order.refunded_cents + total, version=Order.version + 1)).rowcount
@@ -881,6 +890,7 @@ def settle_refund(db: Session, order_id: int, lines: list[tuple[int, int, int, b
         raise AppError(ErrorCode.CONFLICT, "refund exceeds paid amount")
     _sync_refund_status(db, order_id)
     db.refresh(order)
+    purchase.release_refunded(db, order, refunded_items, _items(db, order_id))
     full = order.paid_cents > 0 and order.refunded_cents >= order.paid_cents
     coupons = {}
     if json.loads(order.coupon_ids_json or "[]"):

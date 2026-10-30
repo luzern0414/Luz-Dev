@@ -14,6 +14,10 @@
       "description": "商品基础信息、规格组合（SKU）、价格、上下架。"
     },
     {
+      "name": "购买规则",
+      "description": "在商品或 SKU 上设置：起售件数、单笔上限、每人限购件数与次数（统计周期：不分周期、每日、每周、每月）、统计范围（全部门店合计或按门店）、共享限额键（同一活动多个商品共用）、身份维度（按会员或同时按手机号）、退款后是否退回名额、新客专享与口径、需绑定手机号。保存时按同样的规则校验（起售不大于单笔上限与件数上限、周期与范围取值合法），即时生效并写审计；改规则只影响之后的订单。规则与计数逻辑见 `references/patterns/purchase-rules.md`。"
+    },
+    {
       "name": "库存预占",
       "description": "下单时预占库存，支付成功确认扣减，订单关闭释放。"
     },
@@ -75,6 +79,14 @@
       "type": "单选 + 文本",
       "required": true,
       "rule": "盘点、报损、入库。"
+    },
+    {
+      "page": "商品编辑页（后台）",
+      "field": "purchase_rule",
+      "label": "购买规则",
+      "type": "分组表单",
+      "required": false,
+      "rule": "起售、单笔上限、每人限购件数或次数为正整数；周期取不分周期、每日、每周、每月；范围取全部门店或按门店；起售不大于单笔上限与件数上限；改共享限额键前提示“改键会重新计数”。"
     }
   ],
   "apis": [
@@ -240,6 +252,13 @@
           "required": false,
           "default": "—",
           "comment": "低库存阈值"
+        },
+        {
+          "name": "purchase_rule",
+          "type": "JSONB",
+          "required": false,
+          "default": "—",
+          "comment": "购买规则：min_qty、max_per_order、limit_qty、limit_orders、window、scope、key、identity、release_on_refund、new_customer_only、new_customer_basis、requires_phone；空表示不限"
         }
       ],
       "indexes": [
@@ -369,6 +388,10 @@
     {
       "case": "释放重复执行",
       "handling": "预占记录状态条件更新，只有 held 能变为 released。"
+    },
+    {
+      "case": "购买规则写错（起售大于上限、周期取值不认识）",
+      "handling": "后台保存时拒绝并写明允许范围；订单模块解析时同样校验，不静默放行。"
     }
   ]
 }

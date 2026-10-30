@@ -12,6 +12,10 @@
       "description": "确认页展示商品快照、价格明细、可用优惠券（默认最优）与应付金额，不写库。"
     },
     {
+      "name": "购买规则校验与计数",
+      "description": "试算与提交时按商品的购买规则校验：起售、单笔上限、周期内件数与次数、新客专享、需绑定手机号；提交时在同一事务里计入名额（含待支付），取消与超时关单原数退回，退款按规则退回。商品页与购物车可查询本人已购与剩余。"
+    },
+    {
       "name": "提交订单",
       "description": "服务端重新计算价格，与前端看到的应付金额不一致时拒绝；锁定优惠券、预占名额或库存。"
     },
@@ -41,7 +45,7 @@
       "name": "提交订单",
       "steps": [
         "前端携带 Idempotency-Key 调用 `POST /api/v1/app/orders`，提交 items、coupon_id、expected_payable_cents、agreed_terms。",
-        "校验会员状态、手机号已绑定、条款已同意、门店营业中、限购。",
+        "校验会员状态、手机号已绑定、条款已同意、门店营业中、购买规则（起售、单笔上限、周期限购、新客专享、需绑定手机号；不满足返回 4225 与原因代码）。",
         "重新计算价格；结果与 expected_payable_cents 不一致返回 PRICE_CHANGED 和新价格。",
         "同一事务：锁定优惠券（available→locked）、预占名额或库存、写 orders（pending_payment，expire_at）与 order_items（价格快照与优惠分摊）、写 order.created 事件。",
         "返回 order_no、payable_cents、expire_at，前端立即进入支付。"
@@ -115,6 +119,15 @@
       "request": "store_id，items[]，coupon_id（可选）",
       "response": "items[]（快照、单价、数量），amounts{goods_cents，discount_cents，coupon_discount_cents，payable_cents}，coupons[]（可用与不可用原因），terms[]",
       "errors": "OFF_SALE，PURCHASE_LIMIT，STORE_CLOSED"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/app/orders/purchase-status",
+      "caller": "小程序",
+      "purpose": "查询购买规则与本人已购、剩余（商品页显示“每日限购 2 件，今日还可买 1 件”，步进器上限取剩余）",
+      "request": "store_id，items（kind，sku_id 或 product_id，qty）",
+      "response": "rules（规则、已购件数与次数、剩余），issues（原因代码）",
+      "errors": "—"
     },
     {
       "method": "POST",
@@ -233,6 +246,11 @@
       "when": "履约",
       "table": "order_items",
       "content": "fulfill_ref_type、fulfill_ref_id。"
+    },
+    {
+      "when": "提交订单、取消或关单、退款成功",
+      "table": "order_purchase_quotas",
+      "content": "提交时条件自增件数与单数；取消、关单原数退回；退款按规则退回。行快照记下计入的计数键与主体。"
     }
   ],
   "tables": [
@@ -484,6 +502,52 @@
         "INDEX(order_id)",
         "CHECK(refunded_cents <= payable_cents)"
       ]
+    },
+    {
+      "name": "order_purchase_quotas",
+      "label": "购买名额计数",
+      "purpose": "每个人在每条规则、每个统计周期里已计入的件数与单数（含待支付）",
+      "fields": [
+        {
+          "name": "subject",
+          "type": "VARCHAR(80)",
+          "required": true,
+          "default": "—",
+          "comment": "user:<会员> 或 phone:<手机号哈希>"
+        },
+        {
+          "name": "counter_key",
+          "type": "VARCHAR(160)",
+          "required": true,
+          "default": "—",
+          "comment": "<规则键>|<all 或 store:<门店>>|<周期键>，如 service:5|all|d20261030"
+        },
+        {
+          "name": "qty",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "已计入件数"
+        },
+        {
+          "name": "orders",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "已计入单数"
+        },
+        {
+          "name": "window_end_at",
+          "type": "TIMESTAMPTZ",
+          "required": false,
+          "default": "—",
+          "comment": "周期结束时刻；不分周期为空。结束 7 天后由定时任务删除"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(subject, counter_key)",
+        "INDEX(window_end_at)"
+      ]
     }
   ],
   "states": [
@@ -550,6 +614,22 @@
     {
       "case": "前端篡改金额",
       "handling": "金额只以服务端计算为准，前端金额仅用于一致性比对。"
+    },
+    {
+      "case": "同一个人并发提交多单抢限购",
+      "handling": "计数行条件自增（qty + n ≤ 上限、orders + 1 ≤ 上限），只成上限内的单，其余返回 4225。"
+    },
+    {
+      "case": "一人多个账号买新人价或限购商品",
+      "handling": "规则设按手机号计时，会员与手机号两个主体都要满足；未绑定手机号不能买。"
+    },
+    {
+      "case": "昨天下的单今天取消",
+      "handling": "按行快照里的周期键退回昨天的名额，不影响今天的额度。"
+    },
+    {
+      "case": "买了退、退了再买",
+      "handling": "规则设“退款后不退回名额”时，退款不恢复资格。"
     }
   ]
 }
