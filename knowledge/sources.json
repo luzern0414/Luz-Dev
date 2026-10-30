@@ -4471,6 +4471,108 @@
       "queries": [
         "Microsoft Edge Linux docker redistribution license"
       ]
+    },
+    {
+      "id": "KS-0260",
+      "url": "https://element-plus.org/zh-CN/guide/quickstart.html",
+      "title": "快速开始 | Element Plus",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "report"
+      ],
+      "firstReadAt": "2026-10-29T17:11:17+08:00",
+      "checkedAt": "2026-10-29T17:11:17+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\030_Luz-Dev 07 DealRadar-数据质量与研究效率优化\\raw\\1843_Luz-Dev 07 DealRadar-数据质量与研究效率优化 官方原文\\raw\\sources\\links\\raw\\1844_快速开始 Element Plus"
+      ],
+      "excerpt": "快速开始 ​ 本节将介绍如何在项目中使用 Element Plus。 用法 ​ 完整引入 ​ 如果你对打包后的文件大小不是很在乎，那么使用完整导入会更方便。 main.ts ts import { createApp } from 'vue' import ElementPlus from 'element-plus'…",
+      "queries": []
+    },
+    {
+      "id": "KS-0261",
+      "url": "https://playwright.dev/docs/browsers",
+      "title": "Browsers | Playwright",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "report"
+      ],
+      "firstReadAt": "2026-10-29T17:11:17+08:00",
+      "checkedAt": "2026-10-29T17:11:17+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\030_Luz-Dev 07 DealRadar-数据质量与研究效率优化\\raw\\1843_Luz-Dev 07 DealRadar-数据质量与研究效率优化 官方原文\\raw\\sources\\links\\raw\\1853_Browsers Playwright"
+      ],
+      "excerpt": "GuidesBrowsers Browsers Introduction​ Each version of Playwright needs specific versions of browser binaries to operate. You will need to use the Playwright CLI…",
+      "queries": []
+    },
+    {
+      "id": "KS-0262",
+      "url": "https://knowledge.hubspot.com/scoring/understand-the-lead-scoring-tool",
+      "title": "Overview of the lead scoring tool",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "report"
+      ],
+      "firstReadAt": "2026-10-29T17:11:17+08:00",
+      "checkedAt": "2026-10-29T17:11:17+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\030_Luz-Dev 07 DealRadar-数据质量与研究效率优化\\raw\\1843_Luz-Dev 07 DealRadar-数据质量与研究效率优化 官方原文\\raw\\sources\\links\\raw\\1859_Overview of the lead scoring tool"
+      ],
+      "excerpt": "Overview of the lead scoring tool Last updated: October 23, 2026 Available with any of the following subscriptions, except where noted: Marketing Hub Profession…",
+      "queries": []
+    },
+    {
+      "id": "KS-0263",
+      "url": "https://www.sqlite.org/lang_altertable.html",
+      "title": "ALTER TABLE",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "report"
+      ],
+      "firstReadAt": "2026-10-29T17:11:17+08:00",
+      "checkedAt": "2026-10-29T17:11:17+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\030_Luz-Dev 07 DealRadar-数据质量与研究效率优化\\raw\\1843_Luz-Dev 07 DealRadar-数据质量与研究效率优化 官方原文\\raw\\sources\\links\\raw\\1863_ALTER TABLE"
+      ],
+      "excerpt": "Small. Fast. Reliable. Choose any three. Home About Documentation Download License Support Purchase Search ALTER TABLE Table Of Contents 1. Overview alter-table…",
+      "queries": []
+    },
+    {
+      "id": "KS-0264",
+      "url": "https://vite.dev/guide/build",
+      "title": "Building for Production | Vite",
+      "tier": "official",
+      "kind": "platform",
+      "modules": [
+        "report"
+      ],
+      "firstReadAt": "2026-10-29T17:11:17+08:00",
+      "checkedAt": "2026-10-29T17:11:17+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\030_Luz-Dev 07 DealRadar-数据质量与研究效率优化\\raw\\1843_Luz-Dev 07 DealRadar-数据质量与研究效率优化 官方原文\\raw\\sources\\links\\raw\\1865_Building for Production Vite"
+      ],
+      "excerpt": "Building for Production ​ When it is time to deploy your app for production, simply run the vite build command. By default, it uses <root>/index.html as the bui…",
+      "queries": []
+    },
+    {
+      "id": "KS-0265",
+      "url": "https://playwright.dev/docs/test-configuration",
+      "title": "Configuration | Playwright",
+      "tier": "community",
+      "kind": "practice",
+      "modules": [
+        "agent"
+      ],
+      "firstReadAt": "2026-10-29T17:11:17+08:00",
+      "checkedAt": "2026-10-29T17:11:17+08:00",
+      "evidence": [
+        "D:\\Codes\\skill输出\\Luz-Crawl\\raw\\030_Luz-Dev 07 DealRadar-数据质量与研究效率优化\\raw\\1843_Luz-Dev 07 DealRadar-数据质量与研究效率优化 官方原文\\raw\\sources\\links\\raw\\1871_Configuration Playwright"
+      ],
+      "excerpt": "Playwright TestConfiguration Configuration Introduction​ Playwright has many options to configure how your tests are run. You can specify these options in the c…",
+      "queries": []
     }
   ]
 }
