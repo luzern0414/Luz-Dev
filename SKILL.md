@@ -14,24 +14,25 @@ The order is fixed: **research → plan report (HTML) → user approval → fron
 The plan generator, the asset templates (`assets/`) and the standard modules are the cheap path, and following them alone is how plans and code miss the rules. They are skeletons. What the plan, the code, the integration and the launch must contain comes from the rule pages, the standards, the user's preferences and past lessons, and the rule card puts all of that in front of you.
 
 1. **Route.** System design, product UI, prototypes and hardware go to Luz-System; visual standards and page or document layout to Luz-Design; agreement and launch copy to Luz-Writing; web research to Luz-Crawl (table below).
-2. **Read the rule card before producing anything.** `python -X utf8 scripts/context.py list` shows the task kinds (tech-plan, backend-module, frontend-integration, launch-compliance, review-diagnose, agent-service, agent-runtime). `python -X utf8 scripts/context.py <kind> [--topic 词 …]` prints the card: the user's preferences (all binding), matching lessons and facts, the rule text cut from the rule pages (`references/*.md`, `references/dev-checklist.html`, `agent/` and the sections of this file), the tools to use and the checks to pass. Read all of it; for anything the card does not settle, read the named section in full. The per-rule standards stay in `references/standards.json` and reach the plan as its checklist (`tech_plan.py check NN`), not on the card.
+2. **Read the rule card before producing anything.** `python -X utf8 scripts/context.py list` shows the task kinds (tech-plan, backend-module, config-logging, frontend-integration, launch-compliance, review-diagnose, agent-service, agent-runtime). `python -X utf8 scripts/context.py <kind> [--topic 词 …]` prints the card: the user's preferences (all binding), matching lessons and facts, the rule text cut from the rule pages (`references/*.md`, `references/dev-checklist.html` and the sections of this file), the tools to use and the checks to pass. For project work the plan is created first (step 3) and saves its cards into `raw/00-rules/`; read them before researching. A call with no project — a question about this skill, a quick lookup — runs `context.py <kind>` directly and names the card it followed in the reply. Read all of the card; for anything it does not settle, read the named section in full. When two cards cut the same section, read it once. The per-rule standards stay in `references/standards.json` and reach the plan as its checklist (`tech_plan.py check NN`), not on the card.
 3. **Produce with the tools the card names.** `create_tech_plan.py` / `tech_plan.py new` saves the cards for the plan's mode and project types into `raw/00-rules/` (`--card <kind>`, repeatable, chooses them; tech-plan is always included); add one later with `context.py <kind> --session <方案目录>`. Where an asset template, a scaffold default or a standard module's default differs from the card, follow the card.
 4. **Record what you applied.** The card's 采用的规则 is `raw/plan.json` → `adoptedRules`: one row per rule section label or preference key and how this plan applies it — `tech_plan.py rule NN --rule "<小节标签 或 偏好 key>" --how "<本次怎么落实>"`. `tech_plan.py submit` and `check NN --stage delivery` refuse a plan with a missing or out-of-date rule card (the rule pages changed: regenerate it and re-check the plan) or an empty list. The list stays in plan data, not on the page.
 5. **Pass the checks on the card.** `tech_plan.py submit` (which also runs Luz Design's `check_document.py` on the page), `gate` before every change, the project's tests, `design_intake.py check`, and the launch checklist with evidence.
 6. **Sediment — mandatory, checked at submit and delivery.** Every call writes or confirms at least one note with `record_experience.py note` and lists its key in 本次沉淀 (`raw/plan.json` → `sediment`, via `tech_plan.py sediment NN --key <key>`). `submit` refuses until a listed note was written or confirmed on or after the plan's creation day; `check --stage delivery` also wants one on or after the approval day, so the build and launch leave their own note (section 每次调用后沉淀).
 
-## How the four Luz skills work together
+## How the five Luz skills work together
 
 | Step | Skill | Produces | Luz Dev uses it as |
 |---|---|---|---|
 | 1 System design | **Luz-System** (`D:\Codes\Luz-System`) | Requirements, module scope, architecture, function list, product UI and interactive prototype, hardware list — each hash-approved, in `skill输出\Luz-System\NNN-项目\` | The frontend address: `tech_plan.py design NN --session <会话目录>` checks approvals and SHA-256; its pages, actions and entities become the API contract (`design_intake.py bind`) |
 | 2 Visual and page layout | **Luz-Design** (`D:\Codes\Luz-Design`) | Theme tokens, reading-page and document rules, `scripts/check_document.py` | Every Luz Dev page (plan report, standards, knowledge base) is rendered with its tokens and must pass its checker before submission |
 | 3 Development | **Luz Dev** (this skill) | Plan report, backend assembled from the standard modules in `backend/`, integration, deployment, launch | — |
-| Throughout | **Luz-Crawl** (`D:\Codes\Luz-Crawl`) | Real pages for research, one task folder per request (`begin "主题" --new`, then `--out`) | `tech_plan.py research NN --run` and `knowledge/` |
+| Launch copy | **Luz-Writing** (`D:\Codes\Luz-Writing`) | User agreements, privacy policies, consent and launch texts (card `academic-professional`) | `assets/legal/` are skeletons; Luz Dev implements versions and consent records |
+| Throughout | **Luz-Crawl** (`D:\Codes\Luz-Crawl`) | Real pages for research; call order per its SKILL.md 调用协议: `doctor` → `begin "主题" --new` (gives the folder) → `experience --query` → `--out <folder>` on every command | `tech_plan.py research NN --run` and `knowledge/` |
 
-Luz Dev never edits the other three skills. A user-visible change (flow, page, permission, hierarchy) goes back to Luz-System; a visual or layout question goes to Luz-Design.
+Luz Dev never edits the other four skills. A user-visible change (flow, page, permission, hierarchy) goes back to Luz-System; a visual or layout question goes to Luz-Design.
 
-Knowledge lives in four places, each with tested or verified content:
+Knowledge lives in these places, each with tested or verified content:
 
 | Kind | Where |
 |---|---|
@@ -40,12 +41,13 @@ Knowledge lives in four places, each with tested or verified content:
 | Rules and feature baselines (verifiable) | `references/standards.json` → `references/standards.html` |
 | Launch: operations, qualifications, agreements | `references/operations.md`, `references/compliance.md`, `references/legal-documents.md`, templates in `assets/deploy/` and `assets/legal/` |
 | Runtime config files and logging (hot reload, log classes, fields, redaction, retention, log alerts) | `references/config-logging.md` (card `config-logging`) |
+| Front-end texts and display settings kept on the backend, maintained in the admin | module spec `content` (`references/module-specs/content.json`; rules MP-006, ADMIN-005) |
 | Frontend integration with Luz System | `references/design-integration.md` + `scripts/design_intake.py` |
 | Everything research found (sources, facts, searches already run) | `knowledge/` → `knowledge/index.html` (`scripts/knowledge.py`) |
 
 ## Mandatory technical plan before execution
 
-Every invocation — implementation, review, diagnosis, analysis, explanation, operations — has exactly one technical plan. A new task gets the next number and its own project folder:
+Every invocation that works on a project — implementation, review, diagnosis, analysis, explanation, operations — has exactly one technical plan (a call with no project only follows its rule card, 调用协议 step 2). A new task gets the next number and its own project folder:
 
 ```text
 D:\Codes\skill输出\Luz-Dev\
@@ -69,15 +71,15 @@ Edit `raw/plan.json`, then re-render; never hand-edit the HTML. The page opens w
 
    It also saves the rule cards for the mode and project types into `raw/00-rules/` (调用协议 step 2); read them before step 2. Modes: `implementation`, `review`, `diagnosis`, `analysis`, `operations`. Project types: `miniprogram`, `admin`, `mobile`, `backend`, `agent` (a mini-program or admin project also includes `backend`). `--archetype` (`mall`, `food`, `booking`, `membership-store`, `saas-admin`) adds that kind of system's modules, comparable open-source systems and system-level searches; add launch modules (`deploy`, `compliance`, `legal`, `license`, `design-integration`) when the task goes to production. Module IDs: `references/standards.json` → `modules`.
 
-2. **Check the knowledge base, then research with Luz-Crawl — the whole system.** A new plan already contains the fresh sources and facts in `knowledge/` for its modules (marked “知识库”); research only fetches what is missing or past its review period, and every newly read source is written back to `knowledge/` automatically. Read `references/research.md`, then run `python -X utf8 scripts/tech_plan.py research NN --run --batch 15 --pause 6` in the background. It reads comparable systems, every module's design practice, the official pages of external platforms, and the regulations behind qualifications and agreements. Every implementation, operations and analysis plan also researches the **baseline tracks** whatever its modules — Web and API security, admin login and session security, HTTPS and web-server hardening, container deployment, CI/CD and rollback, server and network security, monitoring and alerting, backup and recovery, secrets and dependency security, data protection and 等级保护 (`research-sources.json` → `baselineTracks`); review plans cover the security tracks. Review is refused until each track has a read source, and an official or standard one where the track requires it (OWASP, Docker, PostgreSQL, nginx, Mozilla). The findings go into the plan's 安全与规范 and 上线、运维与合规 chapters as concrete settings (headers, TLS versions, rate limits, lockout thresholds, backup schedule, alert rules) with `[S#]`. Sources are imported with tier and read state; implementation plans need at least one comparable open-source system read. Searches that hit a site cooldown are retried on the next `--run`. If Luz-Crawl is unavailable, stop and tell the user; implementation research is skipped only with explicit user consent (`--skip "原因" --user-consent`).
+2. **Check the knowledge base, then research with Luz-Crawl — the whole system.** A new plan already contains the fresh sources and facts in `knowledge/` for its modules; research only fetches what is missing or past its review period, and every newly read source is written back. Read `references/research.md` (what must be researched per mode, the baseline security and operations tracks, thresholds, source tiers), then run `python -X utf8 scripts/tech_plan.py research NN --run --batch 15 --pause 6` in the background. Findings go into the plan's 安全与规范 and 上线、运维与合规 chapters as concrete settings with `[S#]`. If Luz-Crawl is unavailable, stop and tell the user; implementation research is skipped only with explicit user consent (`--skip "原因" --user-consent`).
 
-3. **Read the system design if it exists.** When the user already has a Luz-System session for this product, read its architecture and function list so the plan's modules, APIs and tables match it. The frontend address itself is registered after approval (step 9).
+3. **Read the system design and the existing code.** When the user already has a Luz-System session for this product, read its architecture and function list so the plan's modules, APIs and tables match it; for an existing system, read the repository, its conventions, tests and current behaviour. Search `record_experience.py search` and `experience/INDEX.md` for verified reusable logic. The frontend address itself is registered after approval (step 9).
 
 4. **List the custom features** — everything the user asked for beyond the base features: `tech_plan.py feature NN --name "人脸入场" --desc "会员刷脸入场，可用会员码替代" --priority P0 --module face` (modules named here join the plan and its checklist). A plan with none records `--none "原因"`.
 
 5. **Reuse standard modules, design only what is custom.** The backend library (`backend/`, catalog `references/standard-modules.json`, overview `backend/MODULES.md`) already holds complete, tested modules: member login, admin accounts and permissions, WeChat Pay and reconciliation, orders, after-sales and refunds, membership cards, stored value, coupons, lottery, notifications, and the shared foundation (lists, export, idempotency, outbox, jobs). A new plan lists the standard modules it uses in `standardModules` and renders one table — module, what it covers, this project's values, deviations — instead of repeating their design. Set values and record deviations with `tech_plan.py standard NN --module order --set ORDER_PAY_TIMEOUT_MINUTES=10 --deviation "不支持余额支付"`; a deviation that changes behaviour is implemented through the module's 定制点 (MODULE.md §13), never by editing its rules. Only modules with no standard module (for example face, iot, access-control, booking, store, report) get a detailed chapter from `references/module-specs/` (功能说明, 业务流程, 页面与输入, 接口, 结果与页面跳转, 数据表, 状态流转, 异常与边界); adapt each and replace it with `tech_plan.py spec NN --file adapted.json`. `standard NN --sync` adds standard modules for modules added later and drops copied specs they replace (older plans). Every table a custom module writes must be defined. Format: `references/module-specs/README.md`. The development-to-operations checklist is `references/dev-checklist.html` (`scripts/build_checklist.py`).
 
-6. **Complete the plan** in `plan.json`. Start business modules from the pattern documents the plan lists; adapt them to what research found and state deviations. Fill the “上线、运维与合规” section: qualifications and filings, agreements, environments and deployment, launch checklist. Replace every `todo` block; mark each checklist item (`tech_plan.py mark NN PAY-005 --status planned --note "做法"`, or `n/a` with a reason); record questions only the user or merchant can answer as decisions (`tech_plan.py decide NN D1 --question … --option … --blocking`). Then `tech_plan.py render NN`.
+6. **Complete the plan** in `plan.json`. Start business modules from the pattern documents the plan lists and the reusable function logic in `references/function-catalog.json`; adapt them to what research found and state deviations. Flows that end in payment, submission or asynchronous work define their result contract from `references/result-patterns.md`. Fill the “上线、运维与合规” section: qualifications and filings, agreements, environments and deployment, launch checklist. Replace every `todo` block; mark each checklist item (`tech_plan.py mark NN PAY-005 --status planned --note "做法"`, or `n/a` with a reason); record questions only the user or merchant can answer as decisions (`tech_plan.py decide NN D1 --question … --option … --blocking`). Then `tech_plan.py render NN`.
 
 7. **Submit for review**: `tech_plan.py submit NN`. It refuses while a section is incomplete, research is below threshold, custom features are not listed, a MUST rule is unhandled, a `[S#]` reference is missing, a rule card in `raw/00-rules/` is missing or out of date, or 采用的规则 (`tech_plan.py rule`) or 本次沉淀 (`tech_plan.py sediment`) is empty; a frontend plan without a frontend address only gets a reminder. Give the user the HTML path and the open decisions.
 
@@ -89,19 +91,19 @@ Edit `raw/plan.json`, then re-render; never hand-edit the HTML. The page opens w
 
 11. **Deliver with evidence and grow the knowledge base**: mark items `done` with `--evidence`, record this build's note in 本次沉淀, pass `tech_plan.py check NN --stage delivery` (it also checks the rule cards, 采用的规则 and a note confirmed since approval), complete the launch checklist, and record every reusable conclusion from this task's research as a fact: `python -X utf8 scripts/knowledge.py fact --kind law|platform|feature|practice|pitfall --topic … --statement … --source <URL 或 KS-编号> --module …`.
 
-Read-only modes do not need approval to run but still create the plan and record findings. `operations` needs approval. Convert an older HTML-only plan with `tech_plan.py adopt NN --mode …`. If a plan cannot be created, researched, or completed, stop and report the blocker.
+Read-only modes do not need approval to run but still create the plan and record findings. `operations` needs approval. Convert an older HTML-only plan with `tech_plan.py adopt NN --mode …`. If a plan cannot be created, researched, or completed, stop and report the blocker. Build order after `gate` (vertical slices, contracts first, tests for failure, concurrency and permissions) and the gate of each stage are in `WORKFLOW.md`.
 
 ### Plan pages follow the Luz Design output rules
 
-Every HTML Luz Dev generates (plan pages, `references/standards.html`, `knowledge/index.html`) is a Luz Design reading page: the first visible line is the title, sections follow directly, light surfaces, one accent colour, one font family, sizes 14/16/20/24/32 only, centered container, no application shell (sidebar, top bar, breadcrumbs, footer). The page holds content only — conclusions, features, architecture, interfaces, data, rules and how this project meets them, launch, tests. Process information stays in `raw/plan.json` and in the conversation: sources and research counts, approval state and hashes, revisions, timestamps, file paths, and open decisions (ask the user in the conversation). Write rule notes and content without those words.
+Every HTML Luz Dev generates (plan pages, `references/standards.html`, `references/function-catalog.html`, `references/dev-checklist.html`, `knowledge/index.html`) is a Luz Design reading page: the first visible line is the title, sections follow directly, light surfaces, one accent colour, one font family, sizes 14/16/20/24/32 only, centered container, no application shell (sidebar, top bar, breadcrumbs, footer). The page holds content only — conclusions, features, architecture, interfaces, data, rules and how this project meets them, launch, tests. Process information stays in `raw/plan.json` and in the conversation: sources and research counts, approval state and hashes, revisions, timestamps, file paths, and open decisions (ask the user in the conversation). Write rule notes and content without those words.
 
 `tech_plan.py submit` runs Luz Design's own checker (`$LUZ_DESIGN_ROOT/scripts/check_document.py`, used read-only) on the page; any ERROR blocks submission. After it passes, still apply Luz Design's deletion test to every visible element. Luz Dev never edits the Luz Design or Luz-Crawl skills.
 
 Colour tokens come from the paired Luz Design theme file at every render (`references/themes.json`, theme `ai-agent`; older layouts are found automatically; bundled snapshot as fallback); the page style is `assets/shared/luz-reading.css`.
 
-Headings are numbered when rendered (2, 2.1 …) and a contents list follows the title on long plans. Plan content blocks: `p`, `h3`, `list`, `table` (`dense` for number-heavy tables), `callout`, `cards`, `kv`, `code`, `svg` (scripts and event attributes are rejected), and `todo` (blocks submission). Inline text supports `` `code` ``, `**bold**` and `[text](https://…)`; `[S#]` source markers stay in the data and are not shown.
+Headings are numbered when rendered (2, 2.1 …). A plan with more than eight sections gets a light contents list after the body, on the right of wide screens and hidden on narrow ones (Luz Design reading-page rule). Plan content blocks: `p`, `h3`, `list`, `table` (`dense` for number-heavy tables), `callout`, `cards`, `kv`, `code`, `svg` (scripts and event attributes are rejected), and `todo` (blocks submission). Inline text supports `` `code` ``, `**bold**` and `[text](https://…)`; `[S#]` source markers stay in the data and are not shown.
 
-The paired Design package is resolved by `--design-root`, then `LUZ_DESIGN_ROOT`, then `../Luz-Design`. Luz Dev depends only on Luz Design's `SKILL.md`, its theme file and `scripts/check_document.py` — not on its internal layout, which changes between releases. Approved design sessions come from Luz System (`D:\Codes\skill输出\Luz-System`). Luz-Crawl is resolved by `--crawl-root`, then `LUZ_CRAWL_ROOT`, then `../Luz-Crawl`.
+Luz Dev depends only on Luz Design's `SKILL.md`, its theme file and `scripts/check_document.py`, not on its internal layout; how the paired packages are found (`--design-root`, `LUZ_DESIGN_ROOT`, `--crawl-root` …) is in `references/index.md`. Approved design sessions come from Luz System (`D:\Codes\skill输出\Luz-System`).
 
 ## Frontend: integrating Luz System
 
@@ -120,55 +122,19 @@ Changing a user-visible flow, permission rule or hierarchy goes back to Luz Syst
 |---|---|---|
 | Environments, deployment, HTTPS, monitoring, backups, rollback, mini-program release | `references/operations.md` | `assets/deploy/` (Compose, Nginx, env example, backup script, `LAUNCH-CHECKLIST.md`) |
 | Qualifications, filings, platform category, payment merchant, graded protection, licences | `references/compliance.md` | `config/third-party-licenses.md` in the project |
-| User terms, privacy policy, mini-program privacy guide, face consent, prepaid-card terms, consent records | `references/legal-documents.md` | `assets/legal/`; backend module `backend/27-legal` |
+| User terms, privacy policy, mini-program privacy guide, face consent, prepaid-card terms, consent records | `references/legal-documents.md` | texts with Luz-Writing from `assets/legal/`; backend module `backend/27-legal` |
 
 Qualifications and filings take time and are done by the merchant: list them in the plan in the first week. Agreement texts are drafted from templates and confirmed by the merchant (lawyer review recommended); Luz Dev implements versioning, consent records, re-consent and withdrawal, and does not make legal judgements for the merchant. Facts about regulations and platform rules must come from official pages read in this task's research.
 
 ## Standards
 
-`references/standards.json` holds the rules (`MUST` / `SHOULD`, platforms, modules, requirement, why, do / don't, verification, sources) and feature baselines per project type. Each implementation or operations plan automatically receives every applicable rule as its checklist and the baselines for its project types. Domains: delivery, authentication, authorization and isolation, input and errors, money, orders and inventory, bookings, WeChat Pay, refunds and reconciliation, coupons, membership and prepaid, personal information, face data, files and content, secrets, external calls, rate limiting, logging and audit, jobs and cache, data and backups, mini-program, admin, UI, agents, frontend integration, qualifications and licences, agreements, release, operations.
+`references/standards.json` holds the rules (`MUST` / `SHOULD`, platforms, modules, requirement, why, do / don't, verification, sources) and feature baselines per project type. Each implementation or operations plan automatically receives every applicable rule as its checklist and the baselines for its project types. Domains: delivery, authentication, authorization and isolation, input and errors, money, orders and inventory, bookings, WeChat Pay, refunds and reconciliation, coupons, membership and prepaid, doors and devices, personal information, face data, files and content, secrets, external calls, rate limiting, logging and audit, jobs and cache, data and backups, mini-program, admin, UI, agents, frontend integration, qualifications and licences, agreements, release, operations.
 
 To add or correct a rule: edit `references/standards.json` (source + check date for external facts), run `python -X utf8 scripts/build_standards.py`, then `tech_plan.py render NN --sync` for open plans.
 
 ## Routing
 
-| Target | Read next | Reference code / baseline |
-|---|---|---|
-| Research for any plan | `references/research.md` + `references/research-sources.json` | Luz-Crawl collections under `D:\Codes\skill输出\Luz-Crawl` |
-| Business logic | `references/patterns/README.md` → the module's pattern | `backend/07-inventory`, `08-order`, `10-after-sales`, `13-reservation`, `15-recharge`, `16-coupon`, `17-campaign`, `27-legal` |
-| Payment, refund, reconciliation | `backend/09-wechat-pay/MODULE.md` (rules `PAY-*`, `RFD-*`) | `wechat_pay/apiv3.py` |
-| Frontend from Luz System | `references/design-integration.md` | `scripts/design_intake.py` |
-| WeChat mini-program implementation | `references/miniprogram.md` | Luz System session for the project |
-| Merchant admin implementation | `references/admin.md` | Luz System session for the project |
-| Mobile app implementation | `references/mobile-app.md` | Luz System session for the project |
-| Backend, API, data | `references/backend.md` → `backend/SPEC.md` → selected `backend/NN-name/MODULE.md` | `backend/MODULES.md`, `backend/API.md` |
-| Module catalog | Agents: `references/function-catalog.json`; humans: `references/function-catalog.html` | — |
-| Result pages | `references/result-patterns.md` + catalog module `result-flow` | — |
-| Operations and launch | `references/operations.md` | `assets/deploy/` |
-| Runtime config files, hot reload, logging, log retention | `references/config-logging.md` | `luzback/config.py`, `luzback/logging.py`, module spec `config` |
-| Qualifications and licences | `references/compliance.md` | — |
-| Agreements and consent | `references/legal-documents.md` | `assets/legal/`, `backend/27-legal` |
-| Intelligent agent (the agent foundation is the one canonical spec) | `references/agent-foundation.md` → `agent/README.md` (code gaps) → `agent/backend/SPEC.md` | `agent/shared/protocol.md` |
-| Architecture decision | `references/implementation-architecture.md` | — |
-| Quality / release | `references/quality.md` + `references/delivery.md` | — |
-| Security and feature rules | Agents: `references/standards.json`; humans: `references/standards.html` | — |
-
-Read only what the task needs.
-
-## Start every task
-
-1. Create the plan draft with project types, archetype and modules and read every rule card it saves in `raw/00-rules/`; run `record_experience.py search` and apply the stored preferences and lessons; search `experience/INDEX.md` for verified reusable logic.
-2. Run the Luz-Crawl research and import it.
-3. Register the Luz System session (or the reason there is none).
-4. Read the pattern documents the plan lists and query `references/function-catalog.json`; for completion flows also read `references/result-patterns.md`.
-5. Inspect the existing repository, conventions, tests, and current behavior.
-6. Complete the plan including the launch section, work through the checklist, submit, and wait for the user's approval.
-7. After `gate` passes: smallest vertical slice first; OpenAPI contract and design bindings before both sides change; tests for behavior, failure, concurrency and permissions.
-8. Integrate the Luz System frontend and pass `design_intake.py check`.
-9. Deploy through the release flow, complete the launch checklist with evidence, observe after release.
-10. Mark checklist items done with evidence; record the experience.
-
-Use `WORKFLOW.md` for gates and sequencing.
+Every target — research, business logic, payment, frontend per platform, backend, module catalog, result pages, operations, config and logging, qualifications, agreements, agents, architecture, quality, standards — has one row in `references/index.md` naming what to read next. Read only what the task needs.
 
 ## Engineering rules
 
@@ -184,6 +150,7 @@ The full, verifiable list is `references/standards.json`. The rules that shape e
 - Personal data needs a stated purpose and consent with records; face recognition is never the only option; agreements are versioned and re-consented after material changes.
 - Production runs HTTPS only, with monitoring, backups that have been restored, and a rehearsed rollback.
 - Secrets live in a secret store or restricted files, never in source, logs, screenshots or prompt-visible files.
+- Front-end texts and display settings (order and visibility of home modules, display switches) come from the backend and are maintained in the admin; keys the merchant must not change stay on the backend, out of the admin (module spec `content`, MP-006, ADMIN-005).
 - Runtime parameters live in validated config files the server hot-reloads, not in admin pages; logs are one-line JSON with shared fields and trace ids, free of secrets, never block a request, and are kept centrally for the legal periods (`references/config-logging.md`).
 - Done means verified in the target environment, including failure, repeat, concurrency, permission and dependency-outage behavior.
 
@@ -215,7 +182,10 @@ Use the project's approved stack when one exists. For greenfield Luz work:
   infra/
     deploy/             # from assets/deploy/
     migrations/
-  config/               # per-environment settings, where secrets live, third-party-licenses.md
+  config/
+    runtime/            # base.toml + dev/staging/prod.toml, hot-reloaded runtime parameters (config-logging.md §2)
+    <env>.md            # per-environment list: items, purpose, how to obtain and verify; secrets only by location
+    third-party-licenses.md
   legal/                # agreement sources and published versions
   docs/
     IMPLEMENTATION.md
@@ -228,7 +198,7 @@ Omit unused targets. Keep runtime secrets outside the repository.
 
 ## Skill registration
 
-Luz Dev, Luz System, Luz Design, Luz Crawl and Luz Writing are registered for every agent on this machine as junctions in `D:\Codes\skills`, which `~/.claude/skills` and `~/.codex/skills` both point to: `luz-dev → D:\Codes\Luz-Dev`, `luz-system → D:\Codes\Luz-System`, `luz-design → D:\Codes\Luz-Design`, `luz-crawl → D:\Codes\Luz-Crawl`, `luz-writing → D:\Codes\Luz-Writing`. An agent calls them by name (Skill tool `luz-crawl`, `luz-system`, `luz-design`, `luz-writing`). Luz Dev uses Luz Crawl for research, Luz System for system design, product UI and prototypes, Luz Design for visual standards and every HTML page's layout, and Luz Writing for user agreements, privacy policies and launch copy; it reads their files and runs their scripts but never edits them. Check or restore them with `python -X utf8 scripts/register_skills.py --check` (report) or `python -X utf8 scripts/register_skills.py` (create missing junctions).
+Luz Dev, Luz System, Luz Design, Luz Crawl and Luz Writing are registered for every agent on this machine as junctions in `D:\Codes\skills`, which `~/.claude/skills` and `~/.codex/skills` both point to: `luz-dev → D:\Codes\Luz-Dev`, `luz-system → D:\Codes\Luz-System`, `luz-design → D:\Codes\Luz-Design`, `luz-crawl → D:\Codes\Luz-Crawl`, `luz-writing → D:\Codes\Luz-Writing`. An agent calls them by name (Skill tool `luz-crawl`, `luz-system`, `luz-design`, `luz-writing`). Luz Dev uses Luz Crawl for research, Luz System for system design, product UI and prototypes, Luz Design for visual standards and every HTML page's layout, and Luz Writing for user agreements, privacy policies and launch copy; it reads their files and runs their scripts but never edits them. The same script keeps the Luz routing and invocation block in `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md`. Check or restore both with `python -X utf8 scripts/register_skills.py --check` (report) or `python -X utf8 scripts/register_skills.py` (create missing junctions and rewrite an outdated block).
 
 ## Knowledge base
 
@@ -249,7 +219,7 @@ Search `experience/INDEX.md` and `knowledge/` before designing. Use verified rec
 
 Knowledge flows one way: **experience record (evidence) → verified → standard rule, pattern, or catalog entry.** A general lesson (platform limit, security requirement, failure mode, launch blocker) becomes a rule in `references/standards.json` with its source and check date; reusable module logic becomes a pattern with tested code and a catalog entry (`python -X utf8 scripts/build_function_catalog.py`).
 
-At the end of every task, including a review, diagnosis or blocked task, record what was learned:
+Every call leaves a note (section 每次调用后沉淀, the mandatory part). A task that produced a reusable method, a failure analysis or evidence worth keeping also gets a full record:
 
 ```powershell
 python -X utf8 scripts/record_experience.py record --key payment-callback-idempotency --title "支付回调幂等处理" --task-mode implementation --plan "D:\Codes\skill输出\Luz-Dev\06-健身房下单小程序\06-健身房下单小程序.html" --summary "使用持久化事件标识过滤重复回调。" --tag payment --tag idempotency
@@ -282,8 +252,9 @@ Here also: `search` without `--kind` (or with `--kind record`) also returns matc
 ## Validation
 
 ```powershell
-python -X utf8 -m unittest -v tests.test_context tests.test_tech_plan tests.test_design_intake tests.test_knowledge tests.test_function_catalog tests.test_skill_automation tests.test_validate_handoff
+python -X utf8 -m pytest tests -q
 python -X utf8 scripts/context.py check
+python -X utf8 scripts/module_specs.py check
 python -X utf8 scripts/knowledge.py check
 python -X utf8 scripts/build_standards.py
 python -X utf8 scripts/build_function_catalog.py

@@ -34,13 +34,13 @@ ROUTING_BLOCK = f"""{BEGIN_MARK}
 | 视觉标准、海报、Excel、Word、报告与阅读网页、演示文稿、PDF 的排版 | luz-design | `py -X utf8 D:\\Codes\\Luz-Design\\scripts\\context.py list` |
 | 后端、接口、数据库、智能体服务、部署上线、资质与协议 | luz-dev | `python -X utf8 D:\\Codes\\Luz-Dev\\scripts\\context.py list` |
 | 文章、文案、协议等文字 | luz-writing | `py -X utf8 D:\\Codes\\Luz-Writing\\scripts\\06-context.py list` |
-| 网页检索、采集、下载 | luz-crawl | `node D:\\Codes\\Luz-Crawl\\scripts\\luz-crawl.mjs doctor`，再 `begin`、`experience --query` |
+| 网页检索、采集、下载 | luz-crawl | `node D:\\Codes\\Luz-Crawl\\scripts\\luz-crawl.mjs doctor`，再 `begin "主题" --out D:\\Codes\\skill输出\\Luz-Crawl --new`、`experience --query`，之后每条命令带 `--out <任务目录>` |
 
 每次调用都要：
 1. 先读规则卡（`context.py <类型>`）：用户偏好、相关教训、规范原文、该用的工具、交付前的检查。模板和脚本只是骨架，与规则卡冲突时按规则卡。
 2. 交付前通过卡上的检查；会话的 BRIEF 写明“采用的规则”。
 3. 结束前沉淀经验：用户新说的偏好、规则纠正、有效或失败的做法、调研来源与范围，用技能的 `note` 命令写入或确认，并写进 BRIEF 的“本次沉淀”。发布和交付会检查这两栏。
-4. 产出只写到 `D:\\Codes\\skill输出\\<技能>\\NNN-名称\\`，不写进技能目录；多个会话同时用 Luz-Crawl 时，每项需求用 `begin --new` 建自己的任务目录。
+4. 产出只写到 `D:\\Codes\\skill输出\\<技能>\\NNN-名称\\`（Luz-Crawl 的任务目录是 `raw\\NNN_名称`），不写进技能目录；多个会话同时用 Luz-Crawl 时，每项需求用 `begin --new` 建自己的任务目录。
 {END_MARK}"""
 
 

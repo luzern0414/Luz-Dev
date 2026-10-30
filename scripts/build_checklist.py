@@ -48,7 +48,10 @@ def render(data: dict[str, Any], design_root: Path | None = None) -> str:
             for item in stage["items"]
         )
         head = "".join(f'<th scope="col">{c}</th>' for c in ("编号", "检查项", "标准", "验证方式", "底座"))
-        sections.append(f'<section id="{html.escape(stage["id"])}"><h2>{index} {html.escape(stage["name"])}</h2>'
+        # The first section opens with what the two numbering schemes mean (checklist items vs standards rules).
+        note = ('<p>两位编号（如 REL-01）是本清单的检查项；三位编号（如 REL-001）是规范库 standards.json 的规则。</p>'
+                if index == 1 else "")
+        sections.append(f'<section id="{html.escape(stage["id"])}"><h2>{index} {html.escape(stage["name"])}</h2>{note}'
                         f'<div class="table-wrap"><table class="dense plain"><thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table></div></section>')
     toc = "".join(f'<li><a href="#{html.escape(s["id"])}">{i} {html.escape(s["name"])}</a></li>' for i, s in enumerate(data["stages"], 1))
     return f"""<!doctype html>

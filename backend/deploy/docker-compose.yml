@@ -36,8 +36,8 @@ services:
 
   migrate:
     build: { context: .., dockerfile: deploy/Dockerfile, args: { PYTHON_IMAGE: "python:3.12-slim-bookworm" } }
-    # 迁移后同步权限码与内置角色（幂等）；首个超级管理员：docker compose run --rm migrate python -m admin_rbac.bootstrap <username>
-    command: ["sh", "-c", "alembic upgrade head && python -m admin_rbac.bootstrap --seed"]
+    # 迁移后同步权限码与内置角色、文案种子（幂等）；首个超级管理员：docker compose run --rm migrate python -m admin_rbac.bootstrap <username>
+    command: ["sh", "-c", "alembic upgrade head && python -m admin_rbac.bootstrap --seed && python -m app_settings sync"]
     healthcheck: { disable: true }   # 镜像自带 HEALTHCHECK 探 api 端口，非 api 进程关闭
     env_file: [.env.dev]
     depends_on:
@@ -47,6 +47,9 @@ services:
     build: { context: .., dockerfile: deploy/Dockerfile, args: { PYTHON_IMAGE: "python:3.12-slim-bookworm" } }
     command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
     env_file: [.env.dev]
+    # 运行配置整目录挂载：改 ../config/runtime/*.toml 后各进程热加载；Docker Desktop 的挂载不发文件通知，用轮询
+    volumes: ["../config/runtime:/srv/backend/config/runtime:ro"]
+    environment: { LUZ_CONFIG_WATCH: poll }
     ports: ["8000:8000"]
     depends_on:
       migrate: { condition: service_completed_successfully }
@@ -62,6 +65,8 @@ services:
     command: ["python", "-m", "jobs", "worker"]
     healthcheck: { disable: true }   # 镜像自带 HEALTHCHECK 探 api 端口，非 api 进程关闭
     env_file: [.env.dev]
+    volumes: ["../config/runtime:/srv/backend/config/runtime:ro"]
+    environment: { LUZ_CONFIG_WATCH: poll }
     depends_on:
       api: { condition: service_healthy }
 
@@ -70,6 +75,8 @@ services:
     command: ["python", "-m", "jobs", "scheduler"]
     healthcheck: { disable: true }   # 镜像自带 HEALTHCHECK 探 api 端口，非 api 进程关闭
     env_file: [.env.dev]
+    volumes: ["../config/runtime:/srv/backend/config/runtime:ro"]
+    environment: { LUZ_CONFIG_WATCH: poll }
     depends_on:
       api: { condition: service_healthy }
 

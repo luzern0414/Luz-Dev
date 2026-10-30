@@ -19,7 +19,7 @@
 
 | 项 | 内容 |
 |---|---|
-| 状态 | 标准（可复用）。测试 84 项（规则、领取、并发 50 线程、订单锁券 / 核销 / 解锁 / 退券、任务、事件、HTTP） |
+| 状态 | 标准（可复用）；测试在 `code/tests/`（规则、领取、并发 50 线程、订单锁券 / 核销 / 解锁 / 退券、任务、事件、HTTP） |
 | 代码 | `16-coupon/code/coupon/`：models / rules / service / events / jobs / api / deps / config |
 | 依赖 | luzback（db、errors、idempotency、outbox、audit、listing、export、statemachine、scheduler、crypto）；17-campaign `pricing`（计价与分摊，只读使用） |
 | 依赖 | 22-admin-rbac（后台鉴权：`admin_rbac.require_permission` 正式依赖 + 门店范围，必备）；可选：01-identity（会员令牌与会话校验、`find_user_by_phone` 手机号查找）、14-membership（`member_profile` 人群画像）、18-lottery（`ack_delivery` 回执） |
@@ -56,12 +56,12 @@
 8. 发布后编辑：类型、门店、有效期类型不可改；库存不得低于已发；每人 / 每日限领只能放宽；领取期只能延长、开始时间不能推后；使用规则可改（version + 1）。`apply_to_issued=true` 时仅当所有修改对顾客有利（面额不减、折扣不升、封顶不降、门槛不升、范围不缩、叠加不收紧、固定有效期不缩短）才同步给 unused 的券，否则 4220 并列出字段。编辑带 `version` 乐观锁，冲突 4090。
 9. 状态：draft → active（发布，校验领取期与有效期未结束）→ paused ↔ active → ended（终态）。只有草稿可删除（软删）。结束发放后已发出的券照常可用。
 10. 抵扣（经 17-campaign `pricing.quote`）：先算活动，再算券；门槛按活动后、范围内行的金额判断；amount_off 抵扣 = min(面额, 范围余额)；percent_off = 范围余额 − 范围余额 × 折扣 // 100（应付向下取整，优惠向上取整到分），封顶 max_discount_cents；exchange = 范围内最便宜的 exchange_qty 件单价之和。`stack_with_campaign=false` 的券跳过已享活动的行。抵扣按行金额用最大余数法分摊，合计严格相等。
-11. 叠加：stack_group 为空的券不与任何券同用；同组互斥；不同非空组可叠加；一单最多 `COUPON_MAX_PER_ORDER` 张。冲突 4220 stack_conflict。
+11. 叠加：stack_group 为空的券不与任何券同用；同组互斥；不同非空组可叠加；一单最多 `[coupon] max_coupons_per_order` 张。冲突 4220 stack_conflict。
 12. 可用券：unused 且在有效期内，逐张计算抵扣；不可用给出原因（not_started、expired、no_scope_items、campaign_conflict、below_threshold + “还差X元可用”、no_discount）。推荐：抵扣最大，同额先到期。
 13. 锁定：下单事务内 `unused → locked`（条件 UPDATE，WHERE 含 user_id 与有效期），写 order_id、discount_cents、alloc_json；同一订单重复锁定幂等；其他订单 4220 unavailable 或 4090。
 14. 核销：支付成功 `locked → used`，模板 used_count + n；锁定时已校验有效期，支付时不因到期拒绝；重复回调幂等。
 15. 解锁：关单 / 超时 `locked → unused`；若此时已过有效期则 `locked → expired`（修复 002Gym 把过期券放回可用的问题）。
-16. 退券：策略 full_refund（默认，仅整单全额退款）/ any_refund / never；`COUPON_RETURN_WINDOW_HOURS > 0` 时核销超过该时长不退；仍在有效期 → unused，已过期 → expired；used_count − n；重复调用幂等。只退券本身，退款资金一律原路退回。
+16. 退券：策略 full_refund（默认，仅整单全额退款）/ any_refund / never；`[coupon] return_window_hours > 0` 时核销超过该时长不退；仍在有效期 → unused，已过期 → expired；used_count − n；重复调用幂等。只退券本身，退款资金一律原路退回。
 17. 来源收回：`revoke_by_source(source_ref)` 把该来源发出的 unused 券置 revoked；锁定 / 已用的保留并返回，由来源模块决定是否阻止退款。后台作废单张 unused 券须填原因（审计）。
 18. 兑换码：12 位（去掉 I O 0 1 的 32 字符字母表，约 60 位熵），只存 HMAC 与密文；一码一次（条件 UPDATE）；不存在 / 已用 / 作废统一 4040；同一会员每窗口失败达上限后 4290（含 Retry-After），失败计数在业务事务回滚后单独提交；发券失败（限领、售罄）时码保持未使用。生成数量不超过剩余库存减未兑换码数。
 19. 批量发放：创建时校验模板 active、渠道（admin / compensation）、剩余库存，原因必填（审计）；任务逐个会员一个事务，ref_key `batch:{批次}:{会员}` + 明细唯一约束保证幂等；失败写原因；`ignore_limit` 仅用于补偿。
@@ -94,7 +94,7 @@
 |---|---|---|---|---|---|---|
 | GET | `/api/v1/app/coupon-templates` | 可选 | — | — | read | 领券中心，游标（type、store_id，sort=published_at）；登录后带 claimed_by_me / can_claim |
 | GET | `/api/v1/app/coupon-templates/{id}` | — | — | — | read | 模板详情（规则与有效期文案） |
-| POST | `/api/v1/app/coupon-templates/{id}/claim` | 会员 | 必须 | — | low（需确认） | 领取；4225 限领 / 售罄 |
+| POST | `/api/v1/app/coupon-templates/{id}/claim` | 会员 | 必须 | — | write | 领取；4225 限领 / 售罄 |
 | GET | `/api/v1/app/coupons?tab=available\|used\|expired` | 会员 | — | — | read | 我的券，游标（template_id，sort=valid_to / claimed_at） |
 | GET | `/api/v1/app/coupons/counts` | 会员 | — | — | read | 各页签数量 |
 | GET | `/api/v1/app/coupons/{id}` | 会员 | — | — | read | 他人的券 4040 |
@@ -126,7 +126,7 @@
 | `lock(db, user_id, order_id, coupon_ids, lines, campaign_promotions=(), shipping_cents=0, now=None) -> CouponPricing` | 08-order 下单事务 | 与报价同一计算；写 order_items.coupon_alloc_cents 用 `line_coupon_cents`；同订单重复调用幂等 |
 | `redeem(db, order_id, now=None) -> list[int]` | 支付成功处理（payment.succeeded 消费方） | locked → used，幂等 |
 | `unlock(db, order_id, now=None) -> {"unlocked", "expired"}` | 取消 / 超时关单 | 已过期的直接 expired |
-| `return_on_refund(db, order_id, full_refund, now=None, policy=None) -> {"returned", "expired", "kept"}` | 10-after-sales / 08-order 在 `refund.succeeded` 后、确认整单是否全额退款时调用 | 按 COUPON_RETURN_POLICY |
+| `return_on_refund(db, order_id, full_refund, now=None, policy=None) -> {"returned", "expired", "kept"}` | 10-after-sales / 08-order 在 `refund.succeeded` 后、确认整单是否全额退款时调用 | 按 `[coupon] return_policy` |
 | `revoke_by_source(db, source_ref, reason, now=None)` | 赠券来源订单退款 | 返回 revoked 与 kept（已用的） |
 | `issue(db, template_id, user_id, ref_key, channel=..., source_ref=None, enforce_limits=True, now=None)` | 会员、补偿、生日礼 | ref_key 幂等 |
 | `available_coupons / best_coupon(db, user_id, lines, campaign_promotions=(), ...)` | 确认订单页 | 可用 / 不可用原因 / 推荐 |
@@ -179,19 +179,30 @@
 
 ## 9 配置
 
-| 键 | 默认 | 说明 |
+运行参数写在 `backend/config/runtime/*.toml`，字段说明（类型、范围、能否热加载、是否下发客户端）在 `00-framework/code/luzback/runtime_config.py`；模块经 `luzback.module_config.ModuleConfig` 读取，热加载后下一次读取即生效。环境变量只放秘密与部署参数；迁移前的环境变量名仍设置着时，启动会打 `config.unknown_env` 警告并指出新键。测试用 `set_config(...)` 或 `luzback.testing.override_runtime(...)` 注入运行参数（写进一份测试用运行配置，测试结束撤销）。
+
+### 9.1 环境变量（秘密与部署参数）
+
+| 变量 | 默认 | 说明 |
 |---|---|---|
-| COUPON_TIMEZONE | LUZ_TIMEZONE / Asia/Shanghai | 每日限领与文案的时区 |
-| COUPON_RETURN_POLICY | full_refund | full_refund / any_refund / never |
-| COUPON_RETURN_WINDOW_HOURS | 0 | 核销后多少小时内退款才退券；0 = 只看有效期 |
-| COUPON_CODE_LENGTH | 12 | 兑换码长度（8–32） |
-| COUPON_CODE_MAX_FAILURES / COUPON_CODE_WINDOW_SECONDS | 5 / 600 | 兑换失败限流 |
-| COUPON_CODE_BATCH_MAX / COUPON_ISSUE_BATCH_MAX | 10000 / 10000 | 单批上限 |
-| COUPON_EXPIRE_BATCH | 500 | 过期 / 提醒任务每批行数 |
-| COUPON_REMIND_BEFORE_HOURS | 48 | 到期提醒提前量 |
-| COUPON_ISSUE_JOB_BATCH | 200 | 批量发放任务每轮会员数 |
-| COUPON_MAX_PER_ORDER | 3 | 一单最多用券数 |
-| LUZ_FIELD_KEY | （框架） | 兑换码 HMAC 与加密密钥 |
+| `COUPON_TIMEZONE` | LUZ_TIMEZONE / Asia/Shanghai | 每日限领与文案的时区 |
+| `LUZ_FIELD_KEY` | 框架 | 兑换码 HMAC 与加密密钥 |
+
+### 9.2 运行配置键
+
+| 键 | 默认 | 范围 | 热加载 | 下发客户端 | 说明（含单位） |
+|---|---|---|---|---|---|
+| `[coupon] return_policy` | "full_refund" | never / full_refund / any_refund | 是 | 否 | 退款后是否退券：never 不退、full_refund 整单全额退款才退、any_refund 任何退款都退（原 `COUPON_RETURN_POLICY`） |
+| `[coupon] return_window_hours` | 0 | 0–8760 | 是 | 否 | 退券只在下单后多少小时内（小时，0 = 只看券的有效期）（原 `COUPON_RETURN_WINDOW_HOURS`） |
+| `[coupon] code_length` | 12 | 8–32 | 是 | 否 | 兑换码长度（位）（原 `COUPON_CODE_LENGTH`） |
+| `[coupon] code_max_failures` | 5 | 1–100 | 是 | 否 | 兑换码在窗口内输错几次后锁定（原 `COUPON_CODE_MAX_FAILURES`） |
+| `[coupon] code_window_seconds` | 600 | 60–86400 | 是 | 否 | 兑换码输错计数窗口（秒）（原 `COUPON_CODE_WINDOW_SECONDS`） |
+| `[coupon] code_batch_max` | 10_000 | 1–100000 | 是 | 否 | 一批最多生成多少个兑换码（原 `COUPON_CODE_BATCH_MAX`） |
+| `[coupon] issue_batch_max` | 10_000 | 1–100000 | 是 | 否 | 一次批量发券最多多少人（原 `COUPON_ISSUE_BATCH_MAX`） |
+| `[coupon] expire_batch_size` | 500 | 1–10000 | 是 | 否 | 过期任务每批几张（原 `COUPON_EXPIRE_BATCH`） |
+| `[coupon] remind_before_hours` | 48 | 1–720 | 是 | 否 | 到期前多少小时提醒（小时）（原 `COUPON_REMIND_BEFORE_HOURS`） |
+| `[coupon] issue_job_batch` | 200 | 1–10000 | 是 | 否 | 批量发券任务每批几人（原 `COUPON_ISSUE_JOB_BATCH`） |
+| `[coupon] max_coupons_per_order` | 3 | 1–10 | 是 | 是 | 一单最多叠加几张券（原 `COUPON_MAX_PER_ORDER`） |
 
 定时任务（`jobs.JOBS`）：coupon.expire 300 秒、coupon.remind_expiring 3600 秒、coupon.issue_batches 30 秒。
 
@@ -210,7 +221,7 @@
 | 兑换码失败过多 | 4290 | 429 |
 | 购物车钩子未配置 | 5030 | 503 |
 
-## 11 测试清单（`16-coupon/code/tests/`，84 项）
+## 11 测试清单（`16-coupon/code/tests/`）
 
 | 文件 | 覆盖 |
 |---|---|
@@ -236,7 +247,7 @@
 
 | 类型 | 名称 | 说明 |
 |---|---|---|
-| 配置 | §9 全部键 | 环境变量或 `coupon.set_config(...)` |
+| 配置 | §9 | 运行参数在 `[coupon]`；`coupon.set_config(...)` 只给启动与测试 |
 | 钩子 | `set_member_profile_provider(fn(db, user_id) -> MemberProfile)` | 新会员、等级、标签人群；未注入时默认用 `membership.member_profile`（可导入时） |
 | 钩子 | `set_audience_checker(fn(db, user_id, audience, now) -> 原因或 None)` | 完全自定义人群判断 |
 | 钩子 | `set_cart_lines_provider(fn(db, user_id) -> lines 或 (lines, campaign_promotions))` | 购物车可用券（接 04-cart / 03-catalog / 17-campaign） |

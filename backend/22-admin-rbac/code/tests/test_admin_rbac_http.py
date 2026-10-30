@@ -1,7 +1,7 @@
 """HTTP 层：路由、信封、4010 / 4011 / 4030 / 4001、幂等重放、临时口令不进幂等记录、审计列表与导出、定时任务。"""
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -209,10 +209,13 @@ def test_audit_list_filters_and_export(env):
     data = client.get("/api/v1/admin/audit-logs", headers=h,
                       params={"actor_id": str(boss_id), "action": "role.create", "resource": "role"}).json()["data"]
     assert data["total"] == 2 and data["items"][0]["action"] == "role.create"
-    today = (clock() + timedelta(hours=8)).date().isoformat()  # 门店时区 Asia/Shanghai
-    ranged = client.get("/api/v1/admin/audit-logs", headers=h, params={"created_at_from": today, "created_at_to": today}).json()
+    # 审计按真实时间写入：区间取门店时区（Asia/Shanghai）的前一天到后一天，不依赖运行日期，也不怕跨午夜
+    local_now = datetime.now(timezone.utc) + timedelta(hours=8)
+    since, until = (local_now - timedelta(days=1)).date().isoformat(), (local_now + timedelta(days=1)).date().isoformat()
+    ranged = client.get("/api/v1/admin/audit-logs", headers=h, params={"created_at_from": since, "created_at_to": until}).json()
     assert ranged["data"]["total"] >= 2
-    future = client.get("/api/v1/admin/audit-logs", headers=h, params={"created_at_from": "2030-01-01"}).json()
+    later = (local_now + timedelta(days=2)).date().isoformat()
+    future = client.get("/api/v1/admin/audit-logs", headers=h, params={"created_at_from": later}).json()
     assert future["data"]["total"] == 0
     kw = client.get("/api/v1/admin/audit-logs", headers=h, params={"keyword": "role.cre"}).json()["data"]
     assert kw["total"] == 2
@@ -271,7 +274,9 @@ def test_jobs_purge(env):
     clock.advance(31 * 86400)
     assert jobs.purge_sessions(db) == "deleted=1"
     assert jobs.purge_throttles(db) == "deleted=1"
-    clock.advance(150 * 86400)
+    clock.advance(150 * 86400)  # 约 181 天：不到 6 个月，登录日志仍要保留
+    assert jobs.purge_login_logs(db) == "deleted=0"
+    clock.advance(10 * 86400)  # 约 191 天：超过默认 186 天
     assert jobs.purge_login_logs(db).startswith("deleted=")
     assert db.execute(select(func.count()).select_from(AdminLoginLog)).scalar_one() == 0
     assert db.execute(select(func.count()).select_from(AdminSession)).scalar_one() == 0

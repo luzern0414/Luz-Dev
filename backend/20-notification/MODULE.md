@@ -1,6 +1,6 @@
-# 模块：notification（通知中心）
+# 模块：20-notification（通知中心）`notification`
 
-包名 `notification`，代码 `20-notification/code/notification/`，测试 `20-notification/code/tests/`（119 个用例）。
+包名 `notification`，代码 `20-notification/code/notification/`，测试 `20-notification/code/tests/`。
 
 ## 0 官方来源
 
@@ -16,7 +16,7 @@
 | 阿里云短信频控 | https://help.aliyun.com/zh/document_detail/2881383.html | 验证码同号 1 条 / 分钟、5 条 / 小时、10 条 / 天；通知短信同签名同模板同号 50 条 / 天；分钟与小时窗口按 UTC+8 自然窗口；超限码 isv.BUSINESS_LIMIT_CONTROL | 2026-10-28 |
 | 弹性参数 | `backend/SPEC.md` §9 | 订阅消息 / 短信超时 3s，任务重试 1m / 5m / 30m，只重试可重试错误 | 2026-10-28 |
 
-未核实（官方原文未写，按保守方式实现）：同一模板多次 accept 是否累计次数 → 本地累计但设上限 `NOTIFY_QUOTA_CAP`（默认 50），以 43101 校正；长期订阅的开放类目 → 长期模板由后台显式标记 `long_term`。
+未核实（官方原文未写，按保守方式实现）：同一模板多次 accept 是否累计次数 → 本地累计但设上限 `[notification] quota_cap_per_template`（默认 50），以 43101 校正；长期订阅的开放类目 → 长期模板由后台显式标记 `long_term`。
 
 ## 1 状态与依赖
 
@@ -58,17 +58,17 @@
 3. **渠道策略**：站内信模板启用即写收件箱（总是发，不受静默与频控）；会员且订阅模板启用 → 订阅消息投递；短信：`sms_mode=always` 直接投递，`fallback` 在没有订阅模板时直接投递、否则在订阅消息未送达（无额度、43101、无 openid、格式 / 缺字段、永久失败、重试耗尽、模板停用）后补一条（每请求最多一条），`off` 不发。
 4. **关键词格式化**：按 key 前缀（thing1 → thing）取类型。thing 超 20 字截为 19 字 + “…”；name 截到 10（含汉字）/ 20；phrase 只允许汉字并截到 5；letter 截到 32；number、character_string、amount、phone_number、car_number、time、date、symbol、enum 不合规直接判无效（不截断，避免改变编号 / 金额含义）。整数金额按分格式化为 `¥12.34`；datetime 按门店时区格式化为 `2026年10月28日 10:00`。去控制字符、零宽字符，合并空白。无效 → 投递 `skipped / format`，从不把不合规数据发给微信。
 5. **模板渲染**：占位符只允许 `{标识符}`（拒绝属性、下标、格式说明）；缺字段 → `skipped / missing_field`（关键词可配 default）。派生字段：`*_cents` → `*_yuan`，datetime → `*_text`。page 渲染失败退回无参数路径。
-6. **订阅额度**：一次性模板每个 accept +1（上限 `NOTIFY_QUOTA_CAP`）；reject / 推送 change(reject) → 清零并标 rejected；ban → banned；filter 忽略；只接受已配置的模板 id，一次最多 5 个。额度来源二选一（`NOTIFY_QUOTA_SOURCE`）：同一次授权前端上报与 popup 推送都会到达，同时计数会翻倍。
-7. **占用与消耗**：发送前条件 UPDATE `available > 0` 占用 1 次（与投递行标记同事务提交）；发送成功 `consumed_total + 1`；任何未送达结果退回占用。**43101 不算消耗**：退回占用后按 `NOTIFY_ON_43101`（默认 reset）把本地可用次数清零（以微信为准，避免反复 43101），长期模板标 rejected。长期模板不扣次数。
+6. **订阅额度**：一次性模板每个 accept +1（上限 `[notification] quota_cap_per_template`）；reject / 推送 change(reject) → 清零并标 rejected；ban → banned；filter 忽略；只接受已配置的模板 id，一次最多 5 个。额度来源二选一（`[notification] quota_source`）：同一次授权前端上报与 popup 推送都会到达，同时计数会翻倍。
+7. **占用与消耗**：发送前条件 UPDATE `available > 0` 占用 1 次（与投递行标记同事务提交）；发送成功 `consumed_total + 1`；任何未送达结果退回占用。**43101 不算消耗**：退回占用后按 `[notification] on_43101`（默认 reset）把本地可用次数清零（以微信为准，避免反复 43101），长期模板标 rejected。长期模板不扣次数。
 8. **错误分类**（微信）：0 成功；-1、43108、45011、40001 / 40014 / 42001、传输错误（超时、连接、熔断）→ 可重试；45009 → 延后到门店次日 00:00:05；43101 → skipped（无额度）；其他（40003、40037、41030、43107、45168、47003、未知码、发送器异常）→ failed，不重试。
-9. **重试**：可重试错误按 `NOTIFY_RETRY_BACKOFF`（60, 300, 1800, 7200 秒）退避，`attempts ≥ NOTIFY_MAX_ATTEMPTS`（5）→ failed（触发短信兜底）。
+9. **重试**：可重试错误按 `[notification] retry_backoff_seconds`（60, 300, 1800, 7200 秒）退避，`attempts ≥ `[notification] max_attempts``（5）→ failed（触发短信兜底）。
 10. **静默时段**：非紧急场景在门店时区 `22:00–08:00`（可配）内不发，`next_attempt_at` 延后到结束时刻（不计失败次数）；紧急场景（交易、安全、员工告警）照发。门店时区由 `set_store_timezone_resolver` 提供，缺省 `NOTIFY_TIMEZONE`。
-11. **每会员频控**：非紧急场景每会员每门店自然日最多 `NOTIFY_MEMBER_NONURGENT_PER_DAY`（5）个请求走外部渠道，超出的订阅 / 短信投递直接 `skipped / member_rate_limited`，站内信照写。
-12. **短信频控**（按手机号哈希、门店时区自然窗口，不高于云厂商默认值）：1 条 / 分钟（超出延后到下一分钟）、5 条 / 小时、10 条 / 天（超出 `skipped / sms_rate_limited`）；全店日预算 `NOTIFY_SMS_DAILY_CAP`（超出延后到次日）；厂商频控码（LimitExceeded.PhoneNumber*、isv.BUSINESS_LIMIT_CONTROL 等）→ skipped 不重试；厂商系统错误（InternalError*、isp.SYSTEM_ERROR 等）→ 重试。未送达时退回计数。
-13. **订阅消息日上限**：全店按门店日计数，达到 `NOTIFY_SUBSCRIBE_DAILY_CAP` 延后到次日并退回占用。
+11. **每会员频控**：非紧急场景每会员每门店自然日最多 `[notification] member_nonurgent_per_day`（5）个请求走外部渠道，超出的订阅 / 短信投递直接 `skipped / member_rate_limited`，站内信照写。
+12. **短信频控**（按手机号哈希、门店时区自然窗口，不高于云厂商默认值）：1 条 / 分钟（超出延后到下一分钟）、5 条 / 小时、10 条 / 天（超出 `skipped / sms_rate_limited`）；全店日预算 `[notification] sms_daily_cap`（超出延后到次日）；厂商频控码（LimitExceeded.PhoneNumber*、isv.BUSINESS_LIMIT_CONTROL 等）→ skipped 不重试；厂商系统错误（InternalError*、isp.SYSTEM_ERROR 等）→ 重试。未送达时退回计数。
+13. **订阅消息日上限**：全店按门店日计数，达到 `[notification] subscribe_daily_cap` 延后到次日并退回占用。
 14. **推送事件**：兼容 List 对象 / 数组与 XML 风格外层（SubscribeMsgPopupEvent 等）；按 (事件, openid 哈希, CreateTime, 模板, MsgID) 去重；sent 事件 ErrorCode≠0 只在投递上记录 `async:<code>`（sent 为终态）。
 15. **后台重发**：只允许 failed → pending（尝试次数清零、立即到期），其他状态 4090，不存在 4040，写审计。
-16. **站内信**：只能读写自己的消息（他人 4040）；标记已读幂等；全部已读可按类别；删除为软删并视为已读；保留 `NOTIFY_INBOX_RETENTION_DAYS` 天。
+16. **站内信**：只能读写自己的消息（他人 4040）；标记已读幂等；全部已读可按类别；删除为软删并视为已读；保留 `[notification] inbox_retention_days` 天。
 
 ## 5 状态机与关键流程
 
@@ -88,6 +88,8 @@
 发送流程（`process_delivery`）：读投递 → 场景停用则 skipped → 非紧急且在静默时段 → 延后 → 领取 pending→sending 并提交 → 解析收件人 → 渲染与格式校验 → 占用额度（提交）→ 日上限计数 → **事务外**经 `resilient("notify.subscribe", timeout 3s, breaker)` 调用发送器 → 新事务写结果（成功记消耗；失败退回额度与计数、分类、必要时生成短信兜底）。进程在 sending 中崩溃：`notification.reclaim` 把超过 300 秒的 sending 退回 pending，已占用的额度保留不重复扣（至少一次语义）。
 
 ## 6 接口
+
+agent（`SPEC.md` §16）：顾客端站内信与订阅额度的 GET 接口为 `read`，其余（订阅上报、已读、删除）与全部后台接口为 `no`。
 
 会员端前缀 `/api/v1/app/notifications`（会员 access 令牌）；后台前缀 `/api/v1/admin/notifications`（员工令牌）。写接口全部要求 `Idempotency-Key`，同键重放返回首次结果，同键不同请求体 4093。agent 列：均为 no。
 
@@ -150,25 +152,40 @@
 
 ## 9 配置
 
-| 键 | 默认 | 说明 |
+运行参数写在 `backend/config/runtime/*.toml`，字段说明（类型、范围、能否热加载、是否下发客户端）在 `00-framework/code/luzback/runtime_config.py`；模块经 `luzback.module_config.ModuleConfig` 读取，热加载后下一次读取即生效。环境变量只放秘密与部署参数；迁移前的环境变量名仍设置着时，启动会打 `config.unknown_env` 警告并指出新键。测试用 `set_config(...)` 或 `luzback.testing.override_runtime(...)` 注入运行参数（写进一份测试用运行配置，测试结束撤销）。
+
+### 9.1 环境变量（秘密与部署参数）
+
+| 变量 | 默认 | 说明 |
 |---|---|---|
-| `NOTIFY_TIMEZONE` | `LUZ_TIMEZONE` 或 Asia/Shanghai | 无门店时区时使用 |
-| `NOTIFY_QUIET_ENABLED` / `NOTIFY_QUIET_START` / `NOTIFY_QUIET_END` | true / 22:00 / 08:00 | 非紧急场景静默时段 |
-| `NOTIFY_RETRY_BACKOFF` | 60,300,1800,7200 | 秒 |
-| `NOTIFY_MAX_ATTEMPTS` | 5 | 达到即 failed |
-| `NOTIFY_SEND_TIMEOUT` | 3 | 秒（SPEC §9） |
-| `NOTIFY_SENDING_STUCK_SECONDS` | 300 | 卡死回收阈值 |
-| `NOTIFY_BATCH_SIZE` | 100 | 每轮投递数 |
-| `NOTIFY_MINIPROGRAM_STATE` / `NOTIFY_LANG` | formal / zh_CN | send 参数 |
-| `NOTIFY_QUOTA_SOURCE` | frontend | frontend \| push |
-| `NOTIFY_QUOTA_CAP` | 50 | 单模板累计上限 |
-| `NOTIFY_ON_43101` | reset | reset \| keep |
-| `NOTIFY_SUBSCRIBE_DAILY_CAP` | 10000000 | 未开通支付的官方日上限；开通支付可调到 30000000 |
-| `NOTIFY_SMS_PER_MINUTE` / `_PER_HOUR` / `_PER_DAY` | 1 / 5 / 10 | 每手机号 |
-| `NOTIFY_SMS_DAILY_CAP` | 100000 | 全店日预算 |
-| `NOTIFY_MEMBER_NONURGENT_PER_DAY` | 5 | 每会员非紧急请求 |
-| `NOTIFY_INBOX_RETENTION_DAYS` | 180 | 站内信保留 |
-| `NOTIFY_CURSOR_SECRET` | `LUZ_JWT_SECRET` | 站内信游标签名 |
+| `NOTIFY_TIMEZONE` | LUZ_TIMEZONE 或 Asia/Shanghai | 无门店时区时使用 |
+| `NOTIFY_CURSOR_SECRET` | LUZ_JWT_SECRET | 站内信游标签名（秘密） |
+
+### 9.2 运行配置键
+
+| 键 | 默认 | 范围 | 热加载 | 下发客户端 | 说明（含单位） |
+|---|---|---|---|---|---|
+| `[notification] quiet_start` | "22:00" | 时:分 | 是 | 否 | 静默时段开始（时:分，门店时区）；非紧急消息延后到结束（原 `NOTIFY_QUIET_START`） |
+| `[notification] quiet_end` | "08:00" | 时:分 | 是 | 否 | 静默时段结束（时:分，门店时区）（原 `NOTIFY_QUIET_END`） |
+| `[notification] quiet_enabled` | true | true / false | 是 | 否 | 启用静默时段（原 `NOTIFY_QUIET_ENABLED`） |
+| `[notification] retry_backoff_seconds` | [60, 300, 1800, 7200] | 正整数列表 | 是 | 否 | 投递失败的重试间隔（秒）（原 `NOTIFY_RETRY_BACKOFF`） |
+| `[notification] max_attempts` | 5 | 1–20 | 是 | 否 | 每条消息最多投递几次（原 `NOTIFY_MAX_ATTEMPTS`） |
+| `[notification] send_timeout_seconds` | 3.0 | 0.5–30 | 是 | 否 | 单次发送超时（秒）（原 `NOTIFY_SEND_TIMEOUT`） |
+| `[notification] sending_stuck_seconds` | 300 | 30–3600 | 是 | 否 | 发送中超过多久视为卡住并重新投递（秒）（原 `NOTIFY_SENDING_STUCK_SECONDS`） |
+| `[notification] batch_size` | 100 | 1–1000 | 是 | 否 | 投递任务每批几条（原 `NOTIFY_BATCH_SIZE`） |
+| `[notification] miniprogram_state` | "formal" | developer / trial / formal | 是 | 否 | 订阅消息跳转的小程序版本（原 `NOTIFY_MINIPROGRAM_STATE`） |
+| `[notification] lang` | "zh_CN" | zh_CN / en_US / zh_HK / zh_TW | 是 | 否 | 订阅消息语言（原 `NOTIFY_LANG`） |
+| `[notification] quota_source` | "frontend" | frontend / push | 是 | 否 | 订阅额度按什么计数：frontend 前端上报的授权结果、push 微信推送的授权事件（只能选一个，否则额度翻倍）（原 `NOTIFY_QUOTA_SOURCE`） |
+| `[notification] quota_cap_per_template` | 50 | 1–1000 | 是 | 否 | 每个模板本地累计额度上限（次）（原 `NOTIFY_QUOTA_CAP`） |
+| `[notification] on_43101` | "reset" | reset / keep | 是 | 否 | 微信返回 43101（用户没有额度）时：reset 清零本地额度、keep 只退回本次占用（原 `NOTIFY_ON_43101`） |
+| `[notification] subscribe_daily_cap` | 10_000_000 | 1–30000000 | 是 | 否 | 订阅消息每天下发总量（条，官方：开通支付 3000 万、未开通 1000 万）（原 `NOTIFY_SUBSCRIBE_DAILY_CAP`） |
+| `[notification] sms_per_minute` | 1 | 1–60 | 是 | 否 | 同一手机号每分钟最多几条短信（原 `NOTIFY_SMS_PER_MINUTE`） |
+| `[notification] sms_per_hour` | 5 | 1–1000 | 是 | 否 | 同一手机号每小时最多几条短信（原 `NOTIFY_SMS_PER_HOUR`） |
+| `[notification] sms_per_day` | 10 | 1–10000 | 是 | 否 | 同一手机号每天最多几条短信（原 `NOTIFY_SMS_PER_DAY`） |
+| `[notification] sms_daily_cap` | 100_000 | 1–10000000 | 是 | 否 | 全店每天短信预算（条）（原 `NOTIFY_SMS_DAILY_CAP`） |
+| `[notification] member_nonurgent_per_day` | 5 | 0–100 | 是 | 否 | 每个会员每天最多收几条非紧急通知（订阅消息与短信合计）（原 `NOTIFY_MEMBER_NONURGENT_PER_DAY`） |
+| `[notification] inbox_retention_days` | 180 | 1–3650 | 是 | 否 | 站内信保留（天）（原 `NOTIFY_INBOX_RETENTION_DAYS`） |
+| `[notification] delivery_retention_days` | 180 | 1–3650 | 是 | 否 | 投递记录保留（天）（原 `NOTIFY_DELIVERY_RETENTION_DAYS`） |
 
 ## 10 错误码
 
@@ -189,10 +206,10 @@
 
 | 文件 | 覆盖 |
 |---|---|
-| `test_notification_rules.py`（51） | 每种关键词类型的合法 / 截断 / 无效；控制字符；占位符注入；映射校验；静默时段跨午夜与门店时区；微信与短信错误码分类；退避；推送 List 对象 / 数组 / XML 外层 / sent 事件 |
-| `test_notification_service.py`（60） | 发件箱入队与端到端投递、去重；渠道策略；额度消耗、无额度、43101 不消耗（reset / keep）、长期模板、拒收 / 封禁 / 上限；推送计数模式与重投去重；-1 重试退避、传输错误耗尽后 failed + 短信兜底、异常永久失败、45009 与日上限延后、格式错误不发送；卡死回收不重复扣；静默时段（FakeClock）与门店时区钩子；每会员频控；员工告警短信、短信分钟 / 小时 / 天频控、厂商频控码；事件绑定与覆盖；站内信全流程；重发状态边与审计；列表筛选与统计；CSV 导出；模板 CRUD 与校验；任务注册；events.SUBSCRIPTIONS 约定（不提交、回滚后重放、重投幂等、实物奖品过滤、绑定同步）；默认发送器；wechat_mp 适配器；并发（额度、计数、多 worker 同一投递） |
-| `test_notification_api.py`（9） | 会员 / 员工 4010、4030、4001、幂等重放与 4093、4040、信封；订阅上报；站内信；投递日志筛选、导出、重发、统计；场景与模板 CRUD；员工站内信（真实 admin_rbac 会话）；identity 会话吊销 4010、伪造员工声明 4010 |
-| `test_notification_wechat_mp.py`（4） | 默认发送器 → wechat_mp.send_subscribe_message → FakeMiniProgram 端到端（平台额度用完 43101）；适配器签名；wechat_mp.dispatch → handle_push_message（不提交、推送去重）；生产检查 |
+| `test_notification_rules.py` | 每种关键词类型的合法 / 截断 / 无效；控制字符；占位符注入；映射校验；静默时段跨午夜与门店时区；微信与短信错误码分类；退避；推送 List 对象 / 数组 / XML 外层 / sent 事件 |
+| `test_notification_service.py` | 发件箱入队与端到端投递、去重；渠道策略；额度消耗、无额度、43101 不消耗（reset / keep）、长期模板、拒收 / 封禁 / 上限；推送计数模式与重投去重；-1 重试退避、传输错误耗尽后 failed + 短信兜底、异常永久失败、45009 与日上限延后、格式错误不发送；卡死回收不重复扣；静默时段（FakeClock）与门店时区钩子；每会员频控；员工告警短信、短信分钟 / 小时 / 天频控、厂商频控码；事件绑定与覆盖；站内信全流程；重发状态边与审计；列表筛选与统计；CSV 导出；模板 CRUD 与校验；任务注册；events.SUBSCRIPTIONS 约定（不提交、回滚后重放、重投幂等、实物奖品过滤、绑定同步）；默认发送器；wechat_mp 适配器；并发（额度、计数、多 worker 同一投递） |
+| `test_notification_api.py` | 会员 / 员工 4010、4030、4001、幂等重放与 4093、4040、信封；订阅上报；站内信；投递日志筛选、导出、重发、统计；场景与模板 CRUD；员工站内信（真实 admin_rbac 会话）；identity 会话吊销 4010、伪造员工声明 4010 |
+| `test_notification_wechat_mp.py` | 默认发送器 → wechat_mp.send_subscribe_message → FakeMiniProgram 端到端（平台额度用完 43101）；适配器签名；wechat_mp.dispatch → handle_push_message（不提交、推送去重）；生产检查 |
 
 运行：`cd backend && python -X utf8 -m pytest -q 20-notification`。
 
@@ -211,7 +228,7 @@
 
 | 类型 | 入口 |
 |---|---|
-| 配置 | §9 环境变量；运行时 `notification.set_config(**overrides)` |
+| 配置 | §9：运行参数在 `[notification]`；`notification.set_config(...)` 只给启动与测试 |
 | 订阅消息发送器 | `set_subscribe_sender(SubscribeMessageSender)`；默认：wechat_mp 可用（生产，或开发环境已注入客户端 / 配置真实 AppID）→ `WechatMpSubscribeSender`（调用 `wechat_mp.send_subscribe_message`），否则生产 `NotConfiguredSender`（failed / channel_not_configured）、开发 `FakeSubscribeSender` |
 | 短信发送器 | `set_sms_sender(SmsSender)`：`send(phone, template_code, params) -> SendResult(ok, errcode, errmsg, msg_id, retryable)`；默认同上（生产未配置即失败可见） |
 | 收件人 | `set_recipient_resolver(RecipientResolver)`：`member(db, id)`、`staff(db, id)`、`member_id_by_openid(db, openid)`；默认读 identity / admin_rbac |

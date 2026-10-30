@@ -1,10 +1,10 @@
-# 小程序模块 ↔ 后端模块 ↔ 接口
+# 示例：小程序模块 ↔ 后端模块 ↔ 接口
 
-小程序界面语义在 Luz System `references/miniprogram-design.html` 和项目 `HANDOFF.json`，后端模块在 `backend/NN-name/`，接口以 `backend/API.md` 附录 A 为准（状态列：已实现 / 设计 / 待建）。前端改接口前先改后端 `MODULE.md` 与 `API.md`，再改本表。前缀 `/api/v1/app` 省略。
+这是一个餐饮零售类小程序的参考映射，用来在写方案时挑后端模块与接口；左列是示例页面分组，不对应任何设计文件。项目自己的映射是绑定表 `packages/contracts/design-bindings.json`（`design_intake.py bind` 从已批准的 Luz System 会话生成，见 `design-integration.md`）。后端模块在 `backend/NN-name/`，接口以 `backend/API.md` 附录 A 为准（状态列：已实现 / 设计 / 待建）。前缀 `/api/v1/app` 省略。
 
 | 小程序模块 | 后端模块 | 接口 |
 |---|---|---|
-| 00-global（登录拦截、状态、降级） | 01-identity、23-app-settings | `POST /auth/login`、`/auth/refresh`、`/auth/logout`、`GET /config` |
+| 00-global（登录拦截、状态、降级） | 01-identity、23-app-settings | `POST /auth/login`、`/auth/refresh`、`/auth/logout`、`GET /config`、`GET /content` |
 | 01-home | 02-store、08-order、17-campaign、16-coupon、14-membership、03-catalog | `GET /stores/{id}`、`GET /orders?status_group=active&limit=1`、`GET /campaigns`、`GET /coupon-templates`、`GET /member`、`GET /products?sort=sales_desc&limit=4` |
 | 02-catalog | 03-catalog、07-inventory | `GET /categories`、`GET /products`、`GET /products/{id}/specs` |
 | 03-product-detail | 03-catalog、19-review | `GET /products/{id}`、`GET /products/{id}/review-summary`、`GET /products/{id}/reviews` |
@@ -35,4 +35,4 @@
 | 28-agent-chat | 智能体服务 | `/api/v1/agent/conversations*`（`agent/shared/protocol.md`） |
 | 29-share | 03-catalog、17-campaign、02-store、08-order | 落地页按对象调用对应详情接口 |
 
-错误码处理遵循 `backend/SPEC.md` §4 与小程序设计状态表；写接口一律带 `Idempotency-Key`。变更流程：后端 `MODULE.md` → `API.md` 附录 A → 本表 → 前端模块文档 §8。
+错误码处理遵循 `backend/SPEC.md` §4 与设计里的界面状态；写接口一律带 `Idempotency-Key`。接口变更先改后端 `MODULE.md` 与 `API.md` 附录 A，再改项目的绑定表。

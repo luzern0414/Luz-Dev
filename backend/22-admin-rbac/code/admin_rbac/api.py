@@ -25,7 +25,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 from luzback import AppError, ErrorCode, get_db, idempotency_key, ok, run_idempotent
-from luzback.app import client_ip
+from luzback.app import bind_identity, client_ip
 
 from . import auth, service
 from .access import Staff, assert_fresh, assert_permission
@@ -47,8 +47,12 @@ def _ua(request: Request) -> str | None:
 
 def authenticated_staff(request: Request, creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
                         db=Depends(get_db)) -> Staff:
-    return auth.authenticate(db, creds.credentials if creds else None, ip=_ip(request), user_agent=_ua(request),
-                             trace_id=getattr(request.state, "trace_id", None))
+    staff = auth.authenticate(db, creds.credentials if creds else None, ip=_ip(request), user_agent=_ua(request),
+                              trace_id=getattr(request.state, "trace_id", None))
+    # 请求汇总行带上员工内部编号；只管一家门店的员工同时带门店
+    single_store = staff.store_ids[0] if not staff.all_stores and len(staff.store_ids) == 1 else None
+    bind_identity(request, user_ref=f"staff:{staff.id}", store_id=single_store)
+    return staff
 
 
 def current_staff(staff: Staff = Depends(authenticated_staff)) -> Staff:

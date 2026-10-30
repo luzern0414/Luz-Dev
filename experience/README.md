@@ -11,7 +11,7 @@
 
 `notes.json` 的结构：`{"schema_version": "1.0", "caps": {...}, "notes": [...]}`，每条有 `key`、`kind`、`text`、可选 `why`、`uses`、`first_seen`、`last_confirmed`（年-月-日），被替换过的再带 `previous`（`text`、`replaced_at`）。
 
-两类条目都按 `key` 去重：同一 key 再写会替换原内容，保留一次 `previous` 供追溯，不新增条目；同一句话换了 key 只算再确认一次。笔记超过上限时先删确认次数最少、再删最久未确认的，`prune` 同时列出 180 天未确认的笔记；经验记录超限时自动废弃价值最低的 candidate。`check` 发现结构不符、缺字段、重复 key、重复内容、个人信息或超限即失败。INDEX.md 在每次写入后自动重建。
+去重、替换、上限、裁剪与隐私规则以 `SKILL.md` 的“每次调用后沉淀”为准；INDEX.md 在每次写入后自动重建。
 
 ## 状态
 
@@ -22,7 +22,7 @@
 ## 使用流程
 
 1. 任务开始时运行 `record_experience.py search <关键词>`，应用匹配的偏好与教训，优先读取 verified 资产。
-2. 任务结束时用 `note` 写入新的偏好、教训与有效信息；用 `record` 记录任务经验，同一主题沿用原 key。
+2. 每次调用结束前用 `note` 写入或确认至少一条偏好、教训或有效信息（必做）；产出了可复用做法、失败分析或值得保留的证据时，再用 `record` 记录任务经验，同一主题沿用原 key。
 3. 证据充分后使用 promote 转为 verified。
 4. 规则失效时使用 deprecate，写明原因和替代经验。
 

@@ -24,11 +24,11 @@ def haversine_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
 
 
 def check_delivery_range(store: tuple[float, float], address: tuple[float, float], max_km: float) -> float:
-    """返回实际直线距离（米）。超出范围抛 BUSINESS_RULE，并把距离放入 data 供前端提示。"""
+    """返回实际直线距离（米）。超出范围抛 OUT_OF_RANGE（4222，SPEC §4），并把距离放入 data 供前端提示。"""
     distance = haversine_m(store[0], store[1], address[0], address[1])
     if distance > max_km * 1000:
         raise AppError(
-            ErrorCode.BUSINESS_RULE,
+            ErrorCode.OUT_OF_RANGE,
             f"address out of delivery range ({max_km} km)",
             data={"distance_m": round(distance), "max_km": max_km},
         )

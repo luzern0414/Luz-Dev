@@ -37,16 +37,13 @@ REQUIRED = [
     "backend/22-admin-rbac/code/admin_rbac/testing.py",
     "backend/requirements-dev.txt",
     "WORKFLOW.md",
-    "MIGRATION.md",
     "agents/openai.yaml",
     "references/implementation-architecture.md",
     "references/miniprogram.md",
     "references/admin.md",
     "references/mobile-app.md",
-    "references/backend.md",
-    "references/agent.md",
+    "references/agent-foundation.md",
     "references/quality.md",
-    "references/delivery.md",
     "references/config-logging.md",
     "references/api-bindings.md",
     "references/index.md",
@@ -390,7 +387,7 @@ def validate_pages_with_luz_design(design_root: Path) -> list[str]:
     import subprocess  # noqa: PLC0415
 
     errors = []
-    for relative in ("references/standards.html", "knowledge/index.html"):
+    for relative in ("references/standards.html", "references/dev-checklist.html", "references/function-catalog.html", "knowledge/index.html"):
         page = ROOT / relative
         if not page.is_file():
             continue
@@ -665,7 +662,7 @@ def validate_function_catalog() -> list[str]:
     if root_text not in sys.path:
         sys.path.insert(0, root_text)
     try:
-        from scripts.build_function_catalog import extract_embedded_catalog, validate_catalog
+        from scripts.build_function_catalog import render, validate_catalog
     except ImportError as exc:
         return [f"cannot import function catalog builder: {exc}"]
 
@@ -676,31 +673,15 @@ def validate_function_catalog() -> list[str]:
     errors.extend(f"function-catalog.json: {error}" for error in validate_catalog(data))
 
     html = html_path.read_text(encoding="utf-8")
-    try:
-        embedded = extract_embedded_catalog(html)
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
-        errors.append(f"invalid function-catalog.html: {exc}")
-    else:
-        if embedded != data:
-            errors.append("function-catalog.html embedded data differs from canonical JSON")
-
+    if not errors and html != render(data, template_path.read_text(encoding="utf-8")):
+        errors.append("references/function-catalog.html is stale; run scripts/build_function_catalog.py")
     for forbidden in page_safety_problems(html):
         errors.append(f"function-catalog.html contains forbidden dependency or unsafe rendering: {forbidden}")
-    for control_id in (
-        "search-input",
-        "module-filter",
-        "edit-toggle",
-        "add-module",
-        "import-data",
-        "export-json",
-        "export-html",
-        "reset-local",
-    ):
+    for control_id in ("search-input", "module-filter"):
         if f'id="{control_id}"' not in html:
             errors.append(f"function-catalog.html missing control: {control_id}")
-    template = template_path.read_text(encoding="utf-8")
-    if template.count("{{CATALOG_DATA_JSON}}") != 1:
-        errors.append("function-catalog.template.html must contain one catalog data placeholder")
+    if '<main class="doc">' not in html or "<aside" in html or "<nav" in html:
+        errors.append("function-catalog.html is not a Luz Design reading page")
     module_ids = {module.get("id") for module in data.get("modules", []) if isinstance(module, dict)}
     if "result-flow" not in module_ids:
         errors.append("function-catalog.json is missing the result-flow module")

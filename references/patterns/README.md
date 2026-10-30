@@ -17,8 +17,9 @@ Luz Dev 后端开发的业务逻辑参考。每篇写清：方案对比与默认
 | [cache.md](cache.md) | 缓存读写模式、穿透 / 击穿 / 雪崩 | — | 清单 |
 | [catalog-cart.md](catalog-cart.md) | SPU / SKU、改价、上下架、购物车合并与失效 | — | 清单 |
 | [multi-store.md](multi-store.md) | 多门店 / 多租户数据隔离 | `22-admin-rbac` | 清单 |
+| [access-control.md](access-control.md) | 无人值守场馆的入场判定、在场管理、设备指令与回执 | — | 清单 |
 
-支付、退款、对账见 `backend/09-wechat-pay/MODULE.md`；结果页见 `references/result-patterns.md`；安全与合规规则见 `references/standards.json`。
+支付、退款、对账见 `backend/09-wechat-pay/MODULE.md`；结果页见 `references/result-patterns.md`；运行配置与日志见 `references/config-logging.md`；智能体见 `references/agent-foundation.md`；安全与合规规则见 `references/standards.json`。
 
 ## 共同原则
 

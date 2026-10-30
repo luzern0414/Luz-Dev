@@ -43,7 +43,7 @@ def update(model):
 
 
 def cfg() -> _config.WalletConfig:
-    return _config.CONFIG
+    return _config.get_config()
 
 
 def aware(dt: datetime | None) -> datetime | None:

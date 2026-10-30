@@ -21,7 +21,7 @@
 | diagnosis | 涉及外部平台或依赖时调研 | 已阅读 2 个 |
 | review | 按需；纯代码评审可不调研 | 无 |
 
-`officialRequired` 的模块（登录、支付、退款、对账、人脸、上传与内容安全、订阅消息、隐私、储值、定位）没有官方来源时方案不能提交审核。
+`officialRequired` 的模块（登录、支付、退款、对账、人脸、上传与内容安全、订阅消息、隐私、储值、定位、部署、资质、协议，以 `research-sources.json` 为准）没有官方来源时方案不能提交审核。
 
 ### 必查主题（baselineTracks）
 
@@ -69,7 +69,7 @@ python -X utf8 scripts/tech_plan.py research 06 --ingest "D:\Codes\skill输出\L
 python -X utf8 scripts/tech_plan.py research 06 --tag S7=payment,refund
 ```
 
-`--run` 会在 `raw/` 下写 `research-links.txt`、`research-plan.json` 与 `research-run.log`。按 Luz-Crawl 的“一项需求一个任务目录”约定，每个方案第一次 `--run` 时执行一次 `luz-crawl.mjs begin "Luz-Dev NN 主题" --new`，返回的目录记在 `plan.json` → `research.crawlFolder`，之后每次采集都带 `--out` 这个目录；原始证据在 `D:\Codes\skill输出\Luz-Crawl\raw\NNN_Luz-Dev NN 主题\raw\` 下，不会混进其他会话正在使用的任务目录。已阅读过的页面不会重复打开；知识库里未过期的官方原文直接计入列出它的模块与必查主题。
+`--run` 会在 `raw/` 下写 `research-links.txt`、`research-plan.json` 与 `research-run.log`。Luz-Crawl 的调用顺序以它的 SKILL.md 调用协议为准：`doctor` → `begin "主题" --new`（得到 folder）→ `experience --query` → 每条命令带 `--out <folder>`；`research --run` 每个方案第一次运行时自动执行 `begin "Luz-Dev NN 主题" --new`，返回的目录记在 `plan.json` → `research.crawlFolder`，之后都带 `--out`。已阅读过的页面不会重复打开；知识库里未过期的官方原文直接计入列出它的模块与必查主题。
 
 ```powershell
 # 只补某些模块或必查主题（tracks 表示全部必查主题）
@@ -77,7 +77,7 @@ python -X utf8 scripts/tech_plan.py research 06 --run --topics tracks --batch 12
 python -X utf8 scripts/tech_plan.py research 06 --run --only queries --topics host-security,data-protection
 ```
 
-知乎等需要登录的站点会返回 `login_required`，按 Luz-Crawl 的 `headless-login` 提示由用户手动登录后 `continue`；不登录时这些检索记为未读，不影响其他站点。
+需要登录或验证的站点按 Luz-Crawl 的读取顺序处理（先静默、再最小化的可见浏览器、最后才请用户登录，结果为 `awaiting_user` 时用 `continue` 续接）；用户不登录时这些检索记为未读，不影响其他站点。
 
 ## 3. 来源分级
 
@@ -111,16 +111,15 @@ python -X utf8 scripts/tech_plan.py research 06 --run --only queries --topics ho
 
 复核周期：法律法规 365 天、平台文档 90 天、开源实现 180 天、功能做法与工程实践 365 天。过期条目会被下一次调研重新读取并更新核对日期。
 
-## 6. Luz-Crawl 的限制与做法（2026-10-26 实测）
+## 6. 用 Luz-Crawl 调研的做法
 
-| 现象 | 原因 | 做法 |
-|---|---|---|
-| 同一站点读到第 5～6 页后报 “Platform is cooling down” | Luz-Crawl 默认每站 10 分钟最多 40 次请求，页面图片也计入；超限冷却 10 分钟 | 官方文档优先用 `officialUrls` 直读；微信支付文档有 `.md` 纯文本版本与 `llms.txt` 索引，请求更少 |
-| 某站第一次检索就冷却 | 站内检索没有结果时会回退到 Bing `site:` 检索，所有站点共享 Bing 的预算 | 检索按站点轮转、分批并暂停；失败的检索自动记入 `retryQueries`，下次 `--run` 只补跑这些 |
-| 已成功的检索 | 记入 `doneQueries` | 再次 `--run` 不重复执行 |
-| 连续 site: 检索后 Bing 全部失败 | 同一引擎冷却 | 检索分散到 bing / google / 站内搜索，分轮执行；能直读就不检索 |
-| 部分微信开放文档 OpenApiDoc 地址显示 unavailable | 文档迁移 | 从官方页面的导航或索引重新找地址，更新 `officialUrls` |
-| 其他会话同时使用 Luz-Crawl | 节流预算按站点共享 | 调研期间避免并行跑多个大合集；失败的页面下一轮补读 |
-| 需要登录或验证码 | 站点限制 | 让用户手动完成（Luz-Crawl `pending` / `continue`），不绕过 |
+节流、冷却、登录与验证的处理以 Luz-Crawl 的 SKILL.md 为准（按站点自适应节流，限流即停，不换入口规避）。本技能这边的做法：
+
+| 做法 | 原因 |
+|---|---|
+| 官方文档优先用 `officialUrls` 直读；微信支付文档有 `.md` 纯文本版本与 `llms.txt` 索引 | 请求更少、正文更完整，检索只用于发现清单里没有的页面 |
+| 检索按站点轮转、分批并暂停（`--batch`、`--pause`）；被冷却的检索记入 `retryQueries`，下次 `--run` 只补跑这些；成功的记入 `doneQueries` 不再重复 | 同站与同引擎连续请求会触发冷却 |
+| 微信开放文档部分旧地址已迁移：从官方页面的导航或索引重新找地址，更新 `officialUrls` | 旧地址显示 unavailable |
+| 其他会话同时在用 Luz-Crawl 时，调研期间不并行跑多个大合集；失败的页面下一轮补读 | 节流预算按站点共享 |
 
 调研不可用（扩展未连接、站点全部受限）时，停止并告诉用户具体原因；实施类方案只有在用户明确同意后才能 `--skip … --user-consent`。

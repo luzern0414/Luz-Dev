@@ -1,10 +1,10 @@
-# 模块：legal（协议与同意）
+# 模块：27-legal（协议与同意）`legal`
 
 | 项 | 内容 |
 |---|---|
-| 状态 | 已实现：协议版本草稿与发布（旧版本退役、写审计）、当前生效版本、用户待同意文档、主动同意（校验版本与文本哈希）、撤回；购买条款检查器（接 08-order）；测试 7 项 |
+| 状态 | 已实现：协议版本草稿与发布（旧版本退役、写审计）、当前生效版本、用户待同意文档、主动同意（校验版本与文本哈希）、撤回；购买条款检查器（接 08-order）；测试在 `code/tests/` |
 | 代码 | `27-legal/code/legal/`、测试 `27-legal/code/tests/test_legal.py` |
-| 依赖 | framework（审计） |
+| 依赖 | 00-framework（审计） |
 | 说明 | `references/legal-documents.md`；模板 `assets/legal/`；规则 LEGAL-001～LEGAL-003、PII-*、FACE-002 |
 
 ## 1 数据

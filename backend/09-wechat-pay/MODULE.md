@@ -1,4 +1,4 @@
-# 09-wechat-pay（微信支付 APIv3 · 小程序 / JSAPI · 普通商户直连）`wechat_pay`
+# 模块：09-wechat-pay（微信支付 APIv3 · 小程序 / JSAPI · 普通商户直连）`wechat_pay`
 
 ## 0 官方来源
 
@@ -22,13 +22,13 @@
 | 发货信息管理 | developers.weixin.qq.com …/order-shipping/order-shipping.html、…/order_shipping/api_uploadshippinginfo.md、…/jiaoyilei/yunyingguifan.md | upload_shipping_info；logistics_type 3 虚拟发货；统一发货 1 项；item_desc ≤ 120；系统繁忙 -1/10060012/10060019 可重试；10060002 已发货 | 2026-10-28 |
 | 虚拟支付 | 小程序运营规范 2.5.13、2.14.7（developers.weixin.qq.com/miniprogram/product/index.md） | 纯线上虚拟商品必须用小程序虚拟支付；本模块拒绝 `virtual_content` | 2026-10-28 |
 
-未核实（按保守实现）：V3 最短关单间隔、已支付再关单 / 再下单的确切错误码（按 TRADE_ERROR 处理 + 查单兜底）、GZIP 时哈希针对哪份文件（压缩前后任一相符即通过）、虚拟发货是否必须上传与最终期限（默认上传，`WECHAT_PAY_SHIPPING_ENABLED` 可关）。
+未核实（按保守实现）：V3 最短关单间隔、已支付再关单 / 再下单的确切错误码（按 TRADE_ERROR 处理 + 查单兜底）、GZIP 时哈希针对哪份文件（压缩前后任一相符即通过）、虚拟发货是否必须上传与最终期限（默认上传，`[wechat_pay] shipping_enabled` 可关）。
 
 ## 1 状态与依赖
 
 | 项 | 内容 |
 |---|---|
-| 状态 | 标准（可复用）；测试 145 项 |
+| 状态 | 标准（可复用）；测试在 `code/tests/` |
 | 依赖 | 00-framework（db、errors、idempotency、outbox、audit、resilience、listing、export、scheduler）、identity（current_user、User.openid，延迟导入）、admin_rbac（默认后台授权器，延迟导入）、cryptography、httpx |
 | 被依赖 | order、recharge、membership、reservation、after_sales（注册钩子 / 消费事件） |
 
@@ -93,15 +93,15 @@
 |---|---|---|---|---|---|---|
 | POST | `/api/v1/app/orders/{order_id}/pay` | 用户 | 必须 | — | no | 订单去支付 / 继续支付 |
 | POST | `/api/v1/app/payments` | 用户 | 必须 | — | no | 通用业务支付 `{business_type, business_id}` |
-| GET | `/api/v1/app/payments/{out_trade_no}` | 用户（他人 4040） | — | — | yes | 支付结果；未完成节流查单，渠道故障 `degraded=true` |
-| POST | `/api/v1/webhooks/wechat/pay`（兼容 `/api/v1/payments/notify/wechat`） | APIv3 验签 | 状态机 | — | — | 支付回调，204 / FAIL |
-| POST | `/api/v1/webhooks/wechat/refund` | APIv3 验签 | 状态机 | — | — | 退款回调 |
-| GET | `/api/v1/admin/payments`、`/export`、`/{id}` | 员工 | — | payment:read | yes | 列表 / 导出 / 详情（含退款、发货、回调日志） |
+| GET | `/api/v1/app/payments/{out_trade_no}` | 用户（他人 4040） | — | — | read | 支付结果；未完成节流查单，渠道故障 `degraded=true` |
+| POST | `/api/v1/webhooks/wechat/pay`（兼容 `/api/v1/payments/notify/wechat`） | APIv3 验签 | 状态机 | — | no | 支付回调，204 / FAIL |
+| POST | `/api/v1/webhooks/wechat/refund` | APIv3 验签 | 状态机 | — | no | 退款回调 |
+| GET | `/api/v1/admin/payments`、`/export`、`/{id}` | 员工 | — | payment:read | read | 列表 / 导出 / 详情（含退款、发货、回调日志） |
 | POST | `/api/v1/admin/payments/{id}/sync`、`/close` | 员工 | 必须 | payment:reconcile | no | 人工查单 / 关单 |
 | POST | `/api/v1/admin/payments/{id}/refunds` | 员工 | 必须 | payment:refund | no | 人工退款（审计） |
-| GET | `/api/v1/admin/refunds`、`/export`、`/{id}` | 员工 | — | payment:read | yes | 退款列表 / 导出 / 详情 |
+| GET | `/api/v1/admin/refunds`、`/export`、`/{id}` | 员工 | — | payment:read | read | 退款列表 / 导出 / 详情 |
 | POST | `/api/v1/admin/refunds/{id}/abnormal`、`/sync` | 员工 | 必须 | payment:refund | no | 异常退款 / 查询 |
-| GET | `/api/v1/admin/reconciliation/batches`、`/diffs` | 员工 | — | payment:read | yes | 对账批次与差异 |
+| GET | `/api/v1/admin/reconciliation/batches`、`/diffs` | 员工 | — | payment:read | read | 对账批次与差异 |
 | GET | `/api/v1/admin/reconciliation/diffs/export` | 员工 | — | payment:reconcile | no | 差异导出 |
 | POST | `/api/v1/admin/reconciliation/run`、`/diffs/{id}/resolve` | 员工 | 必须 | payment:reconcile | no | 手动对账 / 处理差异 |
 | GET / POST | `/api/v1/admin/payment-shipping`、`/{id}/retry` | 员工 | 重试必须 | payment:read / payment:reconcile | no | 发货上传列表 / 重试 |
@@ -133,7 +133,57 @@
 
 ## 9 配置
 
-见 §13 配置表；所有密钥只从环境变量 / 密钥服务注入，`assert_production_ready()`（导入时另登记 `luzback.register_production_check("wechat_pay", …)`，app / jobs 启动时由 `Settings.assert_production_safe()` 统一执行）在生产拒绝：假客户端、APIv3 密钥非 32 字节、缺私钥 / 序列号 / 公钥或平台证书、回调地址非 https 或带查询参数。
+运行参数写在 `backend/config/runtime/*.toml`，字段说明（类型、范围、能否热加载、是否下发客户端）在 `00-framework/code/luzback/runtime_config.py`；模块经 `luzback.module_config.ModuleConfig` 读取，热加载后下一次读取即生效。环境变量只放秘密与部署参数；迁移前的环境变量名仍设置着时，启动会打 `config.unknown_env` 警告并指出新键。测试用 `set_config(...)` 或 `luzback.testing.override_runtime(...)` 注入运行参数（写进一份测试用运行配置，测试结束撤销）。
+
+### 9.1 环境变量（秘密与部署参数）
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `WECHAT_PAY_CLIENT` | fake | 生产必须 http |
+| `WECHAT_PAY_APPID / WECHAT_PAY_MCHID` | 取 WECHAT_APPID / WECHAT_MCH_ID | 小程序 appid 与商户号 |
+| `WECHAT_PAY_APIV3_KEY` | 空 | 32 字节（秘密） |
+| `WECHAT_PAY_PRIVATE_KEY_PATH / _PEM` | 空 | 商户 API 私钥（以只读文件挂载，秘密） |
+| `WECHAT_PAY_CERT_SERIAL` | 空 | 商户 API 证书序列号 |
+| `WECHAT_PAY_PUBLIC_KEY_ID / _PATH` | 空 | 微信支付公钥（推荐） |
+| `WECHAT_PAY_PLATFORM_CERTS` | 空 | `序列号=路径,…` 平台证书（可与公钥并存） |
+| `WECHAT_PAY_NOTIFY_URL / WECHAT_PAY_REFUND_NOTIFY_URL` | example.com 占位 | https、无查询参数 |
+| `WECHAT_PAY_BASE_URL / _BACKUP_BASE_URL` | api.mch / api2.mch | 主备域名 |
+| `WECHAT_PAY_USER_AGENT` | luz-backend-wechatpay/2.0 | 请求标识 |
+| `WECHAT_PAY_OUT_TRADE_NO_PREFIX` | P | ≤ 4 位字母数字（定了不改） |
+| `WECHAT_PAY_TZ` | Asia/Shanghai | 单号日期与账单日 |
+
+### 9.2 运行配置键
+
+| 键 | 默认 | 范围 | 热加载 | 下发客户端 | 说明（含单位） |
+|---|---|---|---|---|---|
+| `[wechat_pay] timeout_prepay_s` | 8.0 | 1–30 | 是 | 否 | 下单接口超时（秒，不重试）（原 `WECHAT_PAY_TIMEOUT_PREPAY`） |
+| `[wechat_pay] timeout_query_s` | 5.0 | 1–30 | 是 | 否 | 查单与查退款超时（秒）（原 `WECHAT_PAY_TIMEOUT_QUERY`） |
+| `[wechat_pay] timeout_close_s` | 5.0 | 1–30 | 是 | 否 | 关单超时（秒）（原 `WECHAT_PAY_TIMEOUT_CLOSE`） |
+| `[wechat_pay] timeout_refund_s` | 10.0 | 1–60 | 是 | 否 | 退款申请超时（秒，不重试，由任务重试）（原 `WECHAT_PAY_TIMEOUT_REFUND`） |
+| `[wechat_pay] timeout_bill_s` | 30.0 | 5–300 | 否（重启生效） | 否 | 下载账单超时（秒）；HTTP 客户端创建时读取（原 `WECHAT_PAY_TIMEOUT_BILL`） |
+| `[wechat_pay] query_attempts` | 3 | 1–10 | 是 | 否 | 查单最多尝试几次（原 `WECHAT_PAY_QUERY_ATTEMPTS`） |
+| `[wechat_pay] close_attempts` | 2 | 1–10 | 是 | 否 | 关单最多尝试几次（原 `WECHAT_PAY_CLOSE_ATTEMPTS`） |
+| `[wechat_pay] bulkhead` | 30 | 1–1000 | 否（重启生效） | 否 | 同时调用微信支付的并发上限（个）；首次调用时创建（原 `WECHAT_PAY_BULKHEAD`） |
+| `[wechat_pay] timestamp_skew_s` | 300 | 60–900 | 否（重启生效） | 否 | 应答与回调签名的时间偏差上限（秒）；客户端创建时读取（原 `WECHAT_PAY_TIMESTAMP_SKEW`） |
+| `[wechat_pay] default_expire_minutes` | 15 | 1–1440 | 是 | 否 | 支付单默认有效期（分钟），业务没给截止时间时用（原 `WECHAT_PAY_EXPIRE_MINUTES`） |
+| `[wechat_pay] prepay_reuse_seconds` | 6900 | 0–7200 | 是 | 否 | prepay_id 复用期（秒，官方 2 小时有效，留 5 分钟余量）（原 `WECHAT_PAY_PREPAY_REUSE_SECONDS`） |
+| `[wechat_pay] app_sync_min_interval_s` | 3 | 1–60 | 是 | 否 | 客户端轮询支付结果时同一单主动查单的最短间隔（秒）（原 `WECHAT_PAY_APP_SYNC_INTERVAL`） |
+| `[wechat_pay] query_schedule_s` | [5, 30, 60, 180, 300, 600, 1800] | 正整数列表 | 是 | 否 | 下单后主动查单的时间点（秒，官方方案一）（原 `WECHAT_PAY_QUERY_SCHEDULE`） |
+| `[wechat_pay] auto_refund_orphans` | true | true / false | 是 | 否 | 业务已关闭仍到账的支付自动退款（原 `WECHAT_PAY_AUTO_REFUND_ORPHANS`） |
+| `[wechat_pay] refund_max_times` | 50 | 1–50 | 是 | 否 | 一笔支付最多部分退款几次（官方上限 50）（原 `WECHAT_PAY_REFUND_MAX_TIMES`） |
+| `[wechat_pay] refund_min_interval_s` | 60 | 0–3600 | 是 | 否 | 同一笔支付两次退款申请的最短间隔（秒，官方要求 1 分钟；0 = 不限）（原 `WECHAT_PAY_REFUND_MIN_INTERVAL`） |
+| `[wechat_pay] refund_window_days` | 365 | 1–365 | 是 | 否 | 支付后多少天内可以原路退款（天，官方 1 年）（原 `WECHAT_PAY_REFUND_WINDOW_DAYS`） |
+| `[wechat_pay] refund_submit_max_attempts` | 5 | 1–20 | 是 | 否 | 退款申请最多尝试几次，之后转人工（原 `WECHAT_PAY_REFUND_MAX_ATTEMPTS`） |
+| `[wechat_pay] refund_query_fast_s` | 60 | 10–600 | 是 | 否 | 退款申请后快速查询的间隔（秒）（原 `WECHAT_PAY_REFUND_QUERY_FAST`） |
+| `[wechat_pay] refund_query_fast_window_s` | 300 | 60–3600 | 是 | 否 | 快速查询持续多久（秒），之后按退避间隔（原 `WECHAT_PAY_REFUND_QUERY_FAST_WINDOW`） |
+| `[wechat_pay] refund_query_backoff_min` | [5, 10, 20, 30] | 正整数列表 | 是 | 否 | 退款结果查询的退避间隔（分钟）（原 `WECHAT_PAY_REFUND_QUERY_BACKOFF`） |
+| `[wechat_pay] bill_ready_hour` | 10 | 0–23 | 是 | 否 | 每天几点后下载前一天的账单（时，0–23，北京时间）（原 `WECHAT_PAY_BILL_READY_HOUR`） |
+| `[wechat_pay] bill_retry_minutes` | 30 | 5–720 | 是 | 否 | 账单未就绪时多久后重试（分钟）（原 `WECHAT_PAY_BILL_RETRY_MINUTES`） |
+| `[wechat_pay] bill_max_days` | 90 | 1–90 | 是 | 否 | 最多下载多少天前的账单（天，官方 3 个月）（原 `WECHAT_PAY_BILL_MAX_DAYS`） |
+| `[wechat_pay] shipping_enabled` | true | true / false | 是 | 否 | 小程序发货信息管理（上传发货信息）开关（原 `WECHAT_PAY_SHIPPING_ENABLED`） |
+| `[wechat_pay] shipping_max_attempts` | 8 | 1–50 | 是 | 否 | 发货信息上传最多尝试几次（原 `WECHAT_PAY_SHIPPING_MAX_ATTEMPTS`） |
+
+密钥只从环境变量 / 密钥服务注入，`assert_production_ready()`（导入时另登记 `luzback.register_production_check("wechat_pay", …)`，app / jobs 启动时由 `Settings.assert_production_safe()` 统一执行）在生产拒绝：假客户端、APIv3 密钥非 32 字节、缺私钥 / 序列号 / 公钥或平台证书、回调地址非 https 或带查询参数。
 
 ## 10 错误码
 
@@ -150,7 +200,7 @@
 | 熔断打开 | 5030 | 503 |
 | 回调（渠道格式例外） | 204；验签失败 401、报文 / 核对失败 400、未知单号 404、内部错误 500，体 `{"code":"FAIL","message":…}` | — |
 
-## 11 测试清单（149 项）
+## 11 测试清单
 
 | 文件 | 覆盖 |
 |---|---|
@@ -172,34 +222,7 @@
 
 ## 13 定制点
 
-配置（环境变量 → 默认值）：
-
-| 键 | 默认 | 说明 |
-|---|---|---|
-| WECHAT_PAY_CLIENT | fake | 生产必须 http |
-| WECHAT_PAY_APPID / WECHAT_PAY_MCHID | 取 WECHAT_APPID / WECHAT_MCH_ID | 小程序 appid 与商户号 |
-| WECHAT_PAY_APIV3_KEY | 空 | 32 字节 |
-| WECHAT_PAY_PRIVATE_KEY_PATH / _PEM | 空 | 商户 API 私钥 |
-| WECHAT_PAY_CERT_SERIAL | 空 | 商户 API 证书序列号 |
-| WECHAT_PAY_PUBLIC_KEY_ID / _PATH | 空 | 微信支付公钥（推荐） |
-| WECHAT_PAY_PLATFORM_CERTS | 空 | `序列号=路径,…` 平台证书（可与公钥并存） |
-| WECHAT_PAY_NOTIFY_URL / WECHAT_PAY_REFUND_NOTIFY_URL | example.com 占位 | https、无查询参数 |
-| WECHAT_PAY_BASE_URL / _BACKUP_BASE_URL | api.mch / api2.mch | 主备域名 |
-| WECHAT_PAY_TIMEOUT_PREPAY / QUERY / CLOSE / REFUND / BILL | 8 / 5 / 5 / 10 / 30 秒 | SPEC §9 |
-| WECHAT_PAY_QUERY_ATTEMPTS / CLOSE_ATTEMPTS / BULKHEAD | 3 / 2 / 30 | 下单与退款不在调用内重试 |
-| WECHAT_PAY_TIMESTAMP_SKEW | 300 | 验签时间容差（秒） |
-| WECHAT_PAY_OUT_TRADE_NO_PREFIX | P | ≤ 4 位字母数字 |
-| WECHAT_PAY_EXPIRE_MINUTES | 15 | 未给截止时间时的默认 |
-| WECHAT_PAY_PREPAY_REUSE_SECONDS | 6900 | prepay_id 复用窗口（< 2 小时） |
-| WECHAT_PAY_QUERY_SCHEDULE | 5,30,60,180,300,600,1800 | 补偿查单节奏 |
-| WECHAT_PAY_APP_SYNC_INTERVAL | 3 | 顾客查询触发查单的最小间隔 |
-| WECHAT_PAY_AUTO_REFUND_ORPHANS | true | 异常支付自动退款 |
-| WECHAT_PAY_REFUND_MAX_TIMES / MIN_INTERVAL / WINDOW_DAYS | 50 / 60 / 365 | 官方限制 |
-| WECHAT_PAY_REFUND_MAX_ATTEMPTS | 5 | 未受理退款提交上限 |
-| WECHAT_PAY_REFUND_QUERY_FAST / _FAST_WINDOW / _BACKOFF | 60 / 300 / 5,10,20,30 | 退款查询节奏 |
-| WECHAT_PAY_BILL_READY_HOUR / BILL_RETRY_MINUTES / BILL_MAX_DAYS | 10 / 30 / 90 | 对账 |
-| WECHAT_PAY_SHIPPING_ENABLED / SHIPPING_MAX_ATTEMPTS | true / 8 | 发货信息上传 |
-| WECHAT_PAY_TZ | Asia/Shanghai | 单号日期与账单日 |
+配置：§9（秘密与部署参数在环境变量，运行参数在 `[wechat_pay]`）。
 
 扩展钩子：`register_payable(business_type, fn(db, user_id, business_id) -> Payable)`；`register_on_paid(business_type, fn(db, PaymentInfo))`；`register_on_refunded(key, fn(db, RefundInfo))`（key = business_ref 前缀或 business_type）；`set_openid_resolver`；`set_client(WechatPayClient)`；`set_shipping_client(ShippingClient)`（生产注入 `HttpShippingClient()`：access_token 默认取 28-wechat-mp `get_client().access_token()`，40001 / 42001 作废缓存后重试一次；也可传 `access_token=` / `invalidate=`）；后台鉴权为 22-admin-rbac `require_permission`（发起退款、异常退款、关单、对账差异处理 fresh=True），无本地授权器；对外查询 `find_active_refund(db, business_ref) -> RefundRecord | None`（pending / processing / succeeded / abnormal，最新一笔；10-after-sales 重提前查重）；`set_config(WechatPayConfig)`。`adapters.install_defaults` 只在 order 模块未注册时为 v1 订单兜底。测试：`wechat_pay.testing.wechat_pay_kit()` + `FakeWechatPay`（可作 httpx MockTransport 假服务器）。
 

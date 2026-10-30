@@ -1,4 +1,4 @@
-# 18-lottery 抽奖（包名 `lottery`）
+# 模块：18-lottery（抽奖）`lottery`
 
 ## 0 官方来源
 
@@ -99,6 +99,8 @@
 
 ## 6 接口
 
+agent（`SPEC.md` §16）：顾客端 GET 接口为 `read`；抽奖与领奖（`POST /draw`、`POST /records/{id}/claim`）和全部后台接口为 `no`（只给页面入口）。
+
 顾客端 `/api/v1/app/lottery`（会员令牌；写接口必须 `Idempotency-Key`）：
 
 | 方法 | 路径 | 鉴权 | 幂等 | 说明 |
@@ -184,21 +186,33 @@ agent 标记：无（抽奖不开放给智能体写操作）。
 
 ## 9 配置
 
-`lottery.config.LotteryConfig`（`set_config(**overrides)`；违反法定上限 ValueError）：
+运行参数写在 `backend/config/runtime/*.toml`，字段说明（类型、范围、能否热加载、是否下发客户端）在 `00-framework/code/luzback/runtime_config.py`；模块经 `luzback.module_config.ModuleConfig` 读取，热加载后下一次读取即生效。环境变量只放秘密与部署参数；迁移前的环境变量名仍设置着时，启动会打 `config.unknown_env` 警告并指出新键。测试用 `set_config(...)` 或 `luzback.testing.override_runtime(...)` 注入运行参数（写进一份测试用运行配置，测试结束撤销）。
 
-| 键 | 默认 | 说明 |
+### 9.1 环境变量（秘密与部署参数）
+
+| 变量 | 默认 | 说明 |
 |---|---|---|
-| prize_value_cap_cents（LUZ_LOTTERY_PRIZE_CAP_CENTS） | 5_000_000 | 单奖封顶，≤ 5 万元 |
-| publicity_threshold_cents（LUZ_LOTTERY_PUBLICITY_CENTS） | 50_000 | 公示门槛，≤ 500 元 |
-| retention_days（LUZ_LOTTERY_RETENTION_DAYS） | 730 | ≥ 730 |
-| timezone（LUZ_TIMEZONE） | Asia/Shanghai | 日 / 月计数口径 |
-| member_draws_per_minute / ip_draws_per_minute | 10 / 60 | 0 = 关闭 |
-| delivery_ack_timeout_seconds | 600 | 首次回执期限 |
-| delivery_max_attempts / delivery_backoff_seconds | 5 / (600, 1800, 7200, 21600, 43200) | 重发退避 |
-| default_claim_days | 7 | 实物领奖期限默认值（活动可改，1–90） |
-| max_prizes / max_admin_grant / max_simulate | 12 / 100 / 1_000_000 | 上限 |
-| earn_payment_business_types | ("order",) | 可送次数的支付业务类型 |
-| checkin_topic / payment_succeeded_topic / refund_succeeded_topic / delivery_result_topic | "" / payment.succeeded / refund.succeeded / lottery.delivery_result | 消费主题（checkin_topic 为空不订阅） |
+| `LUZ_TIMEZONE` | Asia/Shanghai | 日 / 月计数口径 |
+
+### 9.2 运行配置键
+
+| 键 | 默认 | 范围 | 热加载 | 下发客户端 | 说明（含单位） |
+|---|---|---|---|---|---|
+| `[lottery] prize_value_cap_cents` | 5_000_000 | > 0，≤ 5000000 | 是 | 否 | 单个奖品价值上限（分，法定不超过 5 万元）（原 `LUZ_LOTTERY_PRIZE_CAP_CENTS`） |
+| `[lottery] publicity_threshold_cents` | 50_000 | > 0，≤ 50000 | 是 | 否 | 奖品价值超过多少须公示兑奖情况（分，法定不超过 500 元）（原 `LUZ_LOTTERY_PUBLICITY_CENTS`） |
+| `[lottery] retention_days` | 730 | 730–3650 | 是 | 否 | 抽奖资料保存（天，法定不少于 2 年）（原 `LUZ_LOTTERY_RETENTION_DAYS`） |
+| `[lottery] member_draws_per_minute` | 10 | 0–1000 | 是 | 否 | 每个会员每分钟最多抽几次（次/分钟，0 = 不限）；网关与服务内共用（原 `LUZ_LOTTERY_MEMBER_PER_MIN`） |
+| `[lottery] ip_draws_per_minute` | 60 | 0–10000 | 是 | 否 | 每个 IP 每分钟最多抽几次（次/分钟，0 = 不限）（原 `LUZ_LOTTERY_IP_PER_MIN`） |
+| `[lottery] delivery_ack_timeout_seconds` | 600 | 60–86400 | 是 | 否 | 发奖事件发出后多久没有回执就重发（秒） |
+| `[lottery] delivery_max_attempts` | 5 | 1–20 | 是 | 否 | 发奖最多尝试几次，之后等待人工重试 |
+| `[lottery] delivery_backoff_seconds` | [600, 1800, 7200, 21600, 43200] | 正整数列表 | 是 | 否 | 发奖重试的退避间隔（秒） |
+| `[lottery] default_claim_days` | 7 | 1–90 | 是 | 否 | 实物奖填写收货信息的期限（天） |
+| `[lottery] max_prizes` | 12 | 1–50 | 是 | 否 | 一个活动最多几个奖项 |
+| `[lottery] max_admin_grant` | 100 | 1–10000 | 是 | 否 | 后台单次发放抽奖次数上限（次） |
+| `[lottery] max_simulate` | 1_000_000 | 1–10000000 | 是 | 否 | 概率模拟最多抽几次 |
+| `[lottery] purge_batch` | 500 | 1–10000 | 是 | 否 | 到期清理任务每批几条 |
+
+接线（代码，`lottery.set_config(...)`）：`earn_payment_business_types`（默认 ("order",)）、`checkin_topic`（空 = 不订阅）、`payment_succeeded_topic` / `refund_succeeded_topic` / `delivery_result_topic`。法定上限由字段说明校验，放宽即启动失败（热加载时拒绝）。网关的抽奖限流与服务内限流共用 `member_draws_per_minute`。
 
 ## 10 错误码
 
@@ -216,7 +230,7 @@ agent 标记：无（抽奖不开放给智能体写操作）。
 | 次数用完 / 日 / 月 / 总上限（data.reason） | 4225 |
 | 抽奖限流 | 4290 |
 
-## 11 测试清单（`code/tests/`，84 个用例）
+## 11 测试清单（`code/tests/`）
 
 | 文件 | 覆盖 |
 |---|---|
@@ -240,7 +254,7 @@ agent 标记：无（抽奖不开放给智能体写操作）。
 
 ## 13 定制点
 
-- 配置：§9 全部键（`set_config` 或环境变量）。
+- 配置：§9（运行参数在 `[lottery]`；事件主题等接线用 `set_config`）。
 - 钩子（`lottery.hooks`）：`set_audience_checker(fn(db, activity, member_id) -> bool)`（如会员等级、排除员工账号）；`set_risk_checker(fn(db, RiskContext))`（黑名单、设备指纹，拒绝即抛 AppError）；`set_member_display(fn(db, member_id) -> 昵称)`（公示）；`set_limiters(member, ip)`（多实例换 Redis 实现，`allow(key)` 接口）；`set_random_source(src)`（只用于测试，生产保持 secrets）。
 - 鉴权（`lottery.deps`）：后台 `require_permission(code, fresh=False)` = `admin_rbac.require_permission` + Staff→StaffActor 映射（服务端会话、权限码含 `lottery:*` 通配、门店范围）；没有本地替换钩子，令牌里的声明不算数。顾客端 `current_member` 走 identity 会话检查。权限码 `lottery.PERMISSIONS` 导入时登记到 admin_rbac。事件消费经 `events.py` 以 `handle_event(..., commit=False)` 调用（不提交，worker 统一提交）。
 - 次数来源：其他模块调用 `lottery.grant_chances(db, activity_id, member_id, chances, source="event", source_ref=唯一业务号)`。

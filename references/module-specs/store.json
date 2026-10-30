@@ -1,12 +1,11 @@
 {
   "id": "store",
   "order": 20,
-  "name": "门店与配置",
+  "name": "门店与经营设置",
   "modules": [
-    "store",
-    "settings"
+    "store"
   ],
-  "summary": "维护门店资料、营业时段、容量与状态，以及全局和门店级配置项；为入场、预约、报表提供门店范围。",
+  "summary": "维护门店资料、营业时段、容量与状态，以及门店与全局的经营与展示设置；为入场、预约、报表提供门店范围。",
   "features": [
     {
       "name": "门店资料",
@@ -21,8 +20,8 @@
       "description": "在场人数随入场、离场条件更新，小程序只显示空闲、适中、拥挤三档。"
     },
     {
-      "name": "配置项",
-      "description": "全局默认值与门店覆盖值，如待支付时长、在场超时时长、预约取消时限；修改即时生效并审计。"
+      "name": "经营设置",
+      "description": "全局默认值与门店覆盖值：起送价、配送费、包装费等门店经营参数。每个键在代码里登记类型、范围、默认值与 admin_visible；后台只列 admin_visible 的键，实时维护，修改即时生效并审计。展示配置与前台文案在模块详设 content；待支付时长、在场超时、预约取消时限这类运行参数写在配置文件里（模块详设 config）。"
     },
     {
       "name": "附近门店",
@@ -47,10 +46,10 @@
       ]
     },
     {
-      "name": "读取配置",
+      "name": "读取经营与展示设置",
       "steps": [
-        "业务代码按 key 读取配置：先取门店覆盖值，没有则取全局默认值，再没有使用代码内默认值。",
-        "配置缓存在 Redis，后台修改写库后删除对应缓存。"
+        "业务代码按 key 读取设置：先取门店覆盖值，没有则取全局值，再没有使用代码登记的默认值。",
+        "设置缓存在 Redis，后台修改写库后删除对应缓存。"
       ]
     },
     {
@@ -145,12 +144,12 @@
       "rule": "对会员公开的客服电话。"
     },
     {
-      "page": "配置页（后台）",
+      "page": "门店编辑页（后台）",
       "field": "value",
-      "label": "配置值",
-      "type": "按配置类型",
+      "label": "经营与展示设置",
+      "type": "按登记类型",
       "required": true,
-      "rule": "数值类有上下限，例如待支付时长 5–30 分钟。"
+      "rule": "按登记的类型与范围校验；只显示 admin_visible 的键。"
     }
   ],
   "apis": [
@@ -194,19 +193,19 @@
       "method": "GET",
       "path": "/api/v1/admin/settings",
       "caller": "后台",
-      "purpose": "配置列表",
+      "purpose": "经营设置列表",
       "request": "store_id（可选）",
-      "response": "key，value，默认值，覆盖来源",
+      "response": "key，value，默认值，覆盖来源（只含 admin_visible 的键）",
       "errors": "—"
     },
     {
       "method": "PUT",
       "path": "/api/v1/admin/settings/{key}",
       "caller": "后台",
-      "purpose": "修改配置",
+      "purpose": "修改经营设置",
       "request": "store_id（可选），value",
       "response": "生效后的值",
-      "errors": "VALIDATION_FAILED"
+      "errors": "VALIDATION_FAILED，FORBIDDEN（隐藏键）"
     },
     {
       "method": "GET",
@@ -306,12 +305,12 @@
       "content": "门店资料与状态。"
     },
     {
-      "when": "修改配置",
+      "when": "修改经营与展示设置",
       "table": "store_settings",
       "content": "store_id、key、value、updated_by。"
     },
     {
-      "when": "修改门店或配置",
+      "when": "修改门店或设置",
       "table": "audit_logs",
       "content": "修改前后的值。"
     },
@@ -453,8 +452,8 @@
     },
     {
       "name": "store_settings",
-      "label": "配置",
-      "purpose": "全局默认与门店覆盖配置",
+      "label": "经营设置",
+      "purpose": "门店与全局的经营设置（起送价、配送费、包装费等门店经营参数）；键在代码里登记类型、范围、默认值与 admin_visible。展示配置在模块详设 content 的 display_settings",
       "fields": [
         {
           "name": "store_id",
@@ -468,14 +467,14 @@
           "type": "VARCHAR(64)",
           "required": true,
           "default": "—",
-          "comment": "配置键，如 order.pay_timeout_minutes"
+          "comment": "设置键，如 delivery.min_order_cents"
         },
         {
           "name": "value",
           "type": "JSONB",
           "required": true,
           "default": "—",
-          "comment": "配置值"
+          "comment": "设置值"
         },
         {
           "name": "updated_by",
@@ -688,8 +687,8 @@
       "handling": "按城市选择展示门店，不反复弹出授权。"
     },
     {
-      "case": "配置值非法",
-      "handling": "按配置定义的类型与上下限校验，返回 VALIDATION_FAILED。"
+      "case": "设置值非法或修改隐藏键",
+      "handling": "按登记的类型与范围校验，返回 VALIDATION_FAILED；admin_visible 为否的键只能由种子与迁移修改，后台接口返回 FORBIDDEN。"
     },
     {
       "case": "停业时有进行中与待支付订单",

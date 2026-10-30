@@ -1,7 +1,7 @@
 # 用户协议、隐私政策与同意记录
 
-Luz Dev 负责把协议做成系统功能：文本版本化、在正确的位置展示、取得并记录同意、变更后重新同意、提供撤回与注销。协议正文由模板起草，**上线前须由商户确认并建议律师审核**；Luz Dev 不替商户作法律判断。
-模板：`assets/legal/`。参考代码设计：本篇 §4。相关规范：LEGAL-*、PII-*、FACE-002、MBR-002、MKT-004、PII-003。
+Luz Dev 负责把协议做成系统功能：文本版本化、在正确的位置展示、取得并记录同意、变更后重新同意、提供撤回与注销。协议正文由 Luz-Writing 按模板起草（`D:\Codes\Luz-Writing\references\09-academic-and-professional.md` › 协议与政策文本，规则卡 academic-professional），商户确认，建议律师审核；`assets/legal/` 只是骨架，Luz Dev 不替商户作法律判断。
+模板：`assets/legal/`。参考代码：`backend/27-legal`（本篇 §4）。相关规范：LEGAL-*、PII-*、FACE-002、MBR-002、MKT-004、PII-003。
 
 ## 1. 文档清单
 
@@ -33,22 +33,9 @@ Luz Dev 负责把协议做成系统功能：文本版本化、在正确的位置
 | 撤回 | 提供撤回入口（如人脸、营销推送）；撤回后停止处理并删除相应数据 |
 | 后台代录 | 门店代客录入时，同意必须由用户本人在其设备上完成或保留书面证据 |
 
-## 4. 数据模型与接口（参考）
+## 4. 数据模型与接口
 
-| 表 | 字段 |
-|---|---|
-| `legal_documents` | `id`、`kind`（terms / privacy / face_consent / prepaid / refund / activity）、`version`、`title`、`content`（Markdown）、`content_sha256`、`effective_at`、`status`（draft / published / retired） |
-| `user_consents` | `id`、`user_id`、`document_id`、`version`、`content_sha256`、`accepted_at`、`channel`、`client_hint`（脱敏）、`withdrawn_at` |
-
-| 接口 | 说明 |
-|---|---|
-| `GET /api/v1/app/legal/{kind}` | 当前生效版本 |
-| `GET /api/v1/app/legal/pending` | 当前用户尚未同意的必需文档 |
-| `POST /api/v1/app/legal/consents` | 提交同意（文档 ID + 版本 + 哈希，服务端校验为当前版本） |
-| `POST /api/v1/app/legal/consents/{id}/withdraw` | 撤回 |
-| `POST /api/v1/admin/legal/documents` · `/publish` | 新建版本、发布（权限 `legal:publish`，写审计） |
-
-发布新版本只新增记录，不修改已发布文本；同意记录只追加。
+表、接口与规则以 `backend/27-legal/MODULE.md` 为准（表 `legal_documents`、`user_consents`；接口 `/api/v1/app/legal/{kind}`、`/pending`、`/consents`、`/consents/{kind}/withdraw`，后台 `/api/v1/admin/legal/documents` 与 `/{id}/publish`，权限 `legal:publish`）；方案里的详细设计用模块详设 legal（`references/module-specs/legal.json`）。发布新版本只新增记录，不修改已发布文本；同意记录只追加。
 
 ## 5. 上线前检查
 

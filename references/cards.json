@@ -54,7 +54,6 @@
       "sections": [
         {"page": "../SKILL.md", "title": "SKILL.md", "path": ["Platform defaults"], "label": "SKILL.md › Platform defaults"},
         {"page": "../SKILL.md", "title": "SKILL.md", "path": ["Project structure"], "label": "SKILL.md › Project structure"},
-        {"page": "backend.md", "title": "Backend implementation", "path": [], "label": "backend.md（全文）"},
         {"page": "implementation-architecture.md", "title": "Implementation architecture", "path": [], "label": "implementation-architecture.md（全文）"},
         {"page": "patterns/README.md", "title": "业务逻辑模式库", "path": [], "label": "patterns/README.md（全文）"},
         {"page": "patterns/consistency.md", "title": "一致性模式", "path": [], "label": "patterns/consistency.md（全文）"},
@@ -71,9 +70,9 @@
       "tools": [
         "先过门禁：`python -X utf8 scripts/tech_plan.py gate NN` 通过才写代码；本卡由方案创建时存进 `raw/00-rules/backend-module.md`",
         "标准模块只作参考与复用起点：目录 `references/standard-modules.json`、总览 `backend/MODULES.md`、各模块 `backend/NN-名称/MODULE.md`；与标准不同的行为走 MODULE.md §13 定制点，不改库里的规则；方案里用 `tech_plan.py standard NN --set/--deviation` 记录取值与差异",
-        "业务模式：按方案模块读 `references/patterns/<模块>.md`（inventory、order、pricing、coupon、accounts、reservation、after-sales、seckill、jobs、cache、catalog-cart、multi-store），再按调研结论调整并写明差异",
+        "业务模式：按方案模块读 `references/patterns/<模块>.md`（inventory、order、pricing、coupon、accounts、reservation、after-sales、seckill、jobs、cache、catalog-cart、multi-store、access-control），再按调研结论调整并写明差异",
         "没有标准模块的模块：`python -X utf8 scripts/module_specs.py list` 看模块库，`tech_plan.py spec NN --file adapted.json` 换成本项目的详细设计；每张被写入的表都要定义",
-        "可复用功能逻辑：查 `references/function-catalog.json`（按模块 id 与功能 id），改写后再用，不照抄路由和状态词",
+        "可复用功能逻辑：查 `references/function-catalog.json`（按模块 id 与功能 id），改写后再用，不照抄路由和状态词；前台文案与展示配置用模块详设 content（MP-006、ADMIN-005），运行参数用模块详设 config",
         "支付、退款、对账读 `backend/09-wechat-pay/MODULE.md`（规则 `PAY-*`、`RFD-*`）；规则原文按编号查 `references/standards.json`",
         "契约先行：OpenAPI 与 `packages/contracts/design-bindings.json` 先于两端改动；状态只经 `luzback.StateMachine` 改变"
       ],
@@ -89,7 +88,7 @@
       "summary": "运行参数写在配置文件里由服务端热加载、不在后台展示；日志一行一条 JSON、统一字段与事件名、脱敏、按 trace 串起、不影响业务、分类集中留存（网络日志 6 个月、交易 3 年）、日志告警",
       "keywords": ["配置", "配置文件", "热加载", "热更新", "TOML", "Pydantic", "灰度", "回滚", "日志", "结构化日志", "trace", "脱敏", "留存", "审计", "告警", "级别", "logging", "config"],
       "sections": [
-        {"page": "config-logging.md", "title": "配置文件与日志", "path": ["1. 四类设置分开放"], "label": "config-logging.md › 1. 四类设置分开放"},
+        {"page": "config-logging.md", "title": "配置文件与日志", "path": ["1. 五类设置分开放"], "label": "config-logging.md › 1. 五类设置分开放"},
         {"page": "config-logging.md", "title": "配置文件与日志", "path": ["2. 运行配置文件"], "label": "config-logging.md › 2. 运行配置文件"},
         {"page": "config-logging.md", "title": "配置文件与日志", "path": ["3. 日志"], "label": "config-logging.md › 3. 日志"},
         {"page": "config-logging.md", "title": "配置文件与日志", "path": ["4. Luz 骨架现状与接入"], "label": "config-logging.md › 4. Luz 骨架现状与接入"},
@@ -99,7 +98,7 @@
         "规则：`OPS-005`、`CONF-001` 至 `CONF-003`、`SECRET-*`、`OBS-001` 至 `OBS-008`；方案核对表会自动带上，逐条写落地方式",
         "运行配置的接口、表与异常：模块详设 config（`python -X utf8 scripts/module_specs.py list`）；客户端拉取与兜底、哪些参数要可配置见 Luz System `references/config-design.html`",
         "骨架：`backend/00-framework/code/luzback/config.py`、`logging.py`、`app.py` 请求中间件、`audit.py`；缺的部分按本卡 §4 在项目里补，不改技能里的 `backend/`",
-        "法规期限只引用调研读过的原文：本卡 §6 的来源来自 Luz-Crawl 029；项目调研可 `tech_plan.py research NN --run --topics deploy,compliance` 复核",
+        "法规期限只引用调研读过的原文：来源列在 `references/config-logging.md` §6（不在本卡上）；项目调研可 `tech_plan.py research NN --run --topics deploy,compliance` 复核",
         "部署与告警模板：`assets/deploy/docker-compose.prod.yml`（日志轮转）、`assets/monitoring/rules/`；日志告警规则按本卡 §3.11 补"
       ],
       "checks": [
@@ -116,7 +115,6 @@
       "sections": [
         {"page": "../SKILL.md", "title": "SKILL.md", "path": ["Frontend: integrating Luz System"], "label": "SKILL.md › Frontend: integrating Luz System"},
         {"page": "design-integration.md", "title": "接入 Luz System 前端设计", "path": [], "label": "design-integration.md（全文）"},
-        {"page": "api-bindings.md", "title": "小程序模块 ↔ 后端模块 ↔ 接口", "path": [], "label": "api-bindings.md（全文）"},
         {"page": "miniprogram.md", "title": "WeChat mini-program implementation", "path": [], "label": "miniprogram.md（全文）"},
         {"page": "admin.md", "title": "Merchant admin implementation", "path": [], "label": "admin.md（全文）"},
         {"page": "mobile-app.md", "title": "Mobile app implementation", "path": [], "label": "mobile-app.md（全文）"},
@@ -129,7 +127,7 @@
         "核验与绑定：`python -X utf8 scripts/design_intake.py inspect <会话> --require architecture,system_design,prototype`，`python -X utf8 scripts/design_intake.py bind <会话> --out <项目>/packages/contracts/design-bindings.json`，与 OpenAPI 契约一起填写",
         "界面的行为规则（默认视图、筛选、分页、导出）先运行 Luz-System 的 `scripts/context.py list` 取对应规则卡；视觉与令牌来自 Luz-Design（`references/themes.json`），不在本技能里改",
         "改动用户可见的流程、权限或层级先回 Luz-System 改设计并重新批准（INT-003），不在前端里自行发挥",
-        "保留原型的 `data-page-id` / `data-action-id`，每个夹具数据换成真实接口；结果页按 result-patterns.md 的落点矩阵实现"
+        "保留原型的 `data-page-id` / `data-action-id`，每个夹具数据换成真实接口；结果页按 result-patterns.md 的落点矩阵实现；前台文字与展示配置从 `GET /api/v1/app/content` 取，安装包只带默认值（MP-006）；挑后端模块与接口时可参考示例映射 `references/api-bindings.md`"
       ],
       "checks": [
         "`python -X utf8 scripts/design_intake.py check <绑定表> --frontend <apps/miniprogram> --frontend <apps/admin>` 通过：操作与页面 100% 覆盖、无原型数据或 mock 引用、无未设计的操作",
@@ -146,7 +144,6 @@
         {"page": "operations.md", "title": "运维与上线", "path": [], "label": "operations.md（全文）"},
         {"page": "compliance.md", "title": "商业资质、备案与许可", "path": [], "label": "compliance.md（全文）"},
         {"page": "legal-documents.md", "title": "用户协议、隐私政策与同意记录", "path": [], "label": "legal-documents.md（全文）"},
-        {"page": "delivery.md", "title": "Delivery and operations", "path": [], "label": "delivery.md（全文）"},
         {"page": "dev-checklist.html", "title": "后端开发到运营清单", "path": ["后端开发到运营清单", "7 网关与部署"], "label": "dev-checklist.html › 7 网关与部署"},
         {"page": "dev-checklist.html", "title": "后端开发到运营清单", "path": ["后端开发到运营清单", "8 发布与回滚"], "label": "dev-checklist.html › 8 发布与回滚"},
         {"page": "dev-checklist.html", "title": "后端开发到运营清单", "path": ["后端开发到运营清单", "9 监控与运维"], "label": "dev-checklist.html › 9 监控与运维"},
@@ -155,7 +152,7 @@
       ],
       "tools": [
         "部署与运维模板是骨架：`assets/deploy/`（docker-compose.prod.yml、nginx.conf、api.env.example、backup.sh、release.sh、verify-restore.sh、RUNBOOK.md、LAUNCH-CHECKLIST.md）、`assets/ci/github-actions.yml`、`assets/monitoring/`、`assets/loadtest/k6-api.js`；取值按本卡和调研结论改",
-        "协议正文由 Luz-Writing 起草或润色（`D:\\Codes\\Luz-Writing`，先读它的规则卡），`assets/legal/` 只是骨架；版本、同意记录、重新同意与撤回由本技能实现（参考 `backend/27-legal`），商户确认、建议律师审核",
+        "协议正文由 Luz-Writing 按模板起草（`D:\\Codes\\Luz-Writing\\references\\09-academic-and-professional.md` › 协议与政策文本，规则卡 academic-professional），商户确认，建议律师审核；`assets/legal/` 只是骨架；版本、同意记录、重新同意与撤回由本技能实现（参考 `backend/27-legal`）",
         "资质与备案由商户办理、耗时长：在方案第一周列出（事项、是否适用及理由、负责方、进度、证据、对排期的影响）",
         "法规与平台规则只引用本次调研读过的官方页面：`tech_plan.py research NN --run --topics compliance,legal,deploy` 或 `--add-link <模块>|<官方 URL>`",
         "第三方许可写进项目的 `config/third-party-licenses.md`",
@@ -174,31 +171,23 @@
       "keywords": ["review", "评审", "排查", "诊断", "已有系统", "安全", "账号", "日志", "AUTH", "证据", "缺口", "回滚"],
       "sections": [
         {"page": "research.md", "title": "调研：用 Luz-Crawl 取得真实资料", "path": ["1. 什么时候必须调研"], "label": "research.md › 1. 什么时候必须调研"},
-        {"page": "backend.md", "title": "Backend implementation", "path": [], "label": "backend.md（全文）"},
         {"page": "quality.md", "title": "Quality and verification", "path": [], "label": "quality.md（全文）"},
-        {"page": "patterns/README.md", "title": "业务逻辑模式库", "path": [], "label": "patterns/README.md（全文）"},
         {"page": "patterns/consistency.md", "title": "一致性模式", "path": [], "label": "patterns/consistency.md（全文）"},
         {"page": "result-patterns.md", "title": "闭环结果页规范", "path": ["1. 不可绕过的事实规则"], "label": "result-patterns.md › 1. 不可绕过的事实规则"},
         {"page": "result-patterns.md", "title": "闭环结果页规范", "path": ["7. 失败页与恢复"], "label": "result-patterns.md › 7. 失败页与恢复"},
-        {"page": "operations.md", "title": "运维与上线", "path": ["4. 监控与告警"], "label": "operations.md › 4. 监控与告警"},
-        {"page": "operations.md", "title": "运维与上线", "path": ["5. 备份与恢复"], "label": "operations.md › 5. 备份与恢复"},
-        {"page": "operations.md", "title": "运维与上线", "path": ["6. 安全加固"], "label": "operations.md › 6. 安全加固"},
-        {"page": "delivery.md", "title": "Delivery and operations", "path": [], "label": "delivery.md（全文）"},
         {"page": "dev-checklist.html", "title": "后端开发到运营清单", "path": ["后端开发到运营清单", "2 接口契约"], "label": "dev-checklist.html › 2 接口契约"},
         {"page": "dev-checklist.html", "title": "后端开发到运营清单", "path": ["后端开发到运营清单", "3 数据库与迁移"], "label": "dev-checklist.html › 3 数据库与迁移"},
         {"page": "dev-checklist.html", "title": "后端开发到运营清单", "path": ["后端开发到运营清单", "4 编码"], "label": "dev-checklist.html › 4 编码"},
         {"page": "dev-checklist.html", "title": "后端开发到运营清单", "path": ["后端开发到运营清单", "5 测试"], "label": "dev-checklist.html › 5 测试"},
-        {"page": "dev-checklist.html", "title": "后端开发到运营清单", "path": ["后端开发到运营清单", "6 安全"], "label": "dev-checklist.html › 6 安全"},
-        {"page": "dev-checklist.html", "title": "后端开发到运营清单", "path": ["后端开发到运营清单", "7 网关与部署"], "label": "dev-checklist.html › 7 网关与部署"},
-        {"page": "dev-checklist.html", "title": "后端开发到运营清单", "path": ["后端开发到运营清单", "8 发布与回滚"], "label": "dev-checklist.html › 8 发布与回滚"},
-        {"page": "dev-checklist.html", "title": "后端开发到运营清单", "path": ["后端开发到运营清单", "9 监控与运维"], "label": "dev-checklist.html › 9 监控与运维"}
+        {"page": "dev-checklist.html", "title": "后端开发到运营清单", "path": ["后端开发到运营清单", "6 安全"], "label": "dev-checklist.html › 6 安全"}
       ],
       "tools": [
         "建方案：`python -X utf8 scripts/create_tech_plan.py \"<主题>\" --mode review|diagnosis|analysis|operations --project-type <类型> --modules <模块>`；只读模式不需要批准就能查，但仍要建方案并记录发现；operations 改动线上必须先批准并过 `gate`",
         "按规范逐条对照：`python -X utf8 scripts/tech_plan.py check NN` 列出适用规则，规则原文按编号查 `references/standards.json`；查到的问题写进 findings 章节，核对表用 `tech_plan.py mark` 标状态",
         "排查顺序：复现 → 收集证据（日志、请求、数据、配置、版本）→ 定位到代码或配置行 → 给出修复方案和回归测试；不在批准前改代码或线上",
         "先查经验与知识：`python -X utf8 scripts/record_experience.py search <关键词>`、`python -X utf8 scripts/knowledge.py search <关键词>`；review 方案调研覆盖安全类必查主题",
-        "运行配置文件与日志（分类、字段、脱敏、留存期限、日志告警）的细则在 `context.py config-logging`"
+        "运行配置文件与日志（分类、字段、脱敏、留存期限、日志告警）的细则在 `context.py config-logging`",
+        "评审已有系统的运维面（监控告警、备份恢复、安全加固、网关、发布与回滚）读 `context.py launch-compliance`（operations 方案自动带上）；业务模块的默认做法与模式清单读 `context.py backend-module`；同一小节在两张卡里只读一次"
       ],
       "checks": [
         "每条发现写明证据位置（文件:行、请求、日志片段、配置项）、影响、严重程度和建议；没有证据的只能写成待核实",
@@ -246,7 +235,7 @@
       ],
       "tools": [
         "与 `context.py agent-service` 一起读：那张卡是流水线、编排与工具，本卡是运行保障；两张卡都来自 `references/agent-foundation.md`",
-        "数值以底座 §16 为准，改上限或超时同时改 §16 与 `agent/00-core/code/agent_core/config.py`，方案里改默认值要写理由",
+        "数值以底座 §16 为准；键写在运行配置 `config/runtime/*.toml` 的 `[agent]` 表（小写蛇形，热加载）；改上限或超时同时改 §16、字段说明与代码默认值（`agent/00-core/code/agent_core/config.py`），方案里改默认值要写理由",
         "调研或核对外部文档用 Luz-Crawl；来源与采集编号见底座 §18（任务 017、018、023）"
       ],
       "checks": [

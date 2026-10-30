@@ -1,17 +1,17 @@
-# 模块：map-location（地图与配送范围）
+# 模块：06-geo（地图与配送范围）`geo`
 
 | 项 | 内容 |
 |---|---|
-| 状态 | 已实现（Haversine 距离、配送范围校验、地理编码缓存与降级），测试 5 项通过；腾讯地图客户端为设计 |
+| 状态 | 已实现（Haversine 距离、配送范围校验、地理编码缓存与降级）；腾讯地图客户端为设计 |
 | 代码 | `06-geo/code/geo/`、测试 `06-geo/code/tests/` |
-| 依赖 | framework、address（地址坐标）、order（下单时校验范围） |
+| 依赖 | 00-framework；05-address（地址坐标）、08-order（下单时校验范围） |
 
 ## 1 职责与边界
 
 | 负责 | 不负责 |
 |---|---|
 | 两点直线距离（米） | 路线规划、ETA 计算（地图服务返回，设计） |
-| 门店配送范围判断 | 骑手实时位置（delivery-dispatch） |
+| 门店配送范围判断 | 骑手实时位置（11-delivery） |
 | 地址文本 → 经纬度（地理编码）及缓存 | 地图底图渲染（小程序 map 组件或地图 SDK） |
 | 地图服务失败时的降级信号 | 逆地理编码的业务用途（只做展示） |
 
@@ -45,9 +45,9 @@ Key 只从环境变量读取；按小程序域名白名单与服务端 IP 白名
 
 | 方法 | 路径 | 鉴权 | agent | 说明 |
 |---|---|---|---|---|
-| GET | `/api/v1/app/geo/reverse?lat=&lng=` | access | yes | 逆地理，供“使用当前位置” |
+| GET | `/api/v1/app/geo/reverse?lat=&lng=` | access | read | 逆地理，供“使用当前位置” |
 | GET | `/api/v1/app/geo/geocode?address=` | access | no | 地址解析（填写页“自动回填坐标”） |
-| GET | `/api/v1/app/stores/{id}/delivery-check?lat=&lng=` | access | yes | 返回 `{in_range, distance_m, max_km}` |
+| GET | `/api/v1/app/stores/{id}/delivery-check?lat=&lng=` | access | read | 返回 `{in_range, distance_m, max_km}` |
 
 ## 6 并发与一致性
 
@@ -55,18 +55,19 @@ Key 只从环境变量读取；按小程序域名白名单与服务端 IP 白名
 
 ## 7 配置
 
-| 变量 | 说明 |
-|---|---|
-| `TENCENT_MAP_KEY` | 地图服务密钥（密钥服务注入） |
-| `GEO_CACHE_TTL_DAYS` | 默认 7 |
-| `GEO_UPSTREAM_TIMEOUT_SECONDS` | 默认 3 |
+目前代码不读配置：`GeocodeCache(client, ttl_seconds=7 天)` 由调用方传参，地图客户端由项目注入。接入腾讯地图客户端时（设计）：
+
+| 项 | 放在哪 | 默认 |
+|---|---|---|
+| `TENCENT_MAP_KEY` | 秘密（密钥服务或受限文件，`SPEC.md` §14.1） | — |
+| 地理编码缓存天数、上游超时 | 运行配置 `[geo]` 分组（如 `cache_ttl_days`、`upstream_timeout_ms`），热加载 | 7 天、3000 毫秒 |
 
 ## 8 错误码
 
 | 场景 | code | HTTP |
 |---|---|---|
 | 地址为空 | 4001 | 400 |
-| 超出配送范围 | 4220 | 422（data 含 distance_m、max_km） |
+| 超出配送范围 | 4222 | 422（data 含 distance_m、max_km） |
 | 地图服务失败 | 5020 | 502 |
 
 ## 9 测试用例（已实现）

@@ -1,4 +1,4 @@
-# 08-order（通用交易订单）`order`
+# 模块：08-order（通用交易订单）`order`
 
 ## 0 官方来源
 
@@ -20,7 +20,7 @@
 
 | 项 | 内容 |
 |---|---|
-| 状态 | 标准（可复用）；测试 44 项（另有端到端 3 项在 `backend/tests/test_integration.py`） |
+| 状态 | 标准（可复用）；测试在 `code/tests/`（另有端到端在 `backend/tests/test_integration.py`） |
 | 依赖 | 00-framework；07-inventory（reservation 预占 / 确认 / 释放，`restore` 退货入库）；16-coupon（price_with_coupons / available_coupons / lock / redeem / unlock / return_on_refund）；17-campaign（`pricing` 最大余数法分摊，活动经提供者注入）；09-wechat-pay（支付解析器、支付成功钩子、close_payment、request_shipping_upload）；15-recharge（余额 consume / reverse）；29-member-card（发卡、退卡试算）；01-identity（current_user、手机号）；05-address（地址快照）；22-admin-rbac（权限、门店范围） |
 | 被依赖 | 10-after-sales（退款额度与结算）、19-review（Order、COMPLETED）、09-wechat-pay（order.cancelled） |
 
@@ -56,19 +56,19 @@
 1. 价格只来自服务端：行种类 `resolve` 取价（goods → SKU，service → 价目提供者，member_card → 卡种）；请求体里的价格字段一律忽略。
 2. 试算顺序：活动（`set_promotions_provider` 返回 `pricing.Promotion`）→ 券（16 在活动后金额上计算，门槛按活动后金额）→ 每项优惠只在适用行之间按金额比例、最大余数法分摊；行实付 = 原价 − 活动 − 券。
 3. 试算不因券不可用失败：返回 `coupon_error`（原因：below_threshold / expired / not_started / no_scope_items / campaign_conflict / stack_conflict …）并按无券计价；同时列出可用 / 不可用券及原因、推荐券。
-4. 试算返回 `quote_token`（ORDER_QUOTE_TTL，默认 600 秒）；库存不足、超出限购写入 `issues`，`submittable=false`。
+4. 试算返回 `quote_token`（`[order] quote_ttl_seconds`，默认 600 秒）；库存不足、超出限购写入 `issues`，`submittable=false`。
 5. 下单必须带本人未过期的报价令牌；服务端重新计价，任何一行单价 / 数量 / 实付或券集合变化 → 4223 `price_changed`；令牌过期 / 不存在 → 4223；已用 → 4090 `quote_used`（条件 UPDATE `used_at IS NULL`，同一报价并发只成一单）。
-6. 购买条款：`terms_accepted` 必须为 true，客户端版本与 ORDER_TERMS_VERSION 不一致 → 4220 `terms_outdated`；订单记录生效版本与同意时间（可换成 27-legal 的同意记录：`set_terms_checker`）。
+6. 购买条款：`terms_accepted` 必须为 true，客户端版本与 `[order] terms_version` 不一致 → 4220 `terms_outdated`；订单记录生效版本与同意时间（可换成 27-legal 的同意记录：`set_terms_checker`）。
 7. 下单同一事务：写订单与行快照 → 限购计数条件自增（qty + n ≤ limit，超出 4225）→ 行种类 `reserve`（实物：07 预占，ref = `order:{id}`，按 sku_id 升序）→ 锁券（16 lock，同券并发只成一单）→ 状态日志 → `order.created`。任一步失败整单回滚。
 8. 单号：前缀(≤4) + 北京时间 yyMMddHHmmss + 毫秒 + 6 位随机数字（≤ 25 位，时间有序，可直接做微信 business_no）；唯一约束兜底，碰撞换号重试 3 次。
-9. 支付截止 `pay_deadline_at = 下单时间 + ORDER_PAY_TIMEOUT_MINUTES`（默认 15）；0 元订单提交即成交（`pay_method=free`），不走微信。
+9. 支付截止 `pay_deadline_at = 下单时间 + `[order] pay_timeout_minutes``（默认 15）；0 元订单提交即成交（`pay_method=free`），不走微信。
 10. 微信支付：09 `pay_business("order")` 调用本模块解析器（金额 = total_cents，截止 = pay_deadline_at，goods_kind 汇总：含虚拟 → virtual_content，含实物 → physical，否则 offline_service）；同一订单重复“去支付”复用同一支付单。
 11. 余额支付：先查 / 关闭未完成的微信支付单（已付 → 4090 `already_paid`；渠道不可用 → 5020）；再按行 `wallet.consume(ref=order:{id}:item:{item_id})`（余额不足 4224，整笔回滚）并同事务成交。不支持混合支付。
 12. 支付成功（09 `on_paid` 钩子，保存点内）：核对金额与付款人 → `pending_payment → paid` 条件 UPDATE → 核销券 → 确认库存预占 → 行种类 `fulfil`（会员卡同事务发卡，issue_ref = `order_item:{id}`）→ `order.paid`；全部行已即时交付 → `fulfilled` + `order.fulfilled`。钩子抛错（订单已关闭、金额不符）→ 09 记 needs_manual 并自动全额退款，订单不变。
 13. 用户取消仅限 `pending_payment`；先查单再关单（已付 → 4090；渠道不可用 → 5020，订单保持待支付），然后同事务：释放库存、解锁券（券已过期则 → expired，不回 available）、回退限购计数、`order.cancelled`。后台关单同规则，原因必填并审计。
 14. 超时关单任务：`pending_payment` 且 `pay_deadline_at` 已过 → 同规则 13（cancel_type=timeout，状态 closed）；查到已付 → 由支付钩子成交；渠道不可用 → 本轮跳过并保留库存与券；查到渠道已付但订单钩子曾拒绝 → 关闭订单并标 needs_manual（09 已自动退款）。
 15. 履约：实物 `ship`（paid → fulfilling，快递公司与单号必填，有处理中售后时拒绝）；`mark_fulfilled`（paid / fulfilling → fulfilled，待交付行全部标记）；顾客 `confirm_receipt`（fulfilling / fulfilled → completed，未记交付时间时以确认时间为交付时间）。
-16. 自动完成：fulfilled（或已发货 fulfilling）超过 ORDER_AUTO_COMPLETE_DAYS（默认 7）天且无处理中售后 → completed。
+16. 自动完成：fulfilled（或已发货 fulfilling）超过 `[order] auto_complete_days`（默认 7）天且无处理中售后 → completed。
 17. 发货信息录入：微信支付订单在发货 / 履约事务提交后调用 09 `request_shipping_upload`（快递 1、无快递实物 4、服务 / 会员卡 3）；失败由 `order.shipping_sync` 补录。
 18. 退款额度（供 10）：`refund_quote` 按累计公式 `paid × (已占 + n) // qty − paid × 已占 // qty`，退完剩余数量时 = 剩余实付；行种类可再设上限（会员卡）；`reserve_refund` 条件 UPDATE 保证 Σ占用 ≤ 行实付、数量 ≤ 行数量、单级占用 ≤ 实付；余额支付订单可部分退：`refund_balance(db, order_id, [(item_id, amount_cents)], ref)` 调 `wallet.reverse(..., amount_cents, reversal_ref="{ref}:item:{id}")` 按金额冲回（按 reversal_ref 幂等，累计不超过原消费）。
 19. 退款结算 `settle_refund`：计入已退 → 行种类 `on_refunded`（实物按售后决定回库）→ 16 `return_on_refund`（是否退券由券模块策略决定）→ 全部实付已退则主状态 → refunded（终态）→ `order.refunded`。`refund_status` 由占用与已退推导：refunding / partially_refunded / refunded / none。
@@ -107,17 +107,17 @@ paid ─ship▶ fulfilling ─fulfil▶ fulfilled ─confirm / auto▶ completed
 
 | 方法 | 路径 | 鉴权 | 幂等 | 权限码 | agent | 说明 |
 |---|---|---|---|---|---|---|
-| POST | `/api/v1/app/orders/preview` | 会员 | — | — | yes（只读） | 试算，返回 quote_token |
-| POST | `/api/v1/app/orders` | 会员 | 必须 | — | yes（需确认） | 提交订单 `{quote_token, terms_accepted, terms_version?, remark?, address_id?, expected_total_cents?}` |
-| GET | `/api/v1/app/orders` | 会员 | — | — | yes | 我的订单：`tab`=all/unpaid/to_fulfil/to_receive/completed/closed，游标分页，附各页签数量 |
-| GET | `/api/v1/app/orders/{id}` | 会员（他人 4040） | — | — | yes | 详情：行、时间线、地址（本人明文）、可操作标记 |
-| POST | `/api/v1/app/orders/{id}/cancel` | 会员 | 必须 | — | yes（需确认） | 取消未支付订单 |
+| POST | `/api/v1/app/orders/preview` | 会员 | — | — | read | 试算，返回 quote_token |
+| POST | `/api/v1/app/orders` | 会员 | 必须 | — | write_high | 提交订单 `{quote_token, terms_accepted, terms_version?, remark?, address_id?, expected_total_cents?}` |
+| GET | `/api/v1/app/orders` | 会员 | — | — | read | 我的订单：`tab`=all/unpaid/to_fulfil/to_receive/completed/closed，游标分页，附各页签数量 |
+| GET | `/api/v1/app/orders/{id}` | 会员（他人 4040） | — | — | read | 详情：行、时间线、地址（本人明文）、可操作标记 |
+| POST | `/api/v1/app/orders/{id}/cancel` | 会员 | 必须 | — | write_high | 取消未支付订单 |
 | POST | `/api/v1/app/orders/{id}/payments` | 会员 | 必须 | — | no | `{method: wechat|balance}`；wechat 返回调起参数 |
 | POST | `/api/v1/app/orders/{id}/pay` | 会员 | 必须 | — | no | 09 提供的同一微信支付入口（兼容） |
-| POST | `/api/v1/app/orders/{id}/confirm-receipt` | 会员 | 必须 | — | yes（低风险） | 确认收货 |
-| GET | `/api/v1/admin/orders` | 员工 | — | order:read | yes | 列表（见下） |
+| POST | `/api/v1/app/orders/{id}/confirm-receipt` | 会员 | 必须 | — | write_high | 确认收货（不可撤销） |
+| GET | `/api/v1/admin/orders` | 员工 | — | order:read | read | 列表（见下） |
 | GET | `/api/v1/admin/orders/export` | 员工 | — | order:export | no | CSV（同一筛选，脱敏，审计） |
-| GET | `/api/v1/admin/orders/{id}` | 员工（范围外 4040） | — | order:read | yes | 详情：行、时间线、地址（脱敏）、备注 |
+| GET | `/api/v1/admin/orders/{id}` | 员工（范围外 4040） | — | order:read | read | 详情：行、时间线、地址（脱敏）、备注 |
 | POST | `/api/v1/admin/orders/{id}/notes` | 员工 | 必须 | order:remark | no | 后台备注（审计） |
 | POST | `/api/v1/admin/orders/{id}/close` | 员工 | 必须 | order:close | no | 关闭未支付订单（原因必填，审计） |
 | POST | `/api/v1/admin/orders/{id}/ship` | 员工 | 必须 | order:fulfil | no | 发货（快递公司、单号） |
@@ -158,7 +158,30 @@ paid ─ship▶ fulfilling ─fulfil▶ fulfilled ─confirm / auto▶ completed
 
 ## 9 配置
 
-见 §13 配置表。所有键都有安全默认值，项目启动时 `order.set_config(...)` 覆盖。
+运行参数写在 `backend/config/runtime/*.toml`，字段说明（类型、范围、能否热加载、是否下发客户端）在 `00-framework/code/luzback/runtime_config.py`；模块经 `luzback.module_config.ModuleConfig` 读取，热加载后下一次读取即生效。环境变量只放秘密与部署参数；迁移前的环境变量名仍设置着时，启动会打 `config.unknown_env` 警告并指出新键。测试用 `set_config(...)` 或 `luzback.testing.override_runtime(...)` 注入运行参数（写进一份测试用运行配置，测试结束撤销）。
+
+### 9.1 环境变量（秘密与部署参数）
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `ORDER_NO_PREFIX` | 空 | 单号前缀（≤ 4 位字母数字；定了不改） |
+| `ORDER_TIMEZONE` | LUZ_TIMEZONE 或 Asia/Shanghai | 单号日期 |
+
+### 9.2 运行配置键
+
+| 键 | 默认 | 范围 | 热加载 | 下发客户端 | 说明（含单位） |
+|---|---|---|---|---|---|
+| `[order] pay_timeout_minutes` | 15 | 1–1440 | 是 | 否 | 待支付自动关闭时间（分钟；微信 time_expire 至少 1 分钟）（原 `ORDER_PAY_TIMEOUT_MINUTES`） |
+| `[order] quote_ttl_seconds` | 600 | 30–3600 | 是 | 否 | 报价有效期（秒）（原 `ORDER_QUOTE_TTL`） |
+| `[order] auto_complete_days` | 7 | 1–30 | 是 | 否 | 履约后自动完成（天）（原 `ORDER_AUTO_COMPLETE_DAYS`） |
+| `[order] max_lines` | 50 | 1–200 | 是 | 是 | 一单最多几种商品（原 `ORDER_MAX_LINES`） |
+| `[order] max_qty_per_line` | 99 | 1–9999 | 是 | 是 | 每种商品最多买几件（原 `ORDER_MAX_QTY_PER_LINE`） |
+| `[order] terms_required` | true | true / false | 是 | 否 | 下单必须同意购买条款（原 `ORDER_TERMS_REQUIRED`） |
+| `[order] terms_version` | "purchase-v1" | 文本 | 是 | 否 | 当前购买条款版本（与 27-legal 发布的版本一致）（原 `ORDER_TERMS_VERSION`） |
+| `[order] close_batch` | 100 | 1–10000 | 是 | 否 | 超时关单任务每批几单（原 `ORDER_CLOSE_BATCH`） |
+| `[order] complete_batch` | 200 | 1–10000 | 是 | 否 | 自动完成任务每批几单（原 `ORDER_COMPLETE_BATCH`） |
+| `[order] balance_payment_enabled` | true | true / false | 是 | 是 | 允许用储值余额支付订单（原 `ORDER_BALANCE_PAYMENT`） |
+| `[order] shipping_upload_enabled` | true | true / false | 是 | 否 | 发货后向微信上传发货信息（原 `ORDER_SHIPPING_UPLOAD`） |
 
 ## 10 错误码
 
@@ -177,14 +200,14 @@ paid ─ship▶ fulfilling ─fulfil▶ fulfilled ─confirm / auto▶ completed
 | 超出限购 | 4225 | 422 |
 | 支付渠道不可用（取消 / 关单 / 余额支付前关单失败） | 5020 | 502 |
 
-## 11 测试清单（44 项，`08-order/code/tests/`）
+## 11 测试清单（`08-order/code/tests/`）
 
 | 文件 | 覆盖 |
 |---|---|
-| `test_order_service.py`（18） | 活动 + 券分摊与余数；不可用券原因；参数与库存提示；快照 / 占库存 / 锁券 / order.created；报价令牌（他人、过期、已用）；改价 4223；条款与库存回滚；限购与取消释放；线下服务人工履约；会员卡发卡与退款上限；0 元单；状态机全边；发货 / 确认收货边与日志；自动完成任务；退款累计公式、占用、释放、结算、全退置 refunded 与退券；v1 兼容；地址加密与脱敏 |
-| `test_order_payment.py`（18） | 微信支付成功（复用支付单、券核销、库存确认、事件、重复回调、订阅兜底）；拒绝场景（他人、方式、过期、虚拟商品）；钩子拒绝自动退款；余额支付成功 / 不足回滚 / 先关微信单 / 渠道已付；取消（释放、他人 4040、过期券、渠道不可用 5020、已付 4090）；后台关单审计；超时关单四条分支与幂等；渠道故障保留资源；关单后到账自动退款；任务与订阅接线；发货信息录入 |
-| `test_order_http.py`（4） | 4010 / 4001 / 信封 / 忽略客户端价格；幂等重放、缺键、短键、4093；我的订单页签、游标、计数、详情 4040、取消、支付、确认收货 4090；后台 4010 / 4030、筛选、手机号哈希与片段关键词、区间、未知参数、导出与审计、备注、关单、门店范围、权限码登记 |
-| `test_order_concurrency.py`（4） | 文件 SQLite + 50 线程：不超卖、同一报价一单、限购、退款占用不超过实付 |
+| `test_order_service.py` | 活动 + 券分摊与余数；不可用券原因；参数与库存提示；快照 / 占库存 / 锁券 / order.created；报价令牌（他人、过期、已用）；改价 4223；条款与库存回滚；限购与取消释放；线下服务人工履约；会员卡发卡与退款上限；0 元单；状态机全边；发货 / 确认收货边与日志；自动完成任务；退款累计公式、占用、释放、结算、全退置 refunded 与退券；v1 兼容；地址加密与脱敏 |
+| `test_order_payment.py` | 微信支付成功（复用支付单、券核销、库存确认、事件、重复回调、订阅兜底）；拒绝场景（他人、方式、过期、虚拟商品）；钩子拒绝自动退款；余额支付成功 / 不足回滚 / 先关微信单 / 渠道已付；取消（释放、他人 4040、过期券、渠道不可用 5020、已付 4090）；后台关单审计；超时关单四条分支与幂等；渠道故障保留资源；关单后到账自动退款；任务与订阅接线；发货信息录入 |
+| `test_order_http.py` | 4010 / 4001 / 信封 / 忽略客户端价格；幂等重放、缺键、短键、4093；我的订单页签、游标、计数、详情 4040、取消、支付、确认收货 4090；后台 4010 / 4030、筛选、手机号哈希与片段关键词、区间、未知参数、导出与审计、备注、关单、门店范围、权限码登记 |
+| `test_order_concurrency.py` | 文件 SQLite + 50 线程：不超卖、同一报价一单、限购、退款占用不超过实付 |
 
 ## 12 前端对接
 
@@ -199,20 +222,7 @@ paid ─ship▶ fulfilling ─fulfil▶ fulfilled ─confirm / auto▶ completed
 
 ## 13 定制点
 
-配置（环境变量 → 默认值）：
-
-| 键 | 默认 | 说明 |
-|---|---|---|
-| ORDER_PAY_TIMEOUT_MINUTES | 15 | 支付截止（1–1440 分钟），同时作为微信 time_expire |
-| ORDER_QUOTE_TTL | 600 | 报价令牌有效秒数（≥ 30） |
-| ORDER_AUTO_COMPLETE_DAYS | 7 | 履约 / 发货后自动完成天数 |
-| ORDER_MAX_LINES / ORDER_MAX_QTY_PER_LINE | 50 / 99 | 行数与单行数量上限 |
-| ORDER_TERMS_REQUIRED / ORDER_TERMS_VERSION | true / purchase-v1 | 购买条款 |
-| ORDER_NO_PREFIX | 空 | 单号前缀（≤ 4 位字母数字） |
-| ORDER_TIMEZONE | LUZ_TIMEZONE 或 Asia/Shanghai | 单号日期 |
-| ORDER_CLOSE_BATCH / ORDER_COMPLETE_BATCH | 100 / 200 | 任务每轮处理量 |
-| ORDER_BALANCE_PAYMENT | true | 是否允许余额支付 |
-| ORDER_SHIPPING_UPLOAD | true | 是否录入微信发货信息 |
+配置：§9（运行参数在 `[order]`；`order.set_config(...)` 只给启动与测试，运行参数转成测试用运行配置）。
 
 扩展钩子：
 

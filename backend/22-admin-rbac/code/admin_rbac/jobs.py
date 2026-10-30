@@ -1,7 +1,7 @@
 """定时任务（幂等，可重跑）。
 
 - admin_rbac.purge_sessions：删除 30 天前已撤销或已过期的会话行（有效会话不受影响）。
-- admin_rbac.purge_login_logs：删除超过保留期（默认 180 天）的登录日志。
+- admin_rbac.purge_login_logs：删除超过保留期（默认 186 天，不少于 6 个月）的登录日志。
 - admin_rbac.purge_throttles：删除未锁定且长时间无失败的节流行（含不存在账号名产生的行）。
 
 25-jobs 读取 `JOBS`（luzback.scheduler.Job 元组）。

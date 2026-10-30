@@ -1,18 +1,18 @@
-# 模块：address（收货地址）
+# 模块：05-address（收货地址）`address`
 
 | 项 | 内容 |
 |---|---|
-| 状态 | 已实现（增删设默认、手机号校验、数量上限），测试 5 项通过 |
-| 代码 | `address/code/address/`、测试 `address/code/tests/` |
-| 依赖 | framework、map-location（经纬度，可选） |
+| 状态 | 基础：增删、设默认、手机号校验、数量上限已实现；修改接口、手机号加密存储、写接口幂等键尚未实现 |
+| 代码 | `05-address/code/address/`、测试 `05-address/code/tests/` |
+| 依赖 | 00-framework；06-geo（经纬度与配送范围，可选） |
 
 ## 1 职责与边界
 
 | 负责 | 不负责 |
 |---|---|
-| 用户收货地址的增删改查 | 配送范围判断（map-location） |
-| 默认地址唯一性 | 订单地址快照（order 保存副本） |
-| 手机号格式校验 | 手机号验证码（auth-login） |
+| 用户收货地址的增删改查 | 配送范围判断（06-geo） |
+| 默认地址唯一性 | 订单地址快照（08-order 保存副本） |
+| 手机号格式校验 | 手机号验证码（01-identity） |
 
 ## 2 数据模型
 
@@ -20,17 +20,17 @@
 |---|---|---|---|
 | `addresses` | id, user_id, contact, phone, province, city, district, detail, house_no, lat, lng, tag, is_default, created_at | `user_id` 索引；`(user_id) WHERE is_default` 部分唯一索引（MySQL 用生成列） | 每人最多 20 条 |
 
-手机号在生产环境加密存储；列表接口返回脱敏手机号（`138****0000`），详情接口返回完整号码（需 access，且仅本人）。
+列表接口返回脱敏手机号（`138****0000`）。目前手机号明文存储；按 `SPEC.md` §3.5 应改为 AES-GCM 加密列 + 脱敏展示（与 01-identity 的做法相同），项目上线前补齐。
 
 ## 3 接口
 
 | 方法 | 路径 | 鉴权 | 幂等 | agent | 说明 |
 |---|---|---|---|---|---|
-| GET | `/api/v1/app/addresses` | access | — | yes | 本人地址列表，默认地址排第一 |
-| POST | `/api/v1/app/addresses` | access | 建议 | yes（草稿） | 新增；第一条自动设为默认 |
-| PUT | `/api/v1/app/addresses/{id}` | access（归属） | — | no | 修改 |
-| POST | `/api/v1/app/addresses/{id}/default` | access（归属） | — | yes | 设为默认 |
-| DELETE | `/api/v1/app/addresses/{id}` | access（归属） | — | yes（需确认） | 删除；删除默认时自动补位 |
+| GET | `/api/v1/app/addresses` | access | — | read | 本人地址列表，默认地址排第一 |
+| POST | `/api/v1/app/addresses` | access | 应必填（未实现） | write_high | 新增；第一条自动设为默认 |
+| PUT | `/api/v1/app/addresses/{id}` | access（归属） | 应必填 | no | 修改（设计，未实现） |
+| POST | `/api/v1/app/addresses/{id}/default` | access（归属） | 应必填（未实现） | write | 设为默认 |
+| DELETE | `/api/v1/app/addresses/{id}` | access（归属） | 应必填（未实现） | write_high | 删除；删除默认时自动补位 |
 
 ## 4 关键规则
 
@@ -39,7 +39,7 @@
 | 默认地址唯一 | 同一事务内先清除旧默认，再设新默认；数据库部分唯一索引兜底 |
 | 第一条地址自动默认 | 创建时若数量为 0 |
 | 删除默认地址后补位 | 自动将最近创建的一条设为默认 |
-| 数量上限 | 20 条，超出返回 4220 |
+| 数量上限 | 20 条（常量 `MAX_ADDRESSES_PER_USER`），超出返回 4225 |
 | 手机号 | 中国大陆 11 位，`^1[3-9]\d{9}$` |
 | 归属 | 所有按 id 的操作先校验 `user_id`，不属于则 4040 |
 
@@ -56,16 +56,14 @@
 
 ## 7 配置
 
-| 变量 | 默认 | 说明 |
-|---|---|---|
-| `ADDRESS_MAX_PER_USER` | 20 | 数量上限 |
+没有配置项；数量上限 20 是代码常量 `MAX_ADDRESSES_PER_USER`（项目要调整时改为运行配置键再改常量）。
 
 ## 8 错误码
 
 | 场景 | code | HTTP |
 |---|---|---|
 | 手机号格式错误 | 4001 | 400 |
-| 超过数量上限 | 4220 | 422 |
+| 超过数量上限 | 4225 | 422 |
 | 地址不存在或不属于用户 | 4040 | 404 |
 
 ## 9 测试用例（已实现）
@@ -76,12 +74,12 @@
 | 只能有一个默认 | 设置新默认后旧默认清除 |
 | 手机号错误 | 4001 |
 | 他人地址 | 4040 |
-| 上限 | 第 21 条返回 4220 |
+| 上限 | 第 21 条返回 4225 |
 | 删除默认补位 | 最近一条成为默认 |
 
 ## 10 可复用代码
 
-`address/code/address/__init__.py`：`Address`、`validate_phone`、`create_address`、`set_default`、`delete_address`。
+`05-address/code/address/__init__.py`：`Address`、`validate_phone`、`create_address`、`set_default`、`delete_address`。
 
 ## 11 前端对接
 

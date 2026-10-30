@@ -1,6 +1,6 @@
 {
  "schemaVersion": "1.0",
- "updatedAt": "2026-10-26",
+ "updatedAt": "2026-10-29",
  "description": "Luz Dev 调研路由。三层：系统原型（systemArchetypes：同类系统的开源实现、整体架构）→ 业务模块（modules：每个模块的设计做法、官方原文 officialUrls、检索模板）→ 方案主题（topicQueries）→ 必查主题（baselineTracks：Web 与后台安全、HTTPS 加固、部署发布、主机、监控、备份、密钥、数据保护，按任务类型自动加入，不论方案选了哪些模块）。tech_plan.py research 读取本文件；新增模块或原型时在这里登记。",
  "thresholds": {
   "implementation": {
@@ -810,7 +810,7 @@
    ]
   },
   "design-integration": {
-   "name": "接入 Luz Design 前端",
+   "name": "接入 Luz System 前端设计",
    "officialRequired": false,
    "queries": [
     {
@@ -1007,12 +1007,6 @@
    ]
   }
  },
- "crawlNotes": [
-  "Luz-Crawl 对同一站点默认 10 分钟内最多 40 次请求，页面图片也计入；超限后该站冷却 10 分钟。",
-  "官方文档优先用 officialUrls 直接打开；微信支付文档提供 .md 纯文本版本与 llms.txt 索引，请求更少、正文更完整。",
-  "站内搜索（bing/google site:）只用于发现 officialUrls 中没有的页面；同一引擎连续查询会触发冷却，应分散到不同引擎与轮次。",
-  "微信开放文档 OpenApiDoc 下的部分旧地址已不可用；不可用的地址从 officialUrls 中移除并补充新地址。"
- ],
  "systemArchetypes": {
   "mall": {
    "name": "电商商城（小程序 + 后台）",

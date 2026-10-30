@@ -1,33 +1,35 @@
-# 模块：inventory-oversell（库存与超卖防护）
+# 模块：07-inventory（库存与超卖防护）`inventory`
 
 | 项 | 内容 |
 |---|---|
-| 状态 | 已实现（条件扣减、回补），测试 6 项通过，含 50 线程并发用例 |
+| 状态 | 基础（代码与测试完整，文档为旧格式）：条件扣减、回补、下单预占（预占 / 确认 / 释放 / 超时释放）、库存流水；含 50 线程并发用例 |
 | 代码 | `07-inventory/code/inventory/`、测试 `07-inventory/code/tests/` |
-| 依赖 | framework |
+| 依赖 | 00-framework |
 
 ## 0 预占模型（已实现）
 
-`inventory/reservation.py`：`reserve` / `confirm` / `release` / `expired_refs` / `ledger_balance`，预占状态 `reserved → confirmed | released`，流水表 `stock_ledger`，测试 `test_reservation.py` 8 项（含 50 并发、关单与支付竞态）。做法与方案对比见 `references/patterns/inventory.md`；规则 ORDER-003、ORDER-008。
+`inventory/reservation.py`：`reserve` / `confirm` / `release` / `expired_refs` / `ledger_balance`，预占状态 `reserved → confirmed | released`，流水表 `stock_ledger`，测试 `code/tests/test_reservation.py`（含 50 并发、关单与支付竞态）。做法与方案对比见 `references/patterns/inventory.md`；规则 ORDER-003、ORDER-008。
 
 ## 1 职责与边界
 
 | 负责 | 不负责 |
 |---|---|
-| SKU 库存数量与上下架状态 | 商品基础信息（商品模块，设计） |
-| 原子扣减、回补 | 下单流程（order） |
-| 超卖防护的数据库规则 | 预售与预占（设计，见 §8） |
+| SKU 库存数量与上下架状态 | 商品基础信息（03-catalog，规划） |
+| 原子扣减、回补、下单预占（§0）、库存流水 | 下单流程（08-order）；后台库存接口（规划，§3） |
+| 超卖防护的数据库规则 | 预售 |
 | 库存变动版本号（用于缓存失效） | 缓存实现（Redis，设计） |
 
 ## 2 数据模型
 
 | 表 | 字段 | 约束 | 说明 |
 |---|---|---|---|
-| `skus` | id, name, price_cents, stock, status(on_sale/off_sale), version | `stock >= 0`（应用层与条件 UPDATE 共同保证） | version 每次变动 +1 |
+| `skus` | id, product_id, name, spec_values_json, barcode, price_cents, stock, lock_stock, low_stock_threshold, sold_out_today, status(on_sale/off_sale), version, low_alerted_at | `stock >= 0`（应用层与条件 UPDATE 共同保证） | version 每次变动 +1；`Sku` 只有这一个模型 |
+| `stock_reservations` | id, ref, sku_id, qty, status(reserved/confirmed/released), expires_at, created_at | (ref, sku_id) 唯一 | 每个业务单对每个 SKU 一条预占 |
+| `stock_ledger` | id, sku_id, delta, reason(reserve/release/deduct/restore/adjust), ref, created_at | (ref, sku_id, reason) 唯一 | 只追加；同一业务引用只生效一次 |
 
 ## 3 接口
 
-库存无独立对外接口。管理后台的库存调整接口在 admin 模块中（`PATCH /api/v1/admin/skus/{id}/stock`，权限 `sku:stock`，必须写审计，调整量与原因必填）。
+库存没有对外接口，只在下单、关单、售后的事务里经函数调用（`CONTRACTS.md`）。后台库存调整接口为规划：`PATCH /api/v1/admin/skus/{id}/stock`，权限 `stock:adjust`（查看 `stock:read`，已在 22-admin-rbac 种子目录），只接受增减量与原因，写流水与审计；agent 一律 `no`。
 
 ## 4 核心规则
 
@@ -77,9 +79,7 @@ return redis.call('DECRBY', KEYS[1], ARGV[1])
 
 ## 6 配置
 
-| 变量 | 说明 |
-|---|---|
-| `INVENTORY_HOT_SKU_THRESHOLD` | 每秒请求超过此值的 SKU 启用 Redis 预扣（设计） |
+目前没有配置项。预占有效期由调用方传入（08-order 按支付截止时间）。Redis 预扣（§5.1，设计）实现时，热点阈值作为运行参数写进 `config/runtime/base.toml` 的 `[inventory]` 分组。
 
 ## 7 错误码
 
@@ -89,11 +89,7 @@ return redis.call('DECRBY', KEYS[1], ARGV[1])
 | 商品下架 | 4091 | 409（message 区分） |
 | 数量非正 | 4001 | 400 |
 
-## 8 设计：预占（先占后付）
-
-适用于下单后需要一段时间才支付的场景。`inventory_reservations`：order_id、sku_id、qty、status(reserved/committed/released)、expire_at。预占与扣减的区别：预占可过期自动释放，扣减只能回补。过期释放由定时任务执行：`status = reserved AND expire_at < now` → 回补并标记 released。
-
-## 9 测试用例（已实现）
+## 8 测试用例
 
 | 用例 | 断言 |
 |---|---|
@@ -105,11 +101,11 @@ return redis.call('DECRBY', KEYS[1], ARGV[1])
 | 带 ref 回补重放 / 不同 ref | 同一 ref 只回补一次（返回 False），不同 ref 各回补 |
 | 16 线程同一 ref 回补 | 只成功 1 次（流水唯一约束兜底） |
 
-## 10 可复用代码
+## 9 可复用代码
 
 `inventory`（包导出）：`Sku`（唯一定义在 `inventory/models.py`）、`StockReservation`、`StockLedger`；`deduct(db, sku_id, qty, ref=None) -> bool`、`restore(db, sku_id, qty, ref=None) -> bool`、`restocked(db, ref, sku_id) -> bool`；预占 `reserve / confirm / release / expired_refs / ledger_balance`。带 `ref` 的扣减 / 回补按 `stock_ledger (ref, sku_id, reason)` 唯一去重：同一业务引用只生效一次，重放返回 False（08-order 退货入库用 `refund:order:{id}:item:{item}:upto:{累计退货件数}`）。并发测试可直接复用到其他“数量类”资源（优惠券名额、活动名额）。
 
-## 11 前端对接
+## 10 前端对接
 
 | 页面 | 行为 |
 |---|---|

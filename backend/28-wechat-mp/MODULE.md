@@ -29,7 +29,7 @@
 
 | 项 | 内容 |
 |---|---|
-| 状态 | 标准：客户端协议 + HTTP 实现 + 假服务、token 中控、全部接口、消息推送路由，测试 38 项通过 |
+| 状态 | 标准：客户端协议 + HTTP 实现 + 假服务、token 中控、全部接口、消息推送路由 |
 | 代码 | `28-wechat-mp/code/wechat_mp/`，测试 `28-wechat-mp/code/tests/` |
 | 依赖 | 00-framework（resilient / BreakerRegistry、AppError、db）；cryptography（AES-CBC）；httpx（仅生产传输层） |
 
@@ -65,7 +65,7 @@
 12. media_check_async：media_type 1/2、scene 1–4、URL 必须可下载；返回 trace_id；结果事件 `wxa_media_check` 只有 errcode=0 才有效（`MediaCheckEvent.valid`）。
 13. 小程序码：scene 本地校验（≤ 32、字符集）；page 不以 `/` 开头、不带 `?`；width 280–1280；响应 `image/*` 返回字节，否则按 JSON 错误处理。
 14. 消息推送 GET：sha1(sort(token, timestamp, nonce)) 等于 signature 才原样返回 echostr，否则 4010。
-15. 消息推送 POST：先校验 URL 签名；`encrypt_type=aes` 时校验 msg_signature 后解密并核对 appid；配置了 EncodingAESKey 且 `WECHAT_MP_PUSH_REQUIRE_AES=true` 时拒绝明文推送（4010）；可选时间戳偏差校验。
+15. 消息推送 POST：先校验 URL 签名；`encrypt_type=aes` 时校验 msg_signature 后解密并核对 appid；配置了 EncodingAESKey 且 `[wechat_mp] push_require_aes=true` 时拒绝明文推送（4010）；可选时间戳偏差校验。
 16. 报文支持 JSON 与 XML；XML 拒绝 DTD / 实体；`normalize_list` 兼容 List 单对象 / 数组。
 17. 去重：MsgId 或 (FromUserName, CreateTime, Event, trace_id / MsgID) 的哈希唯一；重复推送直接回 "success" 不再处理。
 18. 分发：按 `Event`（普通消息按 `MsgType`）调用注册的处理函数，同一事务提交；处理函数异常回滚并返回 5000，平台重推时可再次处理。
@@ -100,7 +100,7 @@
 | `access_token() -> str` | 中控 token（缓存、提前刷新） | 09-wechat-pay 发货信息录入 |
 | `invalidate_access_token(bad_token) -> str` | 调用方收到 40001 / 40014 / 42001 时上报，返回新 token（同一缓存，单飞） | 同上 |
 | `is_configured() -> bool` | 已注入客户端或配置了真实 AppID / AppSecret | 20-notification 选择默认发送器 |
-| `production_problems() -> list[str]` | 生产检查：开发占位 AppID / Secret、进程客户端是假实现、非 https、推送启用但缺 EncodingAESKey、`WECHAT_MP_STATE` ≠ formal；导入时 `register_production_check("wechat_mp", ...)` | app.py 启动（`Settings.assert_production_safe`） |
+| `production_problems() -> list[str]` | 生产检查：开发占位 AppID / Secret、进程客户端是假实现、非 https、推送启用但缺 EncodingAESKey、`[wechat_mp] miniprogram_state` ≠ formal；导入时 `register_production_check("wechat_mp", ...)` | app.py 启动（`Settings.assert_production_safe`） |
 
 ## 7 事件
 
@@ -123,21 +123,31 @@
 
 ## 9 配置
 
+运行参数写在 `backend/config/runtime/*.toml`，字段说明（类型、范围、能否热加载、是否下发客户端）在 `00-framework/code/luzback/runtime_config.py`；模块经 `luzback.module_config.ModuleConfig` 读取，热加载后下一次读取即生效。环境变量只放秘密与部署参数；迁移前的环境变量名仍设置着时，启动会打 `config.unknown_env` 警告并指出新键。测试用 `set_config(...)` 或 `luzback.testing.override_runtime(...)` 注入运行参数（写进一份测试用运行配置，测试结束撤销）。
+
+### 9.1 环境变量（秘密与部署参数）
+
 | 变量 | 默认 | 说明 |
 |---|---|---|
-| `WECHAT_APPID` / `WECHAT_SECRET` | 开发占位值 | 与框架共用；占位值时 `get_client()` 报 5020（不发真实请求） |
-| `WECHAT_MP_API_BASE` | `https://api.weixin.qq.com` | |
-| `WECHAT_MP_TIMEOUT` / `WECHAT_MP_QRCODE_TIMEOUT` | 3 / 5 秒 | |
-| `WECHAT_MP_TOKEN_MARGIN` | 300 | 提前刷新余量（秒） |
-| `WECHAT_MP_FORCE_REFRESH_INTERVAL` | 30 | 强制刷新最小间隔（秒） |
-| `WECHAT_MP_STATE` | formal | 订阅消息跳转版本 developer / trial / formal |
-| `WECHAT_MP_LANG` | zh_CN | |
-| `WECHAT_MP_ENV_VERSION` | release | 小程序码版本 |
-| `WECHAT_MP_PUSH_TOKEN` / `WECHAT_MP_PUSH_AES_KEY` | 空 | 消息推送 Token 与 43 位 EncodingAESKey |
-| `WECHAT_MP_PUSH_REQUIRE_AES` | true | 配置了 AESKey 时拒绝明文推送 |
-| `WECHAT_MP_PUSH_MAX_SKEW` | 0 | 推送时间戳最大偏差秒数，0 不校验 |
+| `WECHAT_APPID / WECHAT_SECRET` | 开发占位值 | 与框架共用；占位值时 `get_client()` 报 5020（不发真实请求） |
+| `WECHAT_MP_API_BASE` | https://api.weixin.qq.com | 接口地址 |
+| `WECHAT_MP_PUSH_TOKEN / WECHAT_MP_PUSH_AES_KEY` | 空 | 消息推送 Token 与 43 位 EncodingAESKey（秘密） |
 
-熔断参数沿用框架 BreakerRegistry 默认（60 秒窗口、≥10 次且 ≥50% → 打开 30 秒）。
+### 9.2 运行配置键
+
+| 键 | 默认 | 范围 | 热加载 | 下发客户端 | 说明（含单位） |
+|---|---|---|---|---|---|
+| `[wechat_mp] timeout_s` | 3.0 | 0.5–30 | 否（重启生效） | 否 | 服务端接口超时（秒，读类接口）；客户端创建时读取（原 `WECHAT_MP_TIMEOUT`） |
+| `[wechat_mp] qrcode_timeout_s` | 5.0 | 1–60 | 否（重启生效） | 否 | 生成小程序码超时（秒）；客户端创建时读取（原 `WECHAT_MP_QRCODE_TIMEOUT`） |
+| `[wechat_mp] token_refresh_margin_s` | 300 | 60–1800 | 否（重启生效） | 否 | access_token 到期前多久刷新（秒；新旧 token 5 分钟内都可用）；客户端创建时读取（原 `WECHAT_MP_TOKEN_MARGIN`） |
+| `[wechat_mp] force_refresh_min_interval_s` | 30 | 30–3600 | 否（重启生效） | 否 | 两次强制刷新 access_token 的最短间隔（秒，官方至少 30 秒）；客户端创建时读取（原 `WECHAT_MP_FORCE_REFRESH_INTERVAL`） |
+| `[wechat_mp] miniprogram_state` | "formal" | developer / trial / formal | 否（重启生效） | 否 | 订阅消息默认跳转的小程序版本；客户端创建时读取（原 `WECHAT_MP_STATE`） |
+| `[wechat_mp] lang` | "zh_CN" | zh_CN / en_US / zh_HK / zh_TW | 否（重启生效） | 否 | 订阅消息默认语言；客户端创建时读取（原 `WECHAT_MP_LANG`） |
+| `[wechat_mp] env_version` | "release" | release / trial / develop | 否（重启生效） | 否 | 小程序码默认打开的版本；客户端创建时读取（原 `WECHAT_MP_ENV_VERSION`） |
+| `[wechat_mp] push_require_aes` | true | true / false | 是 | 否 | 消息推送只接受安全模式（AES 加密）（原 `WECHAT_MP_PUSH_REQUIRE_AES`） |
+| `[wechat_mp] push_max_skew_s` | 0 | 0–3600 | 是 | 否 | 消息推送时间戳允许的偏差（秒，0 = 不校验）（原 `WECHAT_MP_PUSH_MAX_SKEW`） |
+
+熔断参数沿用框架 `[breaker]`（60 秒窗口、≥ 10 次且 ≥ 50% → 打开 30 秒）。
 
 ## 10 错误码
 
@@ -161,7 +171,7 @@
 | 熔断打开 | CircuitOpenError | 5030 |
 | 推送验签 / 解密失败 | AppError | 4010 |
 
-## 11 测试清单（`tests/test_wechat_mp.py`，38 项）
+## 11 测试清单（`tests/test_wechat_mp.py`）
 
 | 类别 | 用例 |
 |---|---|
@@ -172,7 +182,7 @@
 | 内容安全 | pass / review / risky；参数校验；幂等调用在超时与 -1 时重试；真实超时生效；连续失败熔断打开 5030；异步检测与事件解析（含 -1008） |
 | 小程序码 | 成功返回图片；scene 超长 / 非法字符 / page 前导斜杠本地拒绝；errcode 映射 |
 | 消息推送 | URL 签名向量；AES 与独立参考实现逐字节一致并可往返；错误 appid / 错误签名 / 篡改密文拒绝；XML / JSON 解析、DTD 拒绝、List 归一；HTTP：GET 验证、安全模式 JSON 重复推送只处理一次、XML 安全模式、拒绝明文 |
-| 配置 | 非法 WECHAT_MP_STATE 报错；未配置时 get_client 5020 |
+| 配置 | 非法 `[wechat_mp] miniprogram_state` 报错；未配置时 get_client 5020 |
 
 ## 12 前端对接
 
@@ -182,7 +192,7 @@
 
 | 类型 | 内容 |
 |---|---|
-| 配置 | §9 全部环境变量 |
+| 配置 | §9：AppSecret 与推送密钥在环境变量，运行参数在 `[wechat_mp]` |
 | 注入 | `set_client(client)`：替换进程级客户端（如带 `DbTokenStore` + `RedisLock` 的实例）；`HttpMiniProgramClient(transport=...)` 替换传输层 |
 | 扩展钩子 | `register_push_handler(event, fn(db, message))`：任意推送事件的处理函数（不 commit；`dispatch` 去重后统一提交，异常整体回滚）。已登记：01-identity `wxa_media_check` → `handle_media_check_event`，20-notification 三类订阅消息事件 → `handle_push_message`；`TokenStore` 协议：自定义 token 存储（Redis 等） |
 | 测试替身 | `FakeWechatServer`（HTTP 层假服务，可注入超时 / 5xx / 任意 errcode）、`FakeMiniProgram`（接假服务的真实客户端 + 造数方法） |

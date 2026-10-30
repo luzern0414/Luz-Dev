@@ -1146,7 +1146,7 @@ def knowledge_modules(plan: Mapping[str, Any]) -> list[str]:
 
 
 def apply_knowledge(plan: dict[str, Any], base: "kb.Knowledge | None" = None) -> dict[str, int]:
-    """Reuse fresh sources and facts from knowledge/ before crawling (references/research.md §6)."""
+    """Reuse fresh sources and facts from knowledge/ before crawling (references/research.md §5)."""
     base = base or kb.Knowledge()
     research = plan.setdefault("research", {})
     sources = research.setdefault("sources", [])

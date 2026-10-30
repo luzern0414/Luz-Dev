@@ -34,7 +34,7 @@ def test_other_user_cannot_review(db):
     session, oid = db
     with pytest.raises(AppError) as exc:
         create_review(session, 8, oid, 5, "冒充")
-    assert exc.value.code == ErrorCode.FORBIDDEN
+    assert exc.value.code == ErrorCode.NOT_FOUND  # 他人订单 4040
 
 
 def test_uncompleted_order_cannot_be_reviewed(db):

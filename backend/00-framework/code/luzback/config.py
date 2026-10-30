@@ -1,17 +1,22 @@
-"""运行配置：全部来自环境变量，代码里没有真实密钥。
+"""部署参数与秘密：来自环境变量（/etc/luz/api.env，模板 assets/deploy/api.env.example），代码里没有真实密钥。
 
 用法：
     settings = get_settings()          # 进程内缓存
     settings.assert_production_safe()  # 启动时调用，prod 下拒绝开发默认值
 
-模块级参数（如订单超时）也集中在这里，业务代码通过 settings 读取，不写常量；
-后台可改的业务参数由 app_settings 模块覆盖（优先级高于环境变量）。
+五类设置分开放（references/config-logging.md §1）：
+- 秘密（JWT 密钥、字段密钥、AppSecret、商户私钥）与部署参数（数据库与 Redis 地址、连接池、可信代理网段、服务名）在这里，改了要重启；
+- 运行参数（超时、上限、限流阈值、开关、日志级别）在 `backend/config/runtime/*.toml`，字段说明见 `runtime_config.py`，
+  服务端热加载，读取用 `luzback.runtime_loader.current_config()`；环境变量不覆盖运行参数，同一个值只有一个来源；
+- 经营与运营内容（营业时间、起送价、公告）与前台文案、展示设置在数据库，运营在后台维护；
+  admin_visible 为否的文案与展示由开发经 23-app-settings 的种子维护。
 """
 from __future__ import annotations
 
 import os
+import socket
 import threading
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from functools import lru_cache
 
@@ -40,42 +45,38 @@ class Settings:
     # ---- 运行环境 ----
     env: str = field(default_factory=lambda: _env("LUZ_ENV", "dev"))
     service_name: str = field(default_factory=lambda: _env("LUZ_SERVICE_NAME", "luz-backend"))
-    log_level: str = field(default_factory=lambda: _env("LOG_LEVEL", "info"))
+    app_version: str = field(default_factory=lambda: _env("APP_VERSION", "dev"))  # 镜像构建时写入（Dockerfile ARG）
+    instance_id: str = field(default_factory=lambda: _env("LUZ_INSTANCE_ID", socket.gethostname())[:64])
     timezone: str = field(default_factory=lambda: _env("LUZ_TIMEZONE", "Asia/Shanghai"))
+
+    # ---- 运行配置文件（内容见 config/runtime/*.toml）----
+    config_dir: str = field(default_factory=lambda: _env("LUZ_CONFIG_DIR", ""))  # 空 = backend/config/runtime
+    config_watch: str = field(default_factory=lambda: _env("LUZ_CONFIG_WATCH", "auto"))  # auto | poll | off
 
     # ---- 网关与内网 ----
     # 只有来自这些地址的 X-Forwarded-For 才可信（nginx 所在网段）；其他请求一律取 TCP 对端地址
     trusted_proxies: tuple[str, ...] = field(default_factory=lambda: _list("LUZ_TRUSTED_PROXIES", "127.0.0.1/32,::1/128"))
-    # /metrics 只对内网开放；也可用 LUZ_METRICS_TOKEN 以 Bearer 访问
+    # /metrics 与 /internal/* 只对内网开放；/metrics 也可用 LUZ_METRICS_TOKEN 以 Bearer 访问
     internal_networks: tuple[str, ...] = field(default_factory=lambda: _list(
         "LUZ_INTERNAL_NETWORKS", "127.0.0.0/8,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"))
     metrics_token: str = field(default_factory=lambda: _env("LUZ_METRICS_TOKEN", ""))
+    # /internal/config 与 /internal/config/reload 的运维令牌（内网 + Bearer 同时满足）；为空时这两个接口一律拒绝
+    ops_token: str = field(default_factory=lambda: _env("LUZ_OPS_TOKEN", ""))
 
-    # ---- 存储 ----
+    # ---- 存储（部署参数，改了要重启）----
     database_url: str = field(default_factory=lambda: _env("LUZ_DATABASE_URL", "sqlite:///./luz-dev.db"))
     db_pool_size: int = field(default_factory=lambda: _int("LUZ_DB_POOL_SIZE", 20))
-    db_statement_timeout_ms: int = field(default_factory=lambda: _int("LUZ_DB_STATEMENT_TIMEOUT_MS", 5000))
     redis_url: str = field(default_factory=lambda: _env("LUZ_REDIS_URL", ""))
 
-    # ---- 令牌与口令 ----
+    # ---- 令牌 ----
     jwt_secret: str = field(default_factory=lambda: _env("LUZ_JWT_SECRET", DEV_SECRET))
     jwt_issuer: str = field(default_factory=lambda: _env("LUZ_JWT_ISSUER", "luz"))
-    access_ttl_seconds: int = field(default_factory=lambda: _int("LUZ_ACCESS_TTL", 7200))
-    refresh_ttl_seconds: int = field(default_factory=lambda: _int("LUZ_REFRESH_TTL", 30 * 86400))
-    admin_access_ttl_seconds: int = field(default_factory=lambda: _int("LUZ_ADMIN_ACCESS_TTL", 7200))
-    admin_refresh_ttl_seconds: int = field(default_factory=lambda: _int("LUZ_ADMIN_REFRESH_TTL", 7 * 86400))
-    fresh_window_seconds: int = field(default_factory=lambda: _int("LUZ_FRESH_WINDOW", 900))
-    # NIST SP 800-63B-4 §3.1.1.2：仅口令单因素 ≥ 15 位；与 MFA 合用时 ≥ 8 位；不做组成规则（见 security.check_password_policy）
-    password_min_length: int = field(default_factory=lambda: _int("LUZ_PASSWORD_MIN_LENGTH", 15))
-    login_max_failures: int = field(default_factory=lambda: _int("LUZ_LOGIN_MAX_FAILURES", 5))
-    login_lock_seconds: int = field(default_factory=lambda: _int("LUZ_LOGIN_LOCK_SECONDS", 900))
 
     # ---- 字段加密 ----
     field_encryption_key: str = field(default_factory=lambda: _env("LUZ_FIELD_KEY", ""))  # 32 字节 base64
 
     # ---- 服务间签名 ----
     service_secrets: tuple[str, ...] = field(default_factory=lambda: _list("LUZ_SERVICE_SECRETS", "agent:dev-agent-secret"))
-    service_signature_skew_seconds: int = field(default_factory=lambda: _int("LUZ_SERVICE_SKEW", 300))
 
     # ---- 微信 ----
     wechat_appid: str = field(default_factory=lambda: _env("WECHAT_APPID", "wx-dev-appid"))
@@ -86,43 +87,10 @@ class Settings:
     wechat_mch_private_key_pem: str = field(default_factory=lambda: _env("WECHAT_MCH_PRIVATE_KEY_PEM", ""))
     wechat_notify_url: str = field(default_factory=lambda: _env("WECHAT_NOTIFY_URL", "https://example.com/api/v1/webhooks/wechat/pay"))
 
-    # ---- 业务默认值（可被 app_settings 覆盖）----
-    order_pay_timeout_minutes: int = field(default_factory=lambda: _int("ORDER_PAY_TIMEOUT_MINUTES", 15))
-    order_auto_accept: bool = field(default_factory=lambda: _bool("ORDER_AUTO_ACCEPT", False))
-    order_auto_complete_hours: int = field(default_factory=lambda: _int("ORDER_AUTO_COMPLETE_HOURS", 24))
-    order_accept_overdue_minutes: int = field(default_factory=lambda: _int("ORDER_ACCEPT_OVERDUE_MINUTES", 3))
-    quote_ttl_seconds: int = field(default_factory=lambda: _int("ORDER_QUOTE_TTL", 600))
-    address_max_per_user: int = field(default_factory=lambda: _int("ADDRESS_MAX_PER_USER", 20))
-    points_per_yuan: int = field(default_factory=lambda: _int("POINTS_PER_YUAN", 1))
-    points_redeem_rate: int = field(default_factory=lambda: _int("POINTS_REDEEM_RATE", 100))  # 100 积分 = 1 元
-    points_redeem_cap_bp: int = field(default_factory=lambda: _int("POINTS_REDEEM_CAP_BP", 3000))  # 最多抵 30%
-    queue_miss_seconds: int = field(default_factory=lambda: _int("QUEUE_MISS_SECONDS", 300))
-    reservation_hold_seconds: int = field(default_factory=lambda: _int("RESERVATION_HOLD_SECONDS", 600))
-    reservation_grace_minutes: int = field(default_factory=lambda: _int("RESERVATION_GRACE_MINUTES", 15))
-    recharge_max_balance_cents: int = field(default_factory=lambda: _int("RECHARGE_MAX_BALANCE_CENTS", 500000))
-    sms_daily_limit: int = field(default_factory=lambda: _int("SMS_DAILY_LIMIT", 10))
-    upload_max_bytes: int = field(default_factory=lambda: _int("UPLOAD_MAX_BYTES", 5 * 1024 * 1024))
-
-    # ---- 限流（每秒）----
-    rate_ip_per_second: float = field(default_factory=lambda: float(_env("RATE_IP_PER_SECOND", "20")))
-    rate_user_write_per_second: float = field(default_factory=lambda: float(_env("RATE_USER_WRITE_PER_SECOND", "3")))
-    rate_user_read_per_second: float = field(default_factory=lambda: float(_env("RATE_USER_READ_PER_SECOND", "20")))
-    rate_login_per_minute: int = field(default_factory=lambda: _int("RATE_LOGIN_PER_MINUTE", 5))
-
-    # ---- 弹性（秒）----
-    http_timeout_read: float = field(default_factory=lambda: float(_env("HTTP_TIMEOUT_READ", "3")))
-    http_timeout_write: float = field(default_factory=lambda: float(_env("HTTP_TIMEOUT_WRITE", "5")))
-    http_timeout_pay: float = field(default_factory=lambda: float(_env("HTTP_TIMEOUT_PAY", "8")))
-    breaker_window_seconds: int = field(default_factory=lambda: _int("BREAKER_WINDOW_S", 60))
-    breaker_min_failures: int = field(default_factory=lambda: _int("BREAKER_MIN_FAILS", 10))
-    breaker_fail_rate: float = field(default_factory=lambda: float(_env("BREAKER_FAIL_RATE", "0.5")))
-    breaker_open_seconds: int = field(default_factory=lambda: _int("BREAKER_OPEN_S", 30))
-
-    # ---- 请求限制 ----
-    max_body_bytes: int = field(default_factory=lambda: _int("LUZ_MAX_BODY_BYTES", 256 * 1024))
+    # ---- 跨域（部署参数：后台域名）----
     cors_origins: tuple[str, ...] = field(default_factory=lambda: _list("LUZ_CORS_ORIGINS", ""))
 
-    # ---- 功能开关 ----
+    # ---- 模块装配（部署参数：未启用的模块不导入、不暴露接口，改了要重启）----
     features: tuple[str, ...] = field(default_factory=lambda: _list("LUZ_FEATURES", ""))
 
     @property
@@ -159,9 +127,89 @@ class Settings:
             problems.append("LUZ_FIELD_KEY is required in prod")
         if any(item.endswith(":dev-agent-secret") for item in self.service_secrets):
             problems.append("LUZ_SERVICE_SECRETS contains a dev secret")
+        if self.ops_token and len(self.ops_token) < 32:
+            problems.append("LUZ_OPS_TOKEN must be >= 32 chars when set")
+        if self.config_watch not in ("auto", "poll", "off"):
+            problems.append("LUZ_CONFIG_WATCH must be auto, poll or off")
         problems.extend(run_production_checks(self))
         if problems:
             raise RuntimeError("unsafe production settings: " + "; ".join(problems))
+
+
+# ---------- 环境变量清单：启动时扫一遍，不认识或已迁走的变量打警告（拼错的名字会让默认值悄悄生效）----------
+
+# 框架里已迁到运行配置文件或已删除的变量 → 去处。各模块迁走的变量登记在字段说明的 legacy_env 里（runtime_config.py），
+# env_warnings 两处一起查。
+MOVED_ENV: dict[str, str] = {
+    "LOG_LEVEL": "config/runtime [logging] level",
+    "LUZ_DB_STATEMENT_TIMEOUT_MS": "config/runtime [db] statement_timeout_ms",
+    "LUZ_MAX_BODY_BYTES": "config/runtime [http] max_body_kb",
+    "LUZ_FRESH_WINDOW": "config/runtime [auth] fresh_window_s",
+    "LUZ_SERVICE_SKEW": "config/runtime [auth] service_signature_skew_s",
+    "RATE_IP_PER_SECOND": "config/runtime [rate_limit] ip_per_s",
+    "RATE_USER_WRITE_PER_SECOND": "config/runtime [rate_limit] user_write_per_s",
+    "RATE_LOGIN_PER_MINUTE": "config/runtime [rate_limit] login_per_min",
+    "BREAKER_WINDOW_S": "config/runtime [breaker] window_s",
+    "BREAKER_MIN_FAILS": "config/runtime [breaker] min_failures",
+    "BREAKER_FAIL_RATE": "config/runtime [breaker] fail_rate",
+    "BREAKER_OPEN_S": "config/runtime [breaker] open_s",
+    "UPLOAD_MAX_BYTES": "config/runtime [upload] doc_max_mb",
+    "LUZ_ACCESS_TTL": "removed: config/runtime [identity] access_ttl_seconds",
+    "LUZ_REFRESH_TTL": "removed: config/runtime [identity] refresh_idle_days / refresh_absolute_days",
+    "LUZ_ADMIN_ACCESS_TTL": "removed: config/runtime [admin_rbac] session_idle_seconds / session_absolute_seconds",
+    "LUZ_ADMIN_REFRESH_TTL": "removed: config/runtime [admin_rbac] session_absolute_seconds",
+    "LUZ_PASSWORD_MIN_LENGTH": "removed: config/runtime [admin_rbac] password_min_length_no_mfa",
+    "ORDER_AUTO_ACCEPT": "removed: auto-accept is a store setting (stores.auto_accept)",
+    "ORDER_AUTO_COMPLETE_HOURS": "removed: config/runtime [order] auto_complete_days",
+    "ORDER_ACCEPT_OVERDUE_MINUTES": "removed: not read by any module",
+    "ADDRESS_MAX_PER_USER": "removed: address uses MAX_ADDRESSES_PER_USER",
+    "POINTS_REDEEM_RATE": "removed: not read by any module",
+    "POINTS_REDEEM_CAP_BP": "removed: not read by any module",
+    "QUEUE_MISS_SECONDS": "removed: not read by any module",
+    "RESERVATION_HOLD_SECONDS": "removed: not read by any module",
+    "RESERVATION_GRACE_MINUTES": "removed: not read by any module",
+    "RECHARGE_MAX_BALANCE_CENTS": "removed: config/runtime [prepaid] policy sets the balance cap",
+    "RATE_USER_READ_PER_SECOND": "removed: no read rate rule",
+    "HTTP_TIMEOUT_READ": "removed: each client passes its timeout to resilient()",
+    "HTTP_TIMEOUT_WRITE": "removed: each client passes its timeout to resilient()",
+    "HTTP_TIMEOUT_PAY": "removed: config/runtime [wechat_pay] timeout_prepay_s and related timeouts",
+}
+
+_known_env: set[str] = {
+    "LUZ_ENV", "LUZ_SERVICE_NAME", "LUZ_INSTANCE_ID", "LUZ_TIMEZONE", "LUZ_CONFIG_DIR", "LUZ_CONFIG_WATCH",
+    "LUZ_TRUSTED_PROXIES", "LUZ_INTERNAL_NETWORKS", "LUZ_METRICS_TOKEN", "LUZ_OPS_TOKEN", "LUZ_DATABASE_URL",
+    "LUZ_DB_POOL_SIZE", "LUZ_REDIS_URL", "LUZ_JWT_SECRET", "LUZ_JWT_ISSUER", "LUZ_FIELD_KEY", "LUZ_SERVICE_SECRETS",
+    "LUZ_CORS_ORIGINS", "LUZ_FEATURES", "LUZ_WORKER_HEARTBEAT_FILE",
+}
+
+
+def register_env_names(*names: str) -> None:
+    """模块登记自己读取的 LUZ_ 环境变量，启动扫描时不再报“不认识”。"""
+    _known_env.update(names)
+
+
+def moved_env() -> dict[str, str]:
+    """全部已迁走的环境变量 → 去处：框架的 MOVED_ENV + 字段说明里各键的 legacy_env。"""
+    from .runtime_config import legacy_env_index  # noqa: PLC0415 - 字段说明只依赖 pydantic
+
+    moved = dict(MOVED_ENV)
+    for name, path in legacy_env_index().items():
+        group, _, key = path.partition(".")
+        moved[name] = f"config/runtime [{group}] {key}"
+    return moved
+
+
+def env_warnings(environ: Mapping[str, str] | None = None) -> list[tuple[str, str]]:
+    """[(变量名, 说明)]：已迁到运行配置 / 已删除的变量，以及不认识的 LUZ_ 变量。只返回名字，不返回值。"""
+    environ = os.environ if environ is None else environ
+    moved = moved_env()
+    out: list[tuple[str, str]] = []
+    for name in sorted(environ):
+        if name in moved:
+            out.append((name, moved[name]))
+        elif name.startswith("LUZ_") and name not in _known_env:
+            out.append((name, "unknown LUZ_ variable (misspelt?)"))
+    return out
 
 
 # ---------- 模块生产配置检查（启动时由 assert_production_safe 统一执行）----------
@@ -209,6 +257,6 @@ def get_settings() -> Settings:
 
 
 def reload_settings() -> Settings:
-    """测试或热更新时重新读取环境变量。"""
+    """测试时重新读取环境变量（部署参数改了要重启进程，不做热加载）。"""
     get_settings.cache_clear()
     return get_settings()

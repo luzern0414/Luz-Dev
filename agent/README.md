@@ -68,12 +68,12 @@ P0 = 任何智能体项目上线前必须完成；P1 = 第一个项目交付前�
 | G13 | §9 上下文前缀、重排、按门店与角色预过滤、两路并行、pgvector 实现、入库审核与旧版本保留 | 有标题前缀分块、内存 BM25、RRF（k=60）、阈值、引用、缓存；只按租户与有效期过滤；两路串行 | 补入库与检索能力 | `05-knowledge` | P1 |
 | G14 | §14 遵守 `Retry-After`、全抖动、过载识别、熔断打开时长递增与手动覆盖、整轮时长、图步数、同名同参重复检测 | 有超时、有界退避（固定幅度抖动）、熔断（固定 30 秒）、回退链、token 与日轮次预算、降级梯度 | 补齐策略与上限 | `08-resilience`、`07-graph` | P1 |
 | G15 | §11 OpenTelemetry 导出、span 类型齐全、首事件与首 token 时延、队列与费用指标、告警 | 进程内计数器与直方图、节点计时、脱敏事件日志 | 导出与指标 | `11-observability` | P1 |
-| G16 | §16 默认值落进配置：`AGENT_MAX_RUNNING`、`USER_MAX_RUNNING`、`QUEUE_*`、`RUN_TIMEOUT_S`、`MAX_GRAPH_STEPS`、`MAX_SAME_CALL`、`SMALL_LLM_TIMEOUT_S`、`STRUCTURED_RETRIES`、`BREAKER_OPEN_MAX_S` 等 | `config.py` 缺这些键 | 补配置项与环境变量 | `00-core` | P1 |
+| G16 | §16 默认值落进配置：`AGENT_MAX_RUNNING`、`USER_MAX_RUNNING`、`QUEUE_*`、`RUN_TIMEOUT_S`、`MAX_GRAPH_STEPS`、`MAX_SAME_CALL`、`SMALL_LLM_TIMEOUT_S`、`STRUCTURED_RETRIES`、`BREAKER_OPEN_MAX_S` 等 | `config.py` 缺这些键 | 补运行配置 `[agent]` 表的键与字段说明（小写蛇形，单位写进键名） | `00-core` | P1 |
 | G17 | §6 MCP 客户端接入（白名单、契约包装、熔断分组） | 无 | 新建 | `06-tools` | P2 |
 | G18 | §9 引用带文档版本，核验对照 v3 `Citation` | `Citation` 没有 `version` | 补字段 | `00-core`、`09-verify` | P2 |
 | G19 | 底座 §18 列出的补采：DeepSeek 工具调用（官网需人工验证，暂按 OpenAI 兼容格式）、OpenTelemetry 生成式 AI 属性名（官网为迁移页） | 未采 | 用 Luz-Crawl 补采后更新底座 | `references/agent-foundation.md` | P2 |
 
-文档侧已对齐：底座文档、`references/agent.md`、本文件、`shared/protocol.md` v3、`backend/SPEC.md` 文首的取代说明、`references/standards.json` 的 `AGENT-002`–`AGENT-020`。
+文档侧已对齐：底座文档（§0 含原 `references/agent.md` 的职责边界）、本文件、`shared/protocol.md` v3、`backend/SPEC.md` 文首的取代说明、`references/standards.json` 的 `AGENT-002`–`AGENT-020`。
 
 ## 运行测试
 

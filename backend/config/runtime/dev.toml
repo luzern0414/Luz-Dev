@@ -1,0 +1,5 @@
+# 开发环境：只写与 base.toml 不同的值（LUZ_ENV=dev）。自动化测试也按这份配置运行，不在这里放宽限流等会改变行为的值。
+
+[logging.modules]
+# 本地排障时框架日志多看一层细节；第三方库保持 info，避免 SQL 与网络库日志刷屏
+luzback = "debug"

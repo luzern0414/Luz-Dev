@@ -8,7 +8,6 @@
 """
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -17,7 +16,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from luzback import AppError, ErrorCode, enqueue_event, get_settings, utcnow
+from luzback import AppError, ErrorCode, current_config, enqueue_event, utcnow
 from luzback.outbox import mark_processed
 
 from . import rules
@@ -74,8 +73,8 @@ def _write(db: Session, acct: PointsAccount, user_id: int, delta: int, kind: str
 
 
 def points_valid_days() -> int:
-    """入账批次有效期（天）：POINTS_VALID_DAYS，默认 365（12 个月）；0 = 不过期。"""
-    return int(os.getenv("POINTS_VALID_DAYS", "365"))
+    """入账批次有效期（天）：运行配置 [membership] points_valid_days，默认 365（12 个月）；0 = 不过期。"""
+    return current_config().membership.points_valid_days
 
 
 def _default_expiry(now: datetime) -> datetime | None:
@@ -329,7 +328,7 @@ def on_order_completed(db: Session, payload: dict, event_id: str) -> str:
         return "duplicate"
     order_id, user_id = int(payload["order_id"]), int(payload["user_id"])
     base = int(payload.get("total_cents") or 0) - _refunded_marker(db, order_id)
-    points = rules.points_for_order(base, int(get_settings().points_per_yuan), _multiplier(db, user_id))
+    points = rules.points_for_order(base, current_config().membership.points_per_yuan, _multiplier(db, user_id))
     if points <= 0:
         return "no_points"
     return "earned" if earn(db, user_id, points, "order", f"order:{order_id}:earn") else "duplicate"

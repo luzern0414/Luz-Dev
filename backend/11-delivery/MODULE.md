@@ -1,9 +1,9 @@
-# 模块：delivery-dispatch（配送调度）
+# 模块：11-delivery（配送调度，规划）`delivery`
 
 | 项 | 内容 |
 |---|---|
 | 状态 | **仅设计，代码未实现**（实现时按本文件的表结构与接口落地） |
-| 依赖 | framework、order（已付款订单）、map-location（距离与范围）、notification（骑手与用户通知） |
+| 依赖 | 00-framework、08-order（已付款订单）、06-geo（距离与范围）、20-notification（骑手与用户通知） |
 
 ## 1 职责与边界
 
@@ -40,7 +40,7 @@
 
 | 方法 | 路径 | 鉴权 | agent | 说明 |
 |---|---|---|---|---|
-| GET | `/api/v1/app/orders/{id}/delivery` | access（归属） | yes | 配送进度、骑手信息（脱敏电话）、预计送达 |
+| GET | `/api/v1/app/orders/{id}/delivery` | access（归属） | read | 配送进度、骑手信息（脱敏电话）、预计送达 |
 | GET | `/api/v1/app/orders/{id}/delivery/track` | access（归属） | no | 骑手最新位置（每 10 秒轮询） |
 | GET | `/api/v1/admin/delivery/tasks` | admin `delivery:read` | no | 待派单 / 已派单列表 |
 | GET | `/api/v1/admin/delivery/riders` | admin `delivery:read` | no | 候选骑手与负载 |

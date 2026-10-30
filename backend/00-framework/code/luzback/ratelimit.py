@@ -1,8 +1,8 @@
 """限流：令牌桶 + 固定窗口计数，内存实现与 Redis 实现同一接口。
 
-规则（SPEC §12）：按 IP 20 次/秒（突发 40）；按用户写 3 次/秒、读 20 次/秒；
-登录按设备 5 次/分钟；短信按手机号 1 次/分钟且 10 次/天。规则由 RateLimitRule 声明，
-中间件按路径前缀与方法匹配；Redis 不可用时放行并记日志（降级，不阻塞交易）。
+规则（SPEC §12）：按 IP 20 次/秒（突发 40）；按用户写 3 次/秒；登录按 IP 5 次/分钟；短信按手机号 1 次/分钟且 10 次/天。
+阈值是运行参数，写在 config/runtime 的 [rate_limit]，用 token_bucket / fixed_window（ConfiguredLimiter）读取，热加载后立即生效。
+规则由 RateLimitRule 声明，中间件按路径前缀与方法匹配；Redis 不可用时放行并记日志（降级，不阻塞交易）。
 """
 from __future__ import annotations
 
@@ -108,6 +108,49 @@ class RedisTokenBucket:  # pragma: no cover - 需要 Redis
         except Exception:  # noqa: BLE001
             self.degraded_calls += 1
             return True
+
+
+class ConfiguredLimiter:
+    """阈值来自运行配置（可热加载）：每次判断前把当前快照里的值写到内部限流器上，已有计数不丢。
+
+        ConfiguredLimiter(TokenBucketLimiter(20, 40), lambda cfg: {"rate": cfg.rate_limit.ip_per_s,
+                                                                   "capacity": cfg.rate_limit.ip_per_s * 2})
+    params(cfg) 返回内部限流器的属性名与值；cfg 是当前请求取到的运行配置快照（luzback.runtime_loader.current_config）。
+    """
+
+    def __init__(self, limiter: RateLimiter, params: Callable[[object], dict[str, float]]):
+        self.limiter = limiter
+        self.params = params
+
+    def allow(self, key: str, cost: float = 1.0) -> bool:
+        from .runtime_loader import current_config  # noqa: PLC0415 - 运行配置依赖日志，避免导入环
+
+        for name, value in self.params(current_config()).items():
+            if getattr(self.limiter, name) != value:
+                setattr(self.limiter, name, value)
+        return self.limiter.allow(key, cost)
+
+
+def token_bucket(per_second: Callable[[object], float], burst: float = 2.0) -> ConfiguredLimiter:
+    """令牌桶，速率取运行配置：token_bucket(lambda cfg: cfg.rate_limit.ip_per_s)，容量为速率 × burst。"""
+    def params(cfg: object) -> dict[str, float]:
+        rate = float(per_second(cfg))
+        return {"rate": rate, "capacity": rate * burst}
+
+    initial = params(_defaults())
+    return ConfiguredLimiter(TokenBucketLimiter(initial["rate"], initial["capacity"]), params)
+
+
+def fixed_window(per_window: Callable[[object], int], window_seconds: int = 60) -> ConfiguredLimiter:
+    """固定窗口，次数取运行配置：fixed_window(lambda cfg: cfg.rate_limit.login_per_min)。"""
+    return ConfiguredLimiter(FixedWindowLimiter(int(per_window(_defaults())), window_seconds),
+                             lambda cfg: {"limit": int(per_window(cfg))})
+
+
+def _defaults() -> object:
+    from .runtime_config import RuntimeConfig  # noqa: PLC0415
+
+    return RuntimeConfig()
 
 
 @dataclass

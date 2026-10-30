@@ -69,9 +69,7 @@ python -X utf8 scripts/validate_skill_package.py --design-root ../Luz-Design
 
 ## 经验沉淀
 
-Luz-System、Luz-Design、Luz-Dev、Luz-Writing 四个技能用同一套经验沉淀：经验库是 `experience/notes.json`，每条有主题键 `key`、类别 `kind`（偏好 preference、教训 lesson、有效信息 fact）、一句话原则 `text`、可选依据 `why`、确认次数 `uses`、首次记录 `first_seen`、最近确认 `last_confirmed`，被替换过的再带一条旧说法 `previous`。开始时用 `search` 查，结束前用 `note` 写，另有 `list`、`prune`、`check`（本仓库脚本 `scripts/record_experience.py`）。同一主题再写会替换旧说法，同一句话换了键只算再确认一次；偏好最多 60 条，教训和有效信息各 120 条，超出时先删确认最少、最久没确认的，180 天没确认的会列出来。仓库公开，手机号、邮箱、微信号、个人目录路径和密钥写不进去，检查也会拦下。
-
-本仓库另有完整任务经验记录 `experience/records/EXP-*.md`（`record`、`promote`、`deprecate`，有效记录最多 120 条），`search` 会一并检索。
+每次调用至少写入或确认一条经验（偏好、教训、有效信息），存在 `experience/notes.json`；Luz-System、Luz-Design、Luz-Dev、Luz-Writing 四个技能用同一套格式与命令。规则（字段、上限、去重、隐私）以 [SKILL.md](SKILL.md) 的“每次调用后沉淀”一节为准；完整任务经验记录在 `experience/records/`，说明见 [experience/README.md](experience/README.md)。
 
 ## 目录结构
 
@@ -86,6 +84,7 @@ experience/    经验库：偏好、教训、有效信息、任务经验与可�
 assets/        方案模板、部署模板、协议模板、页面样式
 scripts/       方案、调研、知识库、经验、交接校验、技能注册等脚本
 agent/         智能体运行时与协议
+agents/        代理界面清单（openai.yaml）
 tests/         测试
 ```
 

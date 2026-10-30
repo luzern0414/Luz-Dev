@@ -4,6 +4,7 @@
 - 消费者：consume(topic, group, handler) 按消费者组拉取；handler 抛错则不 ack，由 reclaim 重投；
   业务幂等由 outbox.mark_processed(consumer, event_id) 保证。
 - 主题命名：<聚合>.<事件>（order.paid、queue.called）；payload 必含 event_id。
+- 链路：发布时把 traceparent（与旧 X-Trace-Id）写进消息头，消费时用 continue_trace 接上，日志按同一个 trace_id 串起来。
 """
 from __future__ import annotations
 
@@ -14,6 +15,8 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
+
+from .tracing import continue_trace, outgoing_headers
 
 
 @dataclass
@@ -57,7 +60,7 @@ class InMemoryBroker:
         for message in batch:
             message.attempts += 1
             try:
-                handler(message)
+                _handle(handler, message)
                 handled += 1
             except Exception:  # noqa: BLE001
                 with self._lock:
@@ -107,12 +110,19 @@ class RedisStreamsBroker:  # pragma: no cover - 需要 Redis
                               payload=json.loads(raw.get("payload", "{}")), headers=json.loads(raw.get("headers", "{}")),
                               key=raw.get("key") or None)
             try:
-                handler(message)
+                _handle(handler, message)
                 self.client.xack(topic, group, message.id)
                 handled += 1
             except Exception:  # noqa: BLE001
                 continue  # 不 ack，等待 reclaim
         return handled
+
+
+def _handle(handler: Callable[[Message], None], message: Message) -> None:
+    """消费一条消息：接上生产者的链路（头缺失或不合法时新建 trace）。"""
+    headers = message.headers or {}
+    with continue_trace(headers.get("traceparent"), headers.get("X-Trace-Id"), topic=message.topic, message_id=message.id):
+        handler(message)
 
 
 def outbox_to_broker(broker: Broker) -> Callable[..., None]:
@@ -121,6 +131,6 @@ def outbox_to_broker(broker: Broker) -> Callable[..., None]:
     def handler(topic: str, payload: dict[str, Any], event: Any = None) -> None:
         key = getattr(event, "event_id", None) or payload.get("event_id")
         enriched = {**payload, "event_id": key, "topic": topic, "published_at": time.time()}
-        broker.publish(topic, enriched, key=key)
+        broker.publish(topic, enriched, key=key, headers=outgoing_headers())
 
     return handler

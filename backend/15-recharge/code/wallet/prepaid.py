@@ -15,13 +15,12 @@ None 表示不限。限额按“一次收取”与“续约后余额”双重校
 """
 from __future__ import annotations
 
-import os
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 
 from sqlalchemy.orm import Session
 
-from luzback import AppError, ErrorCode
+from luzback import AppError, ErrorCode, current_config
 
 CATEGORY_PERIOD = "period"            # 会籍类（期限卡、时段卡）
 CATEGORY_COUNT = "count"              # 课时类（次卡）
@@ -116,7 +115,7 @@ _policy_resolver: Callable[[int | None], PrepaidPolicy] | None = None
 
 
 def set_policy_resolver(fn: Callable[[int | None], PrepaidPolicy] | None) -> None:
-    """扩展点：按门店返回策略（连锁跨城市经营时各店不同）。None 恢复默认（环境变量 LUZ_PREPAID_POLICY）。"""
+    """扩展点：按门店返回策略（连锁跨城市经营时各店不同）。None 恢复默认（运行配置 [prepaid] policy）。"""
     global _policy_resolver
     _policy_resolver = fn
 
@@ -124,7 +123,7 @@ def set_policy_resolver(fn: Callable[[int | None], PrepaidPolicy] | None) -> Non
 def policy_for(store_id: int | None = None) -> PrepaidPolicy:
     if _policy_resolver is not None:
         return _policy_resolver(store_id)
-    return PRESETS.get(os.environ.get("LUZ_PREPAID_POLICY", "conservative"), CONSERVATIVE)
+    return PRESETS.get(current_config().prepaid.policy, CONSERVATIVE)
 
 
 def custom_policy(base: str = "conservative", **overrides) -> PrepaidPolicy:

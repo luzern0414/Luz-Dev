@@ -1,22 +1,8 @@
-# 智能体后端规范（LangGraph）v2
+# 智能体后端应用规范（门店业务助手）
 
-本文是**门店业务助手的应用规范**（意图表、工具清单、审批与降级文案、核验细则），建立在智能体底座之上。底座 `../../references/agent-foundation.md` 是唯一权威规范：流水线、契约、默认值、上限与检查清单以底座为准，本文与底座冲突的地方按底座执行。前端对话界面见 Luz System `references/agent-design.html`，前后端协议见 `../shared/protocol.md` v3，每个项目的定制清单按 `../requirements/_template.md` 填写为 `../requirements/<项目名>.md`。后端接口以 `backend/API.md` 为准，工具只能调用其中标注 `agent: yes` 的接口。
+本文只写**门店业务助手的应用层**：意图表、工具清单、高风险确认、降级文案、结果核验、记忆与知识库的业务取舍。流水线、事件协议、接口、排队、超时、重试、熔断、上限、追踪与检查清单都以智能体底座 `../../references/agent-foundation.md` 为准，本文不再重复；前端对话界面见 Luz System `references/agent-design.html`，前后端协议见 `../shared/protocol.md` v3。每个项目的定制清单按 `../requirements/_template.md` 填写为 `../requirements/<项目名>.md`。工具能调用哪些后端接口，以各模块 `MODULE.md` §6 的 agent 列为准。
 
-**被底座取代的条目**（读到时按右侧执行）：
-
-| 本文 | 按底座 |
-|---|---|
-| §1、§11.3 小程序以 WebSocket 为主通道 | 所有端统一 SSE 格式（底座 §2 规则 3–5） |
-| §11.1 事件名 `meta / delta / tool_start / … / done / error`、`seq` | v3 的 14 个事件与 `id / run_id` 信封（底座 §2 契约） |
-| §8.3、§12 同一会话进行中返回 `409 AGENT_BUSY` | 会话内排队，队列满 `429 QUEUE_FULL` + `Retry-After`；错误码表见底座 §14 |
-| §12 `POST …/turns` 直接返回事件流、`…/confirm` | `POST …/runs` 返回 `202`，事件从 `GET /runs/{run_id}/events` 读；审批 `POST /runs/{run_id}/approvals/{approval_id}`（底座 §2） |
-| §10 结构化输出校验失败重试 2 次 | 重试 1 次后降级（底座 §7） |
-| §3.2 置信度 `< 0.5` 走 `general` 让模型自由回答 | 不猜：列候选与入口，不调用写工具（底座 §4） |
-| §6.1 风险等级 `read / low_write / high / forbidden` | 副作用级别 `read / write / write_high`，`forbidden` 不注册（底座 §6）；含义一一对应 |
-| §18 “首 token ≤ 8 秒” | 首个事件 ≤ 1 秒、首个文字增量 P95 ≤ 3 秒；8 秒是首 token 超时（底座 §12、§16） |
-| 超时、重试、熔断、上限的数值 | 底座 §16 总表 |
-
-阅读顺序：§0 边界 → §1 架构 → §2 图 → §3 意图 → §6 工具 → §7 确认 → §8 降级 → §9 核验 → §11 流式 → §17 实现顺序。生成项目时先填 `requirements/<项目名>.md`，再按 `../README.md` 差距待办的顺序实现（§17 是 v2 时的顺序，仅作参考）。
+阅读顺序：§0 边界 → §3 意图 → §6 工具 → §7 确认 → §8 降级文案 → §9 核验；§1、§2 是 LangGraph 图的应用侧写法，§4、§5 是记忆与知识库的业务取舍。
 
 ---
 
@@ -39,7 +25,7 @@
 
 ```
 小程序 / H5 / 后台
-   │  WebSocket 或 轮询（小程序）· SSE（H5、后台）
+   │  SSE（小程序、H5、后台统一，底座 §2）
    ▼
 网关（FastAPI）── 鉴权、限流、会话、事件序号、SSE 编码
    │
@@ -57,7 +43,7 @@
 业务后端（backend/，只经 `agent: yes` 接口；带用户令牌 + 服务签名）
 ```
 
-技术基线：Python 3.11+、`langgraph>=1.0`、`langchain-core`、`pydantic>=2`、FastAPI、Postgres（checkpointer、store、pgvector）。模型供应商由项目配置决定（§16），文档不绑定某一家。
+技术基线：Python 3.12+、`langgraph>=1.0`、`langchain-core`、`pydantic>=2`、FastAPI、Postgres（checkpointer、store、pgvector）。模型供应商由项目配置决定（底座 §16），文档不绑定某一家。
 
 部署形态：与业务后端分离的独立服务（便于独立扩缩容与灰度），通过内网调用后端。开发期可同进程启动。
 
@@ -109,7 +95,7 @@ classify ──(置信度低 / 槽位缺)──► clarify ──► END（本�
 | `respond` | 组装 `FinalAnswer`（文本、卡片、快捷回复、引用）并流式输出 | — |
 | `memorize` | 抽取可长期记忆的事实写入 Store（§4.2），异步、失败不影响回答 | 记日志 |
 
-路由规则（`route_after_plan`）：`answer` → `verify`；工具不存在 → `plan`（带"工具不存在"的工具消息，计 1 次）；`risk == "read" | "low_write"` → `run_tool`；`risk == "high"` → `confirm`；`tool_calls_made >= MAX_TOOL_CALLS(5)` → `respond(步骤过多文案)`；同一工具同一参数连续 3 次 → `respond(循环中止文案)`。
+路由规则（`route_after_plan`）：`answer` → `verify`；工具不存在 → `plan`（带"工具不存在"的工具消息，计 1 次）；`risk == "read" | "write"` → `run_tool`；`risk == "write_high"` → `confirm`；工具次数、决策轮次与同名同参重复超过上限时按底座 §16 报错并用对应文案结束（上限数值见底座）。
 
 ### 2.2 状态
 
@@ -190,7 +176,7 @@ config = {"configurable": {"thread_id": conversation_id, "user_id": user_id, "te
 
 1. **规则预筛**（无模型）：订单号正则 `\b\d{14,20}\b`、取餐码 `[A-Z]\d{3}`、手机号；命中则预填槽位。关键词表（"转人工""投诉""退款"）直接提升 `handoff`/`after_sales` 先验。
 2. **模型分类**：`model.with_structured_output(IntentResult)`，输入最近 6 条消息 + 运行摘要 + 启用意图清单（含一句话描述和示例）。温度 0。
-3. **置信度处理**：`≥0.75` 直接进入；`0.5–0.75` → `clarify`（给 2–4 个快捷回复，由意图候选生成）；`<0.5` → `general`（走 `plan`，允许模型自由回答或追问）。
+3. **置信度处理**：`≥0.75` 直接进入；`0.5–0.75` → `clarify`（给 2–4 个快捷回复，由意图候选生成）；`<0.5` 不猜，列出候选意图与页面入口，不调用写工具（底座 §4）。
 4. **多意图**：`IntentResult.secondary` 最多 1 个；先处理主意图，回答末尾用一句话承接次意图（"另外，你问的营业时间是…"），不并行调工具。
 5. **上下文承接**：`classify` 看到指代（"这个""刚才那单"）时从状态里的 `last_entities`（上一轮工具结果中的商品/订单 id）解析；解析不了 → `clarify`。
 
@@ -279,8 +265,8 @@ class IntentResult(BaseModel):
 | `name` | 蛇形，稳定不变 |
 | `description` | 一句话 + 何时不该用 |
 | `args_model` | Pydantic 模型；约束（长度、范围、枚举）由 Pydantic 校验，不再手写 JSON Schema |
-| `risk` | `read` / `low_write` / `high` / `forbidden` |
-| `endpoint` | 后端路径（必须在 `backend/API.md` 标 `agent: yes`） |
+| `risk` | `read` / `write` / `write_high`（会产生不可逆后果的操作不注册为工具） |
+| `endpoint` | 后端路径（必须在对应模块 `MODULE.md` §6 的 agent 列标为可调用） |
 | `timeout_s` | 读 3 秒，写 5 秒，批量 8 秒 |
 | `retry` | 只有幂等调用可重试：读最多 3 次（0.5/1/2 秒 + 抖动），写只在带幂等键时重试 |
 | `breaker_key` | 熔断分组（通常按后端服务） |
@@ -294,9 +280,9 @@ class IntentResult(BaseModel):
 | 等级 | 规则 | 例子 |
 |---|---|---|
 | `read` | 直接执行 | 查商品、查订单、查会员、查门店、配送范围检查、报价预览 |
-| `low_write` | 直接执行，但结果必须回显并可撤销 | 加入购物车、领券、更新备注 |
-| `high` | 必须 `confirm` 后执行；带幂等键；摘要含金额 | 下单、取消订单、改地址、排队取号/取消、会员开通、售后申请草稿、后台起草优惠券 |
-| `forbidden` | 永不注册为工具，只给页面入口 | 支付、退款执行、改价、改库存、改权限、删除账号 |
+| `write` | 直接执行，但结果必须回显并可撤销 | 加入购物车、领券、更新备注 |
+| `write_high` | 必须 `confirm` 后执行；带幂等键；摘要含金额 | 下单、取消订单、改地址、排队取号/取消、会员开通、售后申请草稿、后台起草优惠券 |
+| 不注册 | 永不注册为工具，只给页面入口 | 支付、退款执行、改价、改库存、改权限、删除账号 |
 
 ### 6.2 小程序工具清单（餐饮 + 花店通用）
 
@@ -304,34 +290,34 @@ class IntentResult(BaseModel):
 |---|---|---|---|
 | `search_products` | read | `keyword≤40, category?, max_price_cents?, tags?[], limit≤10` | `GET /api/v1/app/products` |
 | `get_product` | read | `product_id` | `GET /api/v1/app/products/{id}` |
-| `cart_add` | low_write | `product_id, sku_id?, qty 1–99, spec?{}` | `POST /api/v1/app/cart/items` |
+| `cart_add` | write | `product_id, sku_id?, qty 1–99, spec?{}` | `POST /api/v1/app/cart/items` |
 | `price_preview` | read | `items[], fulfillment, address_id?, coupon_id?` | `POST /api/v1/app/orders/preview`（必须存在，用于确认摘要） |
-| `create_order` | high | 同 `price_preview` + `remark≤100, time_slot?` | `POST /api/v1/app/orders` |
+| `create_order` | write_high | 同 `price_preview` + `remark≤100, time_slot?` | `POST /api/v1/app/orders` |
 | `list_orders` | read | `status?, limit≤5` | `GET /api/v1/app/orders` |
 | `get_order` | read | `order_id` | `GET /api/v1/app/orders/{id}` |
 | `get_delivery` | read | `order_id` | `GET /api/v1/app/orders/{id}/delivery` |
-| `cancel_order` | high | `order_id, reason` | `POST /api/v1/app/orders/{id}/cancel` |
-| `update_order_address` | high | `order_id, address_id` | `POST /api/v1/app/orders/{id}/address` |
-| `urge_order` | low_write | `order_id` | `POST /api/v1/app/orders/{id}/urge` |
+| `cancel_order` | write_high | `order_id, reason` | `POST /api/v1/app/orders/{id}/cancel` |
+| `update_order_address` | write_high | `order_id, address_id` | `POST /api/v1/app/orders/{id}/address` |
+| `urge_order` | write | `order_id` | `POST /api/v1/app/orders/{id}/urge` |
 | `list_addresses` | read | — | `GET /api/v1/app/addresses` |
 | `delivery_check` | read | `address_id` 或 `lng,lat` | `GET /api/v1/app/delivery-check` |
 | `get_member` / `get_points` / `list_coupons` | read | — | `GET /api/v1/app/member`、`/points`、`/coupons` |
-| `claim_coupon` | low_write | `template_id` | `POST /api/v1/app/coupons/claim` |
-| `list_recharge_plans` | read | — | `GET /api/v1/app/recharge/plans` |
+| `claim_coupon` | write | `template_id` | `POST /api/v1/app/coupons/claim` |
+| `list_recharge_plans` | read | — | `GET /api/v1/app/wallet/plans` |
 | `get_store` | read | `store_id?` | `GET /api/v1/app/stores/{id}` |
 | `queue_create` / `queue_current` / `queue_cancel` | high / read / high | `headcount 1–20, zone` / — / `ticket_id` | `/api/v1/app/queue/*` |
-| `create_after_sales_draft` | high | `order_id, reason, items?[]` | `POST /api/v1/app/after-sales`（草稿，提交后转人工） |
+| `create_after_sales_draft` | write_high | `order_id, reason, items?[]` | `POST /api/v1/app/after-sales`（草稿，提交后转人工） |
 | `kb_search` | read | `query, doc_type?` | 内部，不走后端 |
 
 后台工具（`channels: admin`，`requires_role`）：`admin_dashboard(range)`、`admin_list_orders(filters)`、`admin_get_order(id)`、`admin_low_stock()`、`admin_create_coupon_draft(fields)`（high，落草稿态，由店长在页面发布）、`admin_explain_error(trace_id)`（读审计与日志摘要）。
 
-接口若在 `backend/API.md` 中为"设计"状态，工具必须注册为 `disabled`，并在回答里给页面入口；禁止调用不存在的接口。
+接口若在对应模块 `MODULE.md` 中尚未实现，工具必须注册为 `disabled`，并在回答里给页面入口；禁止调用不存在的接口。
 
 ### 6.3 身份与调用
 
 - 网关解析用户令牌得到 `user_id/tenant_id/role`；智能体服务调用后端时转发原始用户令牌，并附服务签名头 `X-Service: agent` + HMAC（后端 `SECURITY.md` 的服务间签名）。后端用用户令牌做数据范围校验，智能体不得拥有超出用户权限的凭据。
 - 幂等键：`Idempotency-Key = uuid5(AGENT_NS, f"{tenant_id}:{conversation_id}:{turn_id}:{tool}:{sha256(args)[:16]}")`，满足后端"36 位 UUID"要求，且同一确认重放得到同一键。
-- 所有调用带 `X-Trace-Id`。
+- 所有调用带 W3C `traceparent` 与 `X-Request-Id`（`references/config-logging.md` §3.6）。
 
 ### 6.4 结果处理
 
@@ -376,19 +362,9 @@ class IntentResult(BaseModel):
 
 ---
 
-## 8. 降级与熔断
+## 8. 降级文案
 
-### 8.1 分层弹性
-
-| 层 | 机制 | 参数（默认，可配） |
-|---|---|---|
-| 单次调用 | 超时 | 模型 20 秒（流式首 token 8 秒）；工具见 §6.1；知识库 1.5 秒 |
-| 重试 | 有界 + 指数退避 + 抖动，只重试可重试错误（429/5xx/超时/连接），且调用幂等 | 读 3 次；模型 2 次；写 0 次（除非带幂等键） |
-| 回退 | 模型：主 → 备（不同供应商或更小模型）→ 模板回答；知识库：跳过检索 → 只用工具；工具：读失败 → 给页面入口 | 回退链在 §16 配置 |
-| 熔断 | 按依赖分组（每个模型供应商、每个后端服务、知识库） | 60 秒窗口内 ≥10 次失败且失败率 ≥50% → 打开 30 秒 → 半开放 3 个探测请求 |
-| 预算 | 每轮 token 上限、每用户每日轮次、每租户每日成本 | 轮 8k token；用户 200 轮/日；租户按配置 |
-| 循环 | 步数上限、同参数重复检测 | 5 步；同工具同参数 3 次中止 |
-| 总开关 | `AGENT_ENABLED`、`AGENT_WRITE_ENABLED` 配置项可热更新 | 关闭写时所有 `high/low_write` 工具变为页面入口 |
+超时、重试、回退链、熔断、预算与轮次上限的机制和数值见底座 §14、§16；协议错误码见底座 §14 与 `../shared/protocol.md`。本节只写门店业务助手在各降级级别下对用户说什么。
 
 ### 8.2 降级梯度（用户可感知）
 
@@ -398,26 +374,10 @@ class IntentResult(BaseModel):
 | L1 无知识库 | 知识库熔断/超时 | 跳过检索；政策类问题给"联系门店"入口 | "规则说明暂时查不到，你可以在「我的 → 帮助」查看，或联系门店。" |
 | L2 备模型 | 主模型熔断 | 切备模型，关闭长回答与推荐生成 | 无提示（记 `degraded`） |
 | L3 无模型 | 所有模型不可用 | 规则意图 + 模板回答；只读工具仍可用（"查订单"按钮式交互） | "助手现在有点忙，先给你直接查：[最近订单] [营业时间] [转人工]" |
-| L4 只读 | `AGENT_WRITE_ENABLED=false` 或后端写接口熔断 | 所有写操作给页面入口 | "现在不能帮你直接下单，点这里去结算页。" |
-| L5 停用 | `AGENT_ENABLED=false` | 入口隐藏；已打开的会话显示维护卡片 | "助手维护中，预计 HH:MM 恢复。" |
+| L4 只读 | 运行配置 `[agent]` 关闭写工具，或后端写接口熔断 | 所有写操作给页面入口 | "现在不能帮你直接下单，点这里去结算页。" |
+| L5 停用 | 运行配置 `[agent]` 关闭智能体 | 入口隐藏；已打开的会话显示维护卡片 | "助手维护中，预计 HH:MM 恢复。" |
 
 降级发生时：事件流发 `notice` 事件（`level`, `message`）；状态 `degraded` 记录原因；观测上报。
-
-### 8.3 协议错误码（服务端 → 前端）
-
-| code | 可重试 | 含义 | 前端 |
-|---|---|---|---|
-| `AGENT_BUSY` | 是 | 该会话已有一轮在处理 | 等待当前轮结束 |
-| `RATE_LIMITED` | 是（按 `retry_after`） | 用户/租户限流 | 提示稍后 |
-| `MODEL_UNAVAILABLE` | 是 | 模型回退链全部失败 | 错误气泡 + 重试 + 快捷入口 |
-| `TOOL_TIMEOUT` | 是 | 关键工具超时且无法回退 | 同上 |
-| `CONFIRM_EXPIRED` | 否 | 确认已过期 | 面板置灰，"重新发起" |
-| `CONFIRM_MISMATCH` | 否 | request_id 不匹配 | 刷新会话 |
-| `STEP_LIMIT` | 否 | 超过步数/循环中止 | 显示服务端文案 |
-| `UNAUTHORIZED` | 否 | 令牌无效/过期 | 重新登录 |
-| `FORBIDDEN` | 否 | 无权限（后台工具） | 提示无权限 |
-| `DISABLED` | 否 | 助手停用 | 维护卡片 |
-| `INTERNAL` | 是 | 未分类错误（带 trace_id） | 错误气泡，可复制 trace_id |
 
 ---
 
@@ -467,57 +427,9 @@ class IntentResult(BaseModel):
 
 ---
 
-## 11. 流式输出
+## 11. 流式输出与接口
 
-### 11.1 事件（服务端 → 客户端）
-
-统一事件名与 `../shared/protocol.md`：`meta`、`intent`、`delta`、`tool_start`、`tool_end`、`card`、`confirm_request`、`notice`、`suggestions`、`done`、`error`、`ping`。每个事件带递增 `seq`（会话内单调），客户端用 `after_seq` 回填。
-
-### 11.2 与 LangGraph 的映射
-
-```python
-async for mode, chunk in graph.astream(input, config, stream_mode=["messages", "custom", "updates"]):
-    if mode == "messages":
-        msg, meta = chunk
-        if meta.get("langgraph_node") == "respond" and msg.content:
-            yield sse("delta", {"text": msg.content})          # 只流 respond 节点的 token
-    elif mode == "custom":
-        yield sse(chunk["event"], chunk["data"])                 # tool_start/tool_end/notice/card 由节点内 get_stream_writer() 发
-    elif mode == "updates":
-        if "__interrupt__" in chunk:
-            payload = chunk["__interrupt__"][0].value
-            yield sse("confirm_request", payload)
-yield sse("done", final_answer_dict)
-```
-
-- `classify`、`verify`、`memorize` 的模型调用打 `nostream` 标签，避免把中间推理流给用户。
-- `respond` 节点用流式模型生成最终文本；`FinalAnswer` 的卡片与快捷回复在 `done` 事件里一次性给出。
-- 节点内发自定义事件：`writer = get_stream_writer(); writer({"event": "tool_start", "data": {...}})`（Python < 3.11 的异步节点改用 `writer: StreamWriter` 参数注入）。
-- 版本差异：`graph.astream(..., version="v2")` 返回 `{"type","ns","data"}` 字典；实现时按安装版本择一，封装在网关的一个适配函数里。
-
-### 11.3 传输
-
-- H5 / 管理后台：SSE（`text/event-stream`），响应头 `Cache-Control: no-cache`、`X-Accel-Buffering: no`；每 15 秒 `ping`；客户端断线用 `Last-Event-ID`（= seq）重连。
-- 微信小程序：`wx.connectSocket` WebSocket 推送同样的事件 JSON；心跳 25 秒；重连 1/2/4/8 秒；不可用时轮询 `GET .../events?after_seq=` 每 800 毫秒。
-- 事件在服务端按会话落库（Redis 或表，保留 24 小时），保证断线回填与重复投递不重复执行。
-
----
-
-## 12. 会话与 API
-
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| POST | `/api/v1/agent/conversations` | 新建会话，返回 `conversation_id`；body 可带 `channel, entry_page` |
-| POST | `/api/v1/agent/conversations/{id}/turns` | 发一轮；SSE 返回事件流（小程序用 WebSocket 时此接口只返回 `202 {turn_id}`） |
-| GET | `/api/v1/agent/conversations/{id}/events?after_seq=` | 回填/轮询 |
-| POST | `/api/v1/agent/conversations/{id}/confirm` | 确认/拒绝 |
-| GET | `/api/v1/agent/conversations/{id}/messages?before=&limit=` | 历史（分页） |
-| POST | `/api/v1/agent/conversations/{id}/feedback` | 点赞/点踩 + 原因 |
-| DELETE | `/api/v1/agent/memory/{memory_id}` | 删除长期记忆 |
-| GET | `/api/v1/agent/memory` | 查看长期记忆 |
-| GET | `/api/v1/agent/health` | 依赖健康（模型/知识库/后端）与熔断状态 |
-
-规则：同一会话同时只允许一轮在处理（`AGENT_BUSY`）；`turn_id` 由服务端递增；`client_message_id` 去重 24 小时；请求体 ≤ 2KB；会话保留 30 天。
+事件、信封、断线续传、心跳、运行接口与审批接口全部按底座 §2 与 `../shared/protocol.md` v3（所有端统一 SSE；`POST …/runs` 返回 202，事件从 `GET /runs/{run_id}/events` 读，审批走 `POST /runs/{run_id}/approvals/{approval_id}`）。应用侧只需要：`respond` 节点流式输出最终文字，`classify`、`verify`、`memorize` 的模型调用不流给用户；卡片与快捷回复在完成事件里一次给出。
 
 ---
 
@@ -534,11 +446,7 @@ yield sse("done", final_answer_dict)
 
 ## 14. 可观测性
 
-- `trace_id` 由网关生成并贯穿事件、工具调用、后端请求（`X-Trace-Id`）、日志。
-- 每轮记录：节点序列与耗时、意图与置信度、工具名/耗时/状态/重试次数、模型供应商/模型名/token 用量/耗时/是否回退、知识库命中与分数、核验结果、降级标记、确认通过/拒绝/过期。
-- 指标：首 token 延迟 p50/p95、整轮延迟、工具错误率、熔断打开次数、回退率、意图分布、追问率、确认通过率、点踩率、每轮成本。
-- 告警：模型回退率 >10%/5 分钟、熔断打开、核验失败率 >5%、成本超预算 80%。
-- 工具：LangSmith 或 OpenTelemetry 导出（二选一，配置项 `TRACING_BACKEND`）。
+按底座 §11 与 `references/config-logging.md` §3：每次运行一条 trace，日志带 `request_id`、`run_id`、`trace_id`，默认不记原文。应用侧额外上报：意图分布、追问率、确认通过率、点踩率。
 
 ---
 
@@ -551,43 +459,13 @@ yield sse("done", final_answer_dict)
 
 ---
 
-## 16. 配置项
+## 16. 配置
 
-| 配置 | 默认 | 说明 |
-|---|---|---|
-| `AGENT_ENABLED` / `AGENT_WRITE_ENABLED` | true / true | 总开关，热更新 |
-| `LLM_PRIMARY` / `LLM_FALLBACK` | 项目指定 | `provider:model` |
-| `LLM_TIMEOUT_S` / `LLM_FIRST_TOKEN_TIMEOUT_S` | 20 / 8 | |
-| `EMBEDDING_MODEL` / `KB_TOPK` / `KB_MIN_SCORE` | 项目指定 / 6 / 0.35 | |
-| `MAX_TOOL_CALLS` / `MAX_TURN_TOKENS` | 5 / 8000 | |
-| `CONFIRM_TTL_S` | 600 | |
-| `BREAKER_WINDOW_S` / `BREAKER_MIN_FAILS` / `BREAKER_FAIL_RATE` / `BREAKER_OPEN_S` | 60 / 10 / 0.5 / 30 | |
-| `USER_DAILY_TURNS` / `TENANT_DAILY_BUDGET_CENTS` | 200 / 项目指定 | |
-| `CHECKPOINT_DSN` / `STORE_DSN` / `KB_DSN` | — | Postgres |
-| `TRACING_BACKEND` | none | `langsmith` / `otel` |
-| `PII_REDACT` | true | |
+超时、上限、开关与回退链写在运行配置文件的 `[agent]` 表里（底座 §16、`references/config-logging.md` §2），服务端热加载，不在后台展示；意图表与工具表是项目的 `config/intents.yaml`、`config/tools.yaml`。实现顺序按 `../README.md` 的差距待办。
 
 ---
 
-## 17. 实现顺序
-
-1. **模型与协议**：`models.py`（§10）、`protocol.md` 事件；网关骨架（会话、SSE/WebSocket、seq 落库）。
-2. **图骨架**：`guard → classify → plan → respond`，脚本化模型跑通；状态重置与 reducer。
-3. **只读工具**：注册表 + Pydantic 校验 + 超时/重试 + 后端客户端（令牌转发、签名、trace）；`search_products / get_order / get_store`。
-4. **核验**：规则核验（数字落地、入口）接入；模板回答。
-5. **流式**：`respond` 流式 + 自定义事件；小程序 WebSocket/轮询回填。
-6. **确认**：`price_preview` + `interrupt` + 过期/匹配校验；`create_order / cancel_order`；审计。
-7. **记忆**：Postgres checkpointer、裁剪与摘要、Store 长期记忆与用户控制页。
-8. **知识库**：入库流水线、混合检索、引用、后台编辑页联动。
-9. **弹性**：熔断器、模型回退链、降级梯度、预算、总开关、`notice` 事件。
-10. **观测与评测**：trace、指标、告警；金标集与对抗集进 CI；灰度。
-11. **后台助手**：后台工具、角色校验、后台 SSE 面板。
-
-每一步完成的判定：对应测试通过 + §18 对应项勾选。
-
----
-
-## 18. 验收清单
+## 18. 应用验收（通用项见底座 §17）
 
 - [ ] `user_id/tenant_id` 只来自令牌；模型输出中的身份字段被忽略（有测试）
 - [ ] 每轮开始重置轮次级状态；多轮同一 `thread_id` 正常（有测试）
@@ -599,7 +477,7 @@ yield sse("done", final_answer_dict)
 - [ ] 回答中的金额/订单号/时间全部可在工具结果或引用中找到（核验测试）
 - [ ] 模型主→备→模板回退可用；知识库/工具/模型熔断可触发并恢复（有测试）
 - [ ] 降级 L1–L5 均有用户文案与 `notice` 事件
-- [ ] 流式：首 token ≤ 8 秒；断线按 `seq` 回填不重复；一个会话同时只有一轮
+- [ ] 流式与排队按底座 §2、§12 验收（首个事件、首个文字增量、断线续传、会话内排队）
 - [ ] 长期记忆：只写允许类型；用户可查看删除
 - [ ] 日志不含完整对话；工具结果进模型前脱敏
 - [ ] trace_id 贯穿事件、工具、后端请求

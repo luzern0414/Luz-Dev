@@ -48,9 +48,10 @@ class RuleCardTests(unittest.TestCase):
                 self.assertIn(heading, text, f"{kind}: {heading}")
             self.assertRegex(digest, r"^[0-9a-f]{12}$")
             size = len(rule_text(kind).encode("utf-8"))
-            # Big enough to carry the rules, small enough to be read whole (shorten a section with max_chars).
-            self.assertGreater(size, 8_000, f"{kind}: rule text too short")
-            self.assertLess(size, 36_000, f"{kind}: rule text too long; give a section max_chars")
+            # Same measure and bounds as Luz-System: 8–35 KB of rule text, enough to carry the rules and short
+            # enough to be read whole (split the card, move a section to another card, or set max_chars).
+            self.assertGreaterEqual(size, 8 * 1024, f"{kind}: {size} bytes of rule text is too thin")
+            self.assertLessEqual(size, 35 * 1024, f"{kind}: {size} bytes of rule text; split the card or set max_chars")
             self.assertNotRegex(rule_text(kind), r"<(p|td|th|tr|li|ul|div|section|h[1-6])[\s>]", f"{kind}: HTML left in the card")
 
     def test_every_card_carries_the_engineering_rules(self) -> None:

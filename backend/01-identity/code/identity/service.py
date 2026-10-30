@@ -23,9 +23,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from luzback import (
-    AppError, ErrorCode, IdempotencyRecord, create_token, decode_token, enqueue_event, get_settings, utcnow, write_audit,
+    AppError, ErrorCode, IdempotencyRecord, create_token, current_config, decode_token, enqueue_event, get_settings, utcnow,
+    write_audit,
 )
+from luzback import log_events as ev
 from luzback.crypto import FieldCipher
+from luzback.logging import log_event
 
 from . import rules
 from .config import get_config
@@ -104,8 +107,7 @@ def assert_session_active(db: Session, claims: Mapping[str, Any], now: datetime 
 
 def require_fresh(claims: Mapping[str, Any]) -> None:
     """敏感操作（注销）要求 access 令牌在 fresh 窗口（默认 15 分钟）内签发。"""
-    s = get_settings()
-    if utcnow().timestamp() - float(claims.get("iat", 0)) > s.fresh_window_seconds:
+    if utcnow().timestamp() - float(claims.get("iat", 0)) > current_config().auth.fresh_window_s:
         raise AppError(ErrorCode.UNAUTHORIZED, "please login again to continue", data={"reason": "fresh_required"})
 
 
@@ -196,7 +198,8 @@ def refresh_tokens(db: Session, refresh_token: str, now: datetime | None = None)
             _revoke_family(db, row.session_id, "reuse_detected", now)
             write_audit(db, "user", row.user_id, "member.session.reuse_detected", "user_session", session.sid)
             db.commit()
-            log.warning("refresh_reuse_detected", extra={"fields": {"event": "refresh_reuse_detected", "user_id": row.user_id}})
+            log_event(log, ev.SECURITY_AUTHN_TOKEN_REUSE, logging.WARNING, outcome="failure", reason="refresh_reuse",
+                      actor="member", user_ref=str(row.user_id))
         raise invalid
     if (session is None or session.status != SESSION_ACTIVE or rules.aware(row.expires_at) <= now
             or rules.aware(session.absolute_expires_at) <= now):
@@ -262,14 +265,22 @@ def _register(db: Session, openid: str, unionid: str | None, channel: str, agree
     raise AppError(ErrorCode.CONFLICT, "please retry")
 
 
-def _assert_login_allowed(db: Session, user: User) -> None:
+def _login_failed(method: str, reason: str, user_id: int | None = None, ip: str | None = None) -> None:
+    """会员登录失败的安全事件（security.authn_login_fail）：只记内部编号与原因，不记手机号、openid 与验证码。"""
+    log_event(log, ev.SECURITY_AUTHN_LOGIN_FAIL, logging.WARNING, outcome="failure", reason=reason, actor="member",
+              method=method, user_ref=str(user_id) if user_id else None, source_ip=ip)
+
+
+def _assert_login_allowed(db: Session, user: User, method: str = "wechat", ip: str | None = None) -> None:
     if user.status == STATUS_DISABLED:
         write_audit(db, "user", user.id, "member.login.denied", "user", user.id, reason="account_disabled")
         db.commit()
+        _login_failed(method, "account_disabled", user.id, ip)
         raise AppError(ErrorCode.FORBIDDEN, "account disabled, please contact customer service",
                        data={"reason": "account_disabled"})
     if user.status == STATUS_DELETED or user.deleted_at is not None:
         db.rollback()
+        _login_failed(method, "account_deleted", user.id, ip)
         raise AppError(ErrorCode.UNAUTHORIZED, "login failed", data={"reason": "account_deleted"})
 
 
@@ -296,7 +307,12 @@ def login_with_code(db: Session, code: str, client: Any = None, *, agreements: I
     session_key 加密保存 → 开新会话签发令牌。"""
     if not code:
         raise AppError(ErrorCode.BAD_REQUEST, "code required")
-    info = _mp(client).code2session(code)
+    try:
+        info = _mp(client).code2session(code)
+    except AppError as exc:
+        if exc.code < 5000:  # 登录码无效或过期；上游故障另有 app.error
+            _login_failed("wechat", "code_invalid", ip=ip)
+        raise
     now = now or utcnow()
     gateway = agreement_gateway or default_agreements()
     items = [a if isinstance(a, AgreementAccept) else AgreementAccept(int(a["document_id"]), str(a["version"]), str(a["sha256"]))
@@ -307,7 +323,7 @@ def login_with_code(db: Session, code: str, client: Any = None, *, agreements: I
         user, created = _register(db, info.openid, info.unionid, "miniprogram", items, gateway, now)
     elif items:
         gateway.accept(db, user.id, items, "miniprogram", now)
-    _assert_login_allowed(db, user)
+    _assert_login_allowed(db, user, "wechat", ip)
     cancelled = _cancel_deletion_on_login(db, user, now)
     if info.session_key:
         user.wx_session_key_enc = _cipher().encrypt(info.session_key)  # 只在服务端加密保存，不下发（官方要求）
@@ -321,7 +337,8 @@ def login_with_code(db: Session, code: str, client: Any = None, *, agreements: I
         write_audit(db, "user", user.id, "member.register", "user", user.id, after={"agreed_document_ids": user.agreed_document_ids})
     pending = gateway.pending(db, user.id, now)
     db.commit()
-    log.info("login", extra={"fields": {"event": "login", "method": "wechat", "user_id": user.id, "new": created}})
+    log_event(log, ev.SECURITY_AUTHN_LOGIN_SUCCESS, outcome="success", actor="member", method="wechat",
+              user_ref=str(user.id), new_member=created, source_ip=ip)
     return _login_payload(db, user, tokens, created, cancelled, pending)
 
 
@@ -450,18 +467,25 @@ def login_with_sms(db: Session, phone: str, request_id: str, code: str, *, ip: s
     """短信登录：只登录已绑定该手机号的账号（注册走微信登录）。验证码通过后才告知未绑定。"""
     phone = rules.normalize_cn_mobile(phone)
     now = now or utcnow()
-    _consume_sms(db, phone, "login", request_id, code, now)
+    try:
+        _consume_sms(db, phone, "login", request_id, code, now)
+    except AppError as exc:
+        _login_failed("sms", (exc.data or {}).get("reason", "sms_code_invalid") if isinstance(exc.data, dict) else "sms_code_invalid",
+                      ip=ip)
+        raise
     user = db.execute(select(User).where(User.phone_hash == _cipher().lookup_hash(phone), User.deleted_at.is_(None))).scalar_one_or_none()
     if user is None:
         db.commit()
+        _login_failed("sms", "phone_not_registered", ip=ip)
         raise AppError(ErrorCode.UNAUTHORIZED, "no account is bound to this phone, please login with WeChat",
                        data={"reason": "phone_not_registered"})
-    _assert_login_allowed(db, user)
+    _assert_login_allowed(db, user, "sms", ip)
     cancelled = _cancel_deletion_on_login(db, user, now)
     user.last_login_at = now
     tokens = _open_session(db, user, "sms", now, ip, user_agent)
     db.commit()
-    log.info("login", extra={"fields": {"event": "login", "method": "sms", "user_id": user.id}})
+    log_event(log, ev.SECURITY_AUTHN_LOGIN_SUCCESS, outcome="success", actor="member", method="sms",
+              user_ref=str(user.id), source_ip=ip)
     return _login_payload(db, user, tokens, False, cancelled, [])
 
 

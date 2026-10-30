@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.1",
-  "updatedAt": "2026-10-26",
+  "updatedAt": "2026-10-29",
   "title": "Luz Dev 功能逻辑参考目录",
   "description": "面向 Luz 产品和后续 Agent 的后端业务逻辑与闭环结果页基线。每个功能以表格列出触发、逻辑、接口、页面落点、数据、权限、失败和测试。",
   "designReference": "Luz-System references/admin-design.html + Luz-Design references/visual-design.html, ai-agent theme",
@@ -213,7 +213,7 @@
       "id": "order",
       "name": "订单管理",
       "backendModule": "08-order",
-      "status": "mixed",
+      "status": "implemented",
       "description": "报价、下单、状态机、取消、售后入口。",
       "sourceRefs": [
         "backend/SPEC.md",
@@ -223,7 +223,7 @@
         {
           "id": "order.preview",
           "name": "订单报价预览",
-          "status": "planned",
+          "status": "implemented",
           "rows": [
             {
               "label": "业务场景",
@@ -259,7 +259,7 @@
             },
             {
               "label": "复用提示",
-              "value": "智能体下单确认摘要应使用服务端 quote 事实，不由模型生成数字。"
+              "value": "智能体下单确认摘要应使用服务端 quote 事实，数字不由模型产生。"
             }
           ]
         },
@@ -352,7 +352,7 @@
         {
           "id": "order.transition",
           "name": "订单状态流转",
-          "status": "design",
+          "status": "implemented",
           "rows": [
             {
               "label": "业务场景",
@@ -441,7 +441,7 @@
       "id": "payment",
       "name": "支付模块",
       "backendModule": "09-wechat-pay",
-      "status": "mixed",
+      "status": "implemented",
       "description": "小程序 / JSAPI 下单、调起支付、回调验签解密、查单与关单、退款与退款回调、对账。外部平台规则见 backend/09-wechat-pay/MODULE.md §0（2026-10-26 官方原文核对）与 references/standards.json PAY-*、RFD-*。",
       "sourceRefs": [
         "backend/SPEC.md",
@@ -538,7 +538,7 @@
         {
           "id": "payment.query-reconcile",
           "name": "支付查询与对账",
-          "status": "design",
+          "status": "implemented",
           "rows": [
             {
               "label": "业务场景",
@@ -581,7 +581,7 @@
         {
           "id": "payment.refund",
           "name": "退款与退款回调",
-          "status": "design",
+          "status": "implemented",
           "rows": [
             {
               "label": "业务场景",
@@ -910,12 +910,13 @@
     },
     {
       "id": "membership",
-      "name": "会员与积分",
+      "name": "会员等级与积分",
       "backendModule": "14-membership",
       "status": "mixed",
-      "description": "等级、权益、积分、储值和身份关系。",
+      "description": "积分获取、抵扣与过期，以及会员等级与权益（14-membership，等级目前只有模型）。次卡、期限卡、时段卡等会员卡在 29-member-card（标准模块 membership），储值在储值钱包（15-recharge）。",
       "sourceRefs": [
         "backend/14-membership/MODULE.md",
+        "backend/29-member-card/MODULE.md",
         "backend/SPEC.md"
       ],
       "functions": [
@@ -1196,7 +1197,7 @@
       "id": "coupon",
       "name": "优惠券模块",
       "backendModule": "16-coupon",
-      "status": "mixed",
+      "status": "implemented",
       "description": "领取、适用、锁定、核销、退回与库存。",
       "sourceRefs": [
         "backend/16-coupon/MODULE.md",
@@ -1249,7 +1250,7 @@
         {
           "id": "coupon.applicable",
           "name": "优惠券适用与排序",
-          "status": "planned",
+          "status": "implemented",
           "rows": [
             {
               "label": "业务场景",
@@ -1292,7 +1293,7 @@
         {
           "id": "coupon.redeem",
           "name": "锁券、核销与退回",
-          "status": "design",
+          "status": "implemented",
           "rows": [
             {
               "label": "业务场景",
@@ -1561,7 +1562,7 @@
             },
             {
               "label": "状态与失败",
-              "value": "实时/延迟/中断；断流显示最后更新时间和 ETA，不显示虚假实时位置。"
+              "value": "实时/延迟/中断；断流显示最近一次位置的时间和 ETA，不显示虚假实时位置。"
             },
             {
               "label": "验证与证据",
@@ -1579,17 +1580,18 @@
       "id": "lottery",
       "name": "抽奖模块",
       "backendModule": "18-lottery",
-      "status": "design",
+      "status": "implemented",
       "description": "活动、概率、预算、幂等抽奖与发奖。",
       "sourceRefs": [
+        "backend/18-lottery/MODULE.md",
         "backend/MODULES.md",
-        "backend/SPEC.md"
+        "references/patterns/inventory.md"
       ],
       "functions": [
         {
           "id": "lottery.rules",
           "name": "活动与奖池规则",
-          "status": "design",
+          "status": "implemented",
           "rows": [
             {
               "label": "业务场景",
@@ -1632,7 +1634,7 @@
         {
           "id": "lottery.draw",
           "name": "幂等抽奖",
-          "status": "design",
+          "status": "implemented",
           "rows": [
             {
               "label": "业务场景",
@@ -1675,7 +1677,7 @@
         {
           "id": "lottery.fulfill",
           "name": "中奖发放与补偿",
-          "status": "design",
+          "status": "implemented",
           "rows": [
             {
               "label": "业务场景",
@@ -1873,7 +1875,7 @@
             },
             {
               "label": "核心逻辑",
-              "value": "展示当前阶段、已处理数量和最后更新时间；按服务端 retry_after 轮询；页面隐藏暂停，回到前台恢复；终态后显示成功或失败汇总。"
+              "value": "展示当前阶段、已处理数量和最近一次进度的时间；按服务端 retry_after 轮询；页面隐藏暂停，回到前台恢复；终态后显示成功或失败汇总。"
             },
             {
               "label": "接口与路由",
@@ -2191,7 +2193,7 @@
       "id": "config",
       "name": "运行配置",
       "backendModule": "23-app-settings",
-      "status": "design",
+      "status": "implemented",
       "description": "运行参数与功能开关写在配置文件里：字段说明、加载校验、热加载、版本观察、文件内灰度与还原回滚、客户端下发与兜底；不在后台展示。",
       "sourceRefs": [
         "references/module-specs/config.json",
@@ -2202,7 +2204,7 @@
         {
           "id": "config.client-fetch",
           "name": "客户端拉取配置",
-          "status": "design",
+          "status": "implemented",
           "rows": [
             {
               "label": "业务场景",
@@ -2245,7 +2247,7 @@
         {
           "id": "config.file-reload",
           "name": "配置文件热加载、灰度与回滚",
-          "status": "design",
+          "status": "implemented",
           "rows": [
             {
               "label": "业务场景",
@@ -2282,6 +2284,105 @@
             {
               "label": "复用提示",
               "value": "灰度用环境文件里的覆盖值，全量后删除覆盖；发布开关全量后按期清理。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "content",
+      "name": "文案与展示配置",
+      "backendModule": "23-app-settings",
+      "status": "implemented",
+      "description": "小程序文字提示与展示配置由后端下发：文案键、默认兜底、后台按页面实时维护、隐藏项由开发经种子维护、内容版本与修改历史。",
+      "sourceRefs": [
+        "references/module-specs/content.json",
+        "references/standards.json"
+      ],
+      "functions": [
+        {
+          "id": "content.client-fetch",
+          "name": "小程序取文案与展示",
+          "status": "implemented",
+          "rows": [
+            {
+              "label": "业务场景",
+              "value": "小程序启动与每次页面显示时取得当前文案与展示配置，运营改完无需发版。"
+            },
+            {
+              "label": "触发与输入",
+              "value": "GET /api/v1/app/content，带 platform、client_version、content_version、store_id。"
+            },
+            {
+              "label": "核心逻辑",
+              "value": "返回全部文案与公开的展示配置，门店覆盖全局；版本相同返回未修改。"
+            },
+            {
+              "label": "接口与路由",
+              "value": "GET /api/v1/app/content；响应带 content_version 与 ETag。"
+            },
+            {
+              "label": "数据与并发",
+              "value": "读缓存；保存文案或展示设置后失效；内容版本取修改历史的最大编号。"
+            },
+            {
+              "label": "权限与安全",
+              "value": "公开接口只返回前台可见内容，不含隐藏的技术配置与运行参数。"
+            },
+            {
+              "label": "状态与失败",
+              "value": "拉取失败、缺键或值非法时用安装包默认值，不显示空白或键名。"
+            },
+            {
+              "label": "验证与证据",
+              "value": "后台改文案后再次进入该页显示新文案；断网启动显示默认文案。"
+            },
+            {
+              "label": "复用提示",
+              "value": "文案键用“页面.位置”；变量在端上替换；超长截断。"
+            }
+          ]
+        },
+        {
+          "id": "content.admin-edit",
+          "name": "后台维护文案与展示",
+          "status": "implemented",
+          "rows": [
+            {
+              "label": "业务场景",
+              "value": "运营按小程序页面找到一处文字或展示开关，行内修改，保存即生效。"
+            },
+            {
+              "label": "触发与输入",
+              "value": "PUT /api/v1/admin/content/texts/{key}（text、version）；展示设置 PUT /api/v1/admin/content/display/{key}。"
+            },
+            {
+              "label": "核心逻辑",
+              "value": "校验字数上限、可用变量与内容安全；按版本条件更新；写修改历史与审计；内容版本加一。"
+            },
+            {
+              "label": "接口与路由",
+              "value": "GET /api/v1/admin/content/texts、PUT …/{key}、POST …/{key}/reset、GET 与 PUT /api/v1/admin/content/display、GET /api/v1/admin/content/revisions。"
+            },
+            {
+              "label": "数据与并发",
+              "value": "ui_texts 按 version 条件更新；content_revisions 只追加；展示设置存 display_settings。"
+            },
+            {
+              "label": "权限与安全",
+              "value": "settings:read、settings:write；隐藏键不出现在列表，修改返回 CONTENT_KEY_HIDDEN。"
+            },
+            {
+              "label": "状态与失败",
+              "value": "CONTENT_TEXT_TOO_LONG、CONTENT_VARIABLE_UNKNOWN、CONTENT_UNSAFE、CONTENT_CONFLICT。"
+            },
+            {
+              "label": "验证与证据",
+              "value": "保存后显示“已生效”；恢复默认与恢复上一版都生成新版本并写审计。"
+            },
+            {
+              "label": "复用提示",
+              "value": "新键由开发在种子文件登记并写迁移；运营只能改已有键的文字与值。"
             }
           ]
         }

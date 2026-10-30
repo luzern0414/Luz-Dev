@@ -638,7 +638,7 @@ class FaviconTests(unittest.TestCase):
 
     def test_reference_pages_render_tab_icon(self) -> None:
         import knowledge as kb  # noqa: PLC0415
-        from build_function_catalog import render_catalog  # noqa: PLC0415
+        from build_function_catalog import render as render_catalog  # noqa: PLC0415
 
         data = json.loads((ROOT / "references" / "standards.json").read_text(encoding="utf-8"))
         template = (ROOT / "assets" / "reference" / "standards.template.html").read_text(encoding="utf-8")
@@ -647,7 +647,8 @@ class FaviconTests(unittest.TestCase):
             page = kb.render(kb.Knowledge(Path(temporary) / "knowledge"))
         self.assertIn('rel="icon"', page.split("</head>", 1)[0])
         catalog = (ROOT / "assets" / "reference" / "function-catalog.template.html").read_text(encoding="utf-8")
-        page = render_catalog(catalog, {"modules": []})
+        catalog_data = json.loads((ROOT / "references" / "function-catalog.json").read_text(encoding="utf-8"))
+        page = render_catalog(catalog_data, catalog)
         self.assertIn('rel="icon"', page.split("</head>", 1)[0])
         self.assertNotIn("{{FAVICON}}", page)
 

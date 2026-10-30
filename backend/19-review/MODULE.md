@@ -1,10 +1,10 @@
-# 模块：review（评价）
+# 模块：19-review（评价）`review`
 
 | 项 | 内容 |
 |---|---|
-| 状态 | 核心已实现（本人已完成订单、每单一评、评分与长度校验、敏感词转审核），测试 5 项通过；审核后台与评价回复为设计 |
+| 状态 | 核心已实现（本人已完成订单、每单一评、评分与长度校验、敏感词转审核）；审核后台与评价回复为设计 |
 | 代码 | `review/code/review/`、测试 `review/code/tests/` |
-| 依赖 | framework、order（读取订单归属与状态） |
+| 依赖 | 00-framework、08-order（读取订单归属与状态） |
 
 ## 1 职责与边界
 
@@ -27,8 +27,8 @@
 | 方法 | 路径 | 鉴权 | 幂等 | agent | 说明 |
 |---|---|---|---|---|---|
 | POST | `/api/v1/app/orders/{id}/review` | access（归属） | 必须 | no | body: `{rating, content, image_urls?}` |
-| GET | `/api/v1/app/skus/{id}/reviews` | 可选 | — | yes | 评价列表（只返回 visible） |
-| GET | `/api/v1/app/skus/{id}/review-summary` | 可选 | — | yes | 评分均值与数量（设计） |
+| GET | `/api/v1/app/skus/{id}/reviews` | 可选 | — | read | 评价列表（只返回 visible） |
+| GET | `/api/v1/app/skus/{id}/review-summary` | 可选 | — | read | 评分均值与数量（设计） |
 | GET | `/api/v1/admin/reviews?status=pending` | admin `review:read` | — | no | 待审核列表（设计） |
 | POST | `/api/v1/admin/reviews/{id}/moderate` | admin `review:moderate` | 必须 | no | 通过 / 隐藏（审计，设计） |
 
@@ -57,10 +57,7 @@
 
 ## 7 配置
 
-| 变量 | 说明 |
-|---|---|
-| `REVIEW_WINDOW_DAYS` | 30 |
-| `REVIEW_SENSITIVE_WORDS_PATH` | 词库文件（不入库） |
+目前代码不读配置（评分范围、正文长度、敏感词是代码常量）。实现评价期限与可维护词库时：评价期限（天）作为运行参数写进运行配置 `[review]` 分组；敏感词库属于经营内容，存数据库由后台维护，或接平台内容安全接口。
 
 ## 8 错误码
 

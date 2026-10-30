@@ -21,7 +21,7 @@ def user_decoder(token: str) -> int:
 
 @pytest.fixture()
 def client(tmp_path):
-    wconfig.CONFIG = wconfig.WalletConfig()
+    wconfig.reset_config()
     set_policy_resolver(lambda store_id: CONSERVATIVE)
     port = wallet.FakePaymentPort()
     wallet.set_payment_port(port)

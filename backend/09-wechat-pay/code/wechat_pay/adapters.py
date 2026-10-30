@@ -10,7 +10,7 @@ from datetime import timedelta
 
 from sqlalchemy.orm import Session
 
-from luzback import AppError, ErrorCode, get_settings
+from luzback import AppError, ErrorCode
 from luzback.contracts import PaymentInfo
 
 from . import service
@@ -36,7 +36,9 @@ def install_defaults() -> None:
                 raise AppError(ErrorCode.CONFLICT, "order is not awaiting payment", data={"status": order.status})
             deadline = getattr(order, "pay_deadline_at", None)
             if deadline is None:
-                deadline = aware(order.created_at) + timedelta(minutes=get_settings().order_pay_timeout_minutes)
+                # 旧订单没有支付截止时间：按订单模块自己的支付时限推算（与下单时写入 pay_deadline_at 的是同一个值）
+                timeout = getattr(getattr(order_module, "get_config", lambda: None)(), "pay_timeout_minutes", 15)
+                deadline = aware(order.created_at) + timedelta(minutes=timeout)
             amount = int(getattr(order, "total_cents")) - int(getattr(order, "paid_cents", 0) or 0)
             return service.Payable(amount_cents=amount, description=f"订单 {order.order_no}", expires_at=aware(deadline),
                                    store_id=getattr(order, "store_id", None), business_no=str(order.order_no),

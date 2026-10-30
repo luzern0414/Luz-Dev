@@ -12,7 +12,9 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from luzback import log_events as ev
 from luzback.config import Settings, get_settings
+from luzback.logging import log_event
 from luzback.outbox import OutboxWorker
 from luzback.scheduler import InMemoryLock, Job, JobRegistry, LockProvider, Scheduler
 
@@ -20,6 +22,7 @@ log = logging.getLogger("luz.jobs")
 
 BACKEND = Path(__file__).resolve().parents[3]
 SKIP_PACKAGES = {"luzback", "jobs", "tests"}
+ALWAYS_ON = frozenset({"app_settings"})  # 与 app.py 一致：运行配置的加载记录在每个进程都要写
 
 Handler = Callable[[Session, dict, str], Any]
 
@@ -35,7 +38,7 @@ def module_packages(settings: Settings, backend: Path = BACKEND) -> list[str]:
     names = []
     for code_dir in sorted(backend.glob("*/code")):
         for pkg in sorted(p for p in code_dir.iterdir() if p.is_dir() and (p / "__init__.py").exists()):
-            if pkg.name in SKIP_PACKAGES or not settings.feature_enabled(pkg.name):
+            if pkg.name in SKIP_PACKAGES or not (settings.feature_enabled(pkg.name) or pkg.name in ALWAYS_ON):
                 continue
             names.append(pkg.name)
     return names
@@ -97,9 +100,9 @@ class EventRouter:
             try:
                 handler(db, payload, event_id)
                 db.commit()
-            except Exception as exc:  # noqa: BLE001 - 记录后整体重试
+            except Exception as exc:  # noqa: BLE001 - 记录后整体重试（topic、event_id 与链路由发件箱投递时绑定）
                 db.rollback()
-                log.exception("subscriber_failed", extra={"fields": {"topic": topic, "subscriber": name, "event_id": event_id}})
+                log_event(log, ev.EVENT_SUBSCRIBER_FAILED, logging.ERROR, exc_info=exc, outcome="failure", subscriber=name)
                 failures.append(f"{name}: {type(exc).__name__}: {exc}")
             finally:
                 db.close()

@@ -1,4 +1,4 @@
-"""迁移：空库 upgrade head → 与模型无漂移（alembic check）→ downgrade base → 再 upgrade；之后权限种子可执行。
+"""迁移：空库 upgrade head → 与模型无漂移（alembic check）→ downgrade base → 再 upgrade；之后权限种子与文案种子可执行。
 
 子进程运行（alembic env.py 会导入全部模块），用临时 SQLite 文件库。
 """
@@ -36,7 +36,8 @@ def test_upgrade_check_downgrade_upgrade_and_seed(tmp_path):
     _ok(_run(["-m", "alembic", "upgrade", "head"], db))
     tables = _tables(db)
     for expected in ("users", "orders", "payment_records", "after_sales", "wallet_accounts", "user_coupons",
-                     "lottery_draws", "admin_users", "member_card_cards", "points_ledger", "outbox_events", "audit_logs"):
+                     "lottery_draws", "admin_users", "member_card_cards", "points_ledger", "outbox_events", "audit_logs",
+                     "config_loads", "ui_texts", "display_settings", "content_revisions"):
         assert any(t == expected for t in tables), (expected, sorted(tables))
     check = _run(["-m", "alembic", "check"], db)
     assert check.returncode == 0, ("model drift — generate a migration", check.stdout[-2000:], check.stderr[-3000:])
@@ -49,6 +50,13 @@ def test_upgrade_check_downgrade_upgrade_and_seed(tmp_path):
         codes = {r[0] for r in conn.execute("select code from admin_permissions")}
         grants = {r[0] for r in conn.execute("select code from admin_role_permissions")}
     for code in ("member:reveal", "wallet:adjust", "payment:refund", "after_sale:approve", "coupon:issue", "lottery:fulfil",
-                 "notification:resend", "member_card:refund", "order:read"):
+                 "notification:resend", "member_card:refund", "order:read", "settings:read", "settings:write"):
         assert code in codes, code
     assert {"wallet:*", "payment:*", "after_sale:*", "order:*"} <= grants
+    synced = _ok(_run(["-m", "app_settings", "sync"], db))  # 文案种子（发布时在迁移之后执行，幂等）
+    assert '"created": ' in synced and _ok(_run(["-m", "app_settings", "sync"], db)).count('"created": 0') == 1
+    with sqlite3.connect(db) as conn:
+        assert conn.execute("select count(*) from ui_texts where admin_visible = 0").fetchone()[0] >= 1
+        assert conn.execute("select count(*) from content_revisions").fetchone()[0] >= 1
+        columns = {r[1] for r in conn.execute("pragma table_info(outbox_events)")}
+    assert {"traceparent", "trace_id"} <= columns

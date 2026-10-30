@@ -1,4 +1,4 @@
-# 模块：membership（会员与积分）
+# 模块：14-membership（会员与积分）`membership`
 
 ## 0 官方来源
 
@@ -12,7 +12,7 @@
 | 项 | 内容 |
 |---|---|
 | 状态 | 标准：积分账户、流水台账、FIFO 过期、追回与欠分、赠送、对账、会员画像、订单 / 抽奖积分事件；会员等级配置与付费会员只有数据模型（§13 不包含） |
-| 代码 | `14-membership/code/membership/`（models / service / rules / events / jobs / api），测试 `code/tests/test_membership.py`（14 项） |
+| 代码 | `14-membership/code/membership/`（models / service / rules / events / jobs / api），测试 `code/tests/test_membership.py` |
 | 依赖 | 00-framework；01-identity（顾客令牌、注册时间）；可选 16-coupon（画像类型）、18-lottery（发奖回执） |
 | 被依赖 | 16-coupon（`member_profile` 作为人群画像）；08-order（事件：完成返积分、退款追回）；18-lottery（积分奖品） |
 
@@ -37,11 +37,11 @@
 
 ## 4 业务规则
 
-1. 入账 `credit/earn/gift_points`：先抵销欠分（`rules.split_debt`），余下进余额并成为一个批次（有效期 `POINTS_VALID_DAYS`，默认 365 天；0 不过期）。
+1. 入账 `credit/earn/gift_points`：先抵销欠分（`rules.split_debt`），余下进余额并成为一个批次（有效期 `[membership] points_valid_days`，默认 365 天；0 不过期）。
 2. 扣减 `debit/spend`：条件 UPDATE `balance >= n`，不足 4220 `insufficient_points`；按 FIFO（先到期先用，不过期最后）扣批次 remaining。
 3. 冲回 `revert_spend(spend_ref)`：按原扣减数量重新入账（订单取消返还抵扣积分）。
 4. 追回 `clawback`：余额够就扣；不够扣到 0，差额记 `debt`，之后入账先抵销；余额永不为负。
-5. 订单返积分（`order.completed`）：⌊(total_cents − 完成前已退) / 100⌋ × `POINTS_PER_YUAN` × 等级倍率 / 10000，ref = `order:{id}:earn`。
+5. 订单返积分（`order.completed`）：⌊(total_cents − 完成前已退) / 100⌋ × `points_per_yuan`（运行配置 `[membership]`）× 等级倍率 / 10000，ref = `order:{id}:earn`。
 6. 退款追回（`order.refunded`）：应追回 = ⌈已返 × 累计退款 / 订单总额⌉（全额退 = 全部），减去已追回与已记欠分，ref = `order:{id}:clawback:{售后 ref}`；订单尚未返积分时只记 0 积分标记，完成时扣除。
 7. 抽奖积分奖品（`lottery.prize_won`，prize_kind=points）：赠 quantity 积分，ref = delivery_key（重投 / 重发奖只入账一次），回执 `lottery.ack_delivery`（可导入时同事务）或 `lottery.delivery_result` 事件。
 8. 过期任务：remaining > 0 且到期的批次清零（条件 UPDATE），写 expire 流水 ref = `expire:{批次}`。
@@ -52,6 +52,8 @@
 无状态机；积分变动只追加流水。订单：completed → 返积分；refunded（可多次）→ 按累计比例追回。
 
 ## 6 接口
+
+agent（`SPEC.md` §16）：`GET /api/v1/app/points` 为 `read`；本模块没有其他接口。
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
@@ -77,18 +79,26 @@
 
 ## 9 配置
 
-| 变量 | 默认 | 说明 |
-|---|---|---|
-| `POINTS_PER_YUAN` | 1 | 每元返积分（Settings） |
-| `POINTS_REDEEM_RATE` | 100 | 多少积分抵 1 元（Settings，订单抵扣用） |
-| `POINTS_REDEEM_CAP_BP` | 3000 | 单笔最多抵扣 30%（Settings） |
-| `POINTS_VALID_DAYS` | 365 | 入账批次有效期，0 = 不过期 |
+运行参数写在 `backend/config/runtime/*.toml`，字段说明（类型、范围、能否热加载、是否下发客户端）在 `00-framework/code/luzback/runtime_config.py`；模块经 `luzback.module_config.ModuleConfig` 读取，热加载后下一次读取即生效。环境变量只放秘密与部署参数；迁移前的环境变量名仍设置着时，启动会打 `config.unknown_env` 警告并指出新键。测试用 `set_config(...)` 或 `luzback.testing.override_runtime(...)` 注入运行参数（写进一份测试用运行配置，测试结束撤销）。
+
+### 9.1 环境变量（秘密与部署参数）
+
+无：本模块没有秘密与部署参数。
+
+### 9.2 运行配置键
+
+| 键 | 默认 | 范围 | 热加载 | 下发客户端 | 说明（含单位） |
+|---|---|---|---|---|---|
+| `[membership] points_per_yuan` | 1 | 0–100 | 是 | 否 | 订单完成后每 1 元返多少积分（再乘等级倍率）；商户要在后台自己改时改由会员模块的后台设置提供（原 `POINTS_PER_YUAN`） |
+| `[membership] points_valid_days` | 365 | 0–3650 | 是 | 否 | 积分入账批次有效期（天，0 = 不过期）（原 `POINTS_VALID_DAYS`） |
+
+积分抵扣的兑换比例与单笔上限不在本模块（原 Settings 里的 `POINTS_REDEEM_RATE`、`POINTS_REDEEM_CAP_BP` 没有代码读取，已删除）；订单抵扣接入时在计价模块登记。
 
 ## 10 错误码
 
 4001 数量非正 / 参数错；4040 冲回的扣减不存在；4090 并发冲突（重试）；4093 同 ref 正在处理；4220 积分不足。
 
-## 11 测试清单（14 项）
+## 11 测试清单
 
 入账 / 扣减 / 幂等 / 台账一致、FIFO 过期与重跑、追回欠分与抵销、赠送与冲回、对账、画像（coupon.MemberProfile）、订单返积分与按比例追回（含完成前退款）、抽奖积分奖品（重发去重、两种回执、无效数量）、20 线程并发扣减。
 

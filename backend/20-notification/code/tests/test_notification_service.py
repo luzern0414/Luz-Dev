@@ -2,6 +2,7 @@
 import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import create_engine, select
@@ -587,7 +588,10 @@ def test_list_and_stats(env):
     assert service.list_deliveries(env.db, {"errcode": "no_quota"})["total"] == 2
     with pytest.raises(AppError):
         service.list_deliveries(env.db, {"status": "weird"})
-    s = service.stats(env.db, {"created_at_from": "2026-10-28", "created_at_to": "2026-10-28"})
+    # 记录按真实时间写入：区间取门店时区的前一天到后一天，不依赖运行日期，也不怕跨午夜
+    now = datetime.now(ZoneInfo("Asia/Shanghai"))
+    s = service.stats(env.db, {"created_at_from": (now - timedelta(days=1)).date().isoformat(),
+                               "created_at_to": (now + timedelta(days=1)).date().isoformat()})
     assert s["sent"] == 4  # 3 站内信 + 1 订阅
     assert s["by_channel"]["subscribe"] == {"pending": 0, "sending": 0, "sent": 1, "failed": 0, "skipped": 2}
     assert s["failed_by_errcode"] == [{"channel": "subscribe", "errcode": "no_quota", "count": 2}]

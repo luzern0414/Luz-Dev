@@ -61,7 +61,7 @@ def update(model):
 
 
 def cfg() -> _config.CardConfig:
-    return _config.CONFIG
+    return _config.get_config()
 
 
 def _no(prefix: str) -> str:

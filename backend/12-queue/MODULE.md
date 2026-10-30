@@ -1,9 +1,9 @@
-# 模块：queue（堂食排队叫号）
+# 模块：12-queue（堂食排队叫号，规划）`queueing`
 
 | 项 | 内容 |
 |---|---|
 | 状态 | **仅设计，代码未实现** |
-| 依赖 | framework、notification（叫号提醒）、order（入座后可点餐，堂食订单） |
+| 依赖 | 00-framework、20-notification（叫号提醒）、08-order（入座后可点餐，堂食订单） |
 
 ## 1 职责与边界
 
@@ -40,9 +40,9 @@
 
 | 方法 | 路径 | 鉴权 | agent | 说明 |
 |---|---|---|---|---|
-| POST | `/api/v1/app/queue/tickets` | access | yes（需确认） | 取号：`{party_size, zone}`，幂等 |
-| GET | `/api/v1/app/queue/tickets/current` | access | yes | 当前排队状态（含前方组数、预计等待） |
-| POST | `/api/v1/app/queue/tickets/{id}/cancel` | access（归属） | yes（需确认） | 取消排队 |
+| POST | `/api/v1/app/queue/tickets` | access | write_high | 取号：`{party_size, zone}`，幂等 |
+| GET | `/api/v1/app/queue/tickets/current` | access | read | 当前排队状态（含前方组数、预计等待） |
+| POST | `/api/v1/app/queue/tickets/{id}/cancel` | access（归属） | write_high | 取消排队 |
 | POST | `/api/v1/app/queue/tickets/{id}/arrive` | access（归属） | no | 叫号后“我已到店” |
 | POST | `/api/v1/staff/queue/call-next` | 员工令牌 | no | 叫下一位 |
 | POST | `/api/v1/staff/queue/tickets/{id}/seat` | 员工令牌 | no | 入座并分配桌台 |

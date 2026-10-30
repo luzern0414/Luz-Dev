@@ -1,4 +1,4 @@
-# 模块：recharge（储值钱包）`wallet`
+# 模块：15-recharge（储值钱包）`wallet`
 
 ## 0 官方来源
 
@@ -18,7 +18,7 @@
 
 | 项 | 内容 |
 |---|---|
-| 状态 | **标准**；测试 49 项（`code/tests/`） |
+| 状态 | **标准**；测试在 `code/tests/` |
 | 依赖 | 00-framework；09-wechat-pay（支付 / 退款 / 钩子，经 `ports.py`）；22-admin-rbac（后台鉴权）；01-identity（顾客令牌、会员查询） |
 | 被依赖 | 08-order（余额支付 `consume` / 冲回 `reverse`）、29-member-card（复用 `PrepaidPolicy` 与适配层）、16/17/18（`grant_bonus` 赠送金） |
 
@@ -47,19 +47,19 @@
 ## 4 业务规则
 
 1. 档位：金额 > 0；创建 / 修改时校验单笔上限与赠送比例（PrepaidPolicy）；上架后才可购买；售卖时间窗；按门店适用（store_id 空 = 全部门店）；每人每日次数上限可选。
-2. 自定义金额默认关闭（`WALLET_CUSTOM_AMOUNT`），开启后最低 `WALLET_CUSTOM_AMOUNT_MIN_CENTS`，无赠送。
-3. 创建充值单：`LUZ_STOP_PREPAID` 开启时拒绝（消保条例第二十二条）；单笔 ≤ `stored_value_max_cents`；充值后余额（本金 + 赠送）≤ `stored_value_max_balance_cents`；同一会员各类预付合计 ≤ `member_total_max_cents`（全部 4225，`data.reason` 区分）。
+2. 自定义金额默认关闭（`[wallet] custom_amount_enabled`），开启后最低 `[wallet] custom_amount_min_cents`，无赠送。
+3. 创建充值单：`[prepaid] stop_prepaid` 开启时拒绝（消保条例第二十二条）；单笔 ≤ `stored_value_max_cents`；充值后余额（本金 + 赠送）≤ `stored_value_max_balance_cents`；同一会员各类预付合计 ≤ `member_total_max_cents`（全部 4225，`data.reason` 区分）。
 4. 充值单先提交，再单独调起支付（09 的 `create_payment` 自行提交）；`goods_kind=offline_service`；记录合同条款快照与发票信息（601、不征税、不可开专票）。
 5. 入账：09 同事务钩子（主）或 `payment.succeeded` 事件（补偿）；条件 UPDATE `pending|closed → paid`，同一批次只入账一次；金额不符 → `needs_manual`，不入账；事件 `needs_manual=true`（关单后支付、重复支付）不入账（09 自动退款）。
 6. 消费：拆分策略 `proportional`（默认，赠送金向下取整）或 `principal_first`；账户条件 UPDATE（四个余额都不为负）；按 FIFO（先入账先用）归属批次并记录分配；同 ref 幂等，ref 属于他人 4090；余额不足 4224。
 7. 冲回 `reverse(db, user_id, ref, amount_cents=None, reversal_ref=None, note=None)`：整笔（不带金额，幂等键 ref）冲回尚未冲回的剩余金额；部分（售后部分退款，带金额与 `reversal_ref`，幂等键 reversal_ref，同键不同金额 4090）。累计冲回 ≤ 原消费（consume 流水 `reversed_cents` 条件 UPDATE 封顶，超出 4220 `reverse_exceeds_consumed`）。本金 / 赠送金按原消费比例拆分：累计应退赠送金 = ⌊原赠送 × 累计冲回 ÷ 原消费⌋（向下取整，余数归本金，最后一笔补齐）；按原分配顺序逐批次退回；原批次已在退款 / 已退时，冲回金额进入新的直接入账批次（线下退款路径）。
 8. 退款按批次（不是整户）：批次 = 一笔充值的原支付交易，微信只能按原交易退款；FIFO 消费让最近的批次保留最多本金。
-9. 退款公式（`rules.quote_batch_refund`）：A = 实付本金、B = 赠送、p / b = 该批剩余；七日内且该批未动 → 退 A；经营者原因 → 可退 = A − ⌊已兑付 × A / (A + B)⌋ + LPR 利息（合同成立时 `lpr_bp`，单利按日）；消费者原因 → 可退 = max(0, A − 已兑付)，可扣手续费 `WALLET_CUSTOMER_REFUND_FEE_BP`（默认 0）；可退永不超过 p；剩余赠送金 b 全部作废。
-10. 申请退款即预扣该批剩余本金与赠送金（移入冻结），批次 `refunding`；顾客申请默认待审批（`WALLET_REFUND_REQUIRES_APPROVAL`）；后台发起即审批；驳回 / 失败释放预扣、批次恢复 `paid`。
+9. 退款公式（`rules.quote_batch_refund`）：A = 实付本金、B = 赠送、p / b = 该批剩余；七日内且该批未动 → 退 A；经营者原因 → 可退 = A − ⌊已兑付 × A / (A + B)⌋ + LPR 利息（合同成立时 `lpr_bp`，单利按日）；消费者原因 → 可退 = max(0, A − 已兑付)，可扣手续费 `[wallet] customer_refund_fee_bp`（默认 0）；可退永不超过 p；剩余赠送金 b 全部作废。
+10. 申请退款即预扣该批剩余本金与赠送金（移入冻结），批次 `refunding`；顾客申请默认待审批（`[wallet] refund_requires_approval`）；后台发起即审批；驳回 / 失败释放预扣、批次恢复 `paid`。
 11. 原路退款在审批事务提交后提交 09 `create_refund`（business_ref = `wallet_refund:<退款单号>`），每笔只提交一次（条件占位）；上游暂时失败等任务重试；规则拒绝（如超 365 天）→ 失败并释放；退款成功清除冻结、批次 `refunded`、事件带 `invoice_action=red_reverse`；`refund.abnormal` 保持处理中并告警。
 12. 线下路径：线下 / 调整 / 赠送 / 直接入账批次、超过 365 天的批次、只有利息可退时走线下退款，由财务 `offline-complete` 确认。
 13. 退款时限：七日全额 `cooling_off_refund_days`（默认 5 天）；其他 `refund_deadline_days`（默认 15 天）；超期任务发 `wallet.refund_overdue`。
-14. 后台调整：原因必填；单次每项 |Δ| ≤ `WALLET_ADJUST_MAX_CENTS`；加款形成 `adjust` 批次，扣款按 FIFO；审计。
+14. 后台调整：原因必填；单次每项 |Δ| ≤ `[wallet] adjust_max_cents`；加款形成 `adjust` 批次，扣款按 FIFO；审计。
 15. 赠送金到期：仅当档位设置 `bonus_valid_days`（默认不过期）；本金永不过期（单用途卡办法第十九条）；任务扣减该批剩余赠送金。
 16. 对账：每日逐账户校验 余额 = Σ流水、冻结 = Σ冻结流水、可用余额 = Σ可用批次剩余；不一致写 `wallet_mismatches`（每账户每日一条）并发告警事件。
 17. 余额不可提现、不可转让；`refund_card`（旧接口）整户线下退剩余本金并关户。
@@ -83,15 +83,15 @@
 
 | 方法 | 路径 | 幂等 | agent | 说明 |
 |---|---|---|---|---|
-| GET | `/plans?store_id=` | — | yes | 在售档位（游标） |
-| POST | `/recharge-orders` | 必须 | 需确认 | 建充值单并返回 pay_params |
-| POST | `/recharge-orders/{id}/pay` | 天然幂等 | — | 继续支付 |
-| GET | `/account` | — | yes | 余额、冻结 |
-| GET | `/ledger` | — | yes | 流水（游标，kind 筛选） |
-| GET | `/recharge-orders`、`/recharge-orders/{id}` | — | yes | 我的充值单 |
-| GET | `/recharge-orders/{id}/refund-quote` | — | yes | 消费者原因报价 |
-| POST | `/recharge-orders/{id}/refund-request` | 必须 | 需确认 | 申请退款 |
-| GET | `/refunds` | — | yes | 我的退款 |
+| GET | `/plans?store_id=` | — | read | 在售档位（游标） |
+| POST | `/recharge-orders` | 必须 | write_high | 建充值单并返回 pay_params |
+| POST | `/recharge-orders/{id}/pay` | 天然幂等 | no | 继续支付 |
+| GET | `/account` | — | read | 余额、冻结 |
+| GET | `/ledger` | — | read | 流水（游标，kind 筛选） |
+| GET | `/recharge-orders`、`/recharge-orders/{id}` | — | read | 我的充值单 |
+| GET | `/recharge-orders/{id}/refund-quote` | — | read | 消费者原因报价 |
+| POST | `/recharge-orders/{id}/refund-request` | 必须 | write_high | 申请退款 |
+| GET | `/refunds` | — | read | 我的退款 |
 
 后台 `/api/v1/admin/wallet`（直接用 `admin_rbac.require_permission(code, fresh=…)`：真实服务端会话、`module:*` 通配授予；带 † 的 fresh=True，`fresh_auth_seconds` 内完成完整认证，否则 4011 `reauth_required`）：
 
@@ -142,18 +142,29 @@
 
 ## 9 配置
 
-| 键 | 默认 | 说明 |
-|---|---|---|
-| `LUZ_PREPAID_POLICY` | conservative | 预设：conservative / shanghai_fitness_2025 / shanghai_fitness_draft_2026 / beijing_2022 / national_single_use_card / unlimited |
-| `LUZ_STOP_PREPAID` | false | 停止收取预付款 |
-| `LUZ_LPR_1Y_BP` | 300 | 合同成立时一年期 LPR（万分比），按全国银行间同业拆借中心公布值更新 |
-| `WALLET_SPLIT_POLICY` | proportional | 或 principal_first |
-| `WALLET_PAY_TIMEOUT_MINUTES` | 15 | 待支付超时 |
-| `WALLET_REFUND_REQUIRES_APPROVAL` | true | 顾客退款需审批 |
-| `WALLET_CUSTOMER_REFUND_FEE_BP` | 0 | 消费者原因手续费 |
-| `WALLET_ADJUST_MAX_CENTS` | 50000 | 单次调整上限 |
-| `WALLET_CUSTOM_AMOUNT` / `_MIN_CENTS` | false / 100 | 自定义金额 |
-| `WALLET_ORIGINAL_REFUND_MAX_DAYS` | 365 | 超过转线下退款 |
+运行参数写在 `backend/config/runtime/*.toml`，字段说明（类型、范围、能否热加载、是否下发客户端）在 `00-framework/code/luzback/runtime_config.py`；模块经 `luzback.module_config.ModuleConfig` 读取，热加载后下一次读取即生效。环境变量只放秘密与部署参数；迁移前的环境变量名仍设置着时，启动会打 `config.unknown_env` 警告并指出新键。测试用 `set_config(...)` 或 `luzback.testing.override_runtime(...)` 注入运行参数（写进一份测试用运行配置，测试结束撤销）。
+
+### 9.1 环境变量（秘密与部署参数）
+
+无：本模块没有秘密与部署参数。
+
+### 9.2 运行配置键
+
+| 键 | 默认 | 范围 | 热加载 | 下发客户端 | 说明（含单位） |
+|---|---|---|---|---|---|
+| `[prepaid] policy` | "conservative" | conservative / shanghai_fitness_2025 / shanghai_fitness_draft_2026 / beijing_2022 / national_single_use_card / unlimited | 是 | 否 | 预付卡监管口径预设（单次、累计上限与冷静期等）；连锁跨城市可按门店另行注入（原 `LUZ_PREPAID_POLICY`） |
+| `[prepaid] lpr_1y_bp` | 300 | 0–2000 | 是 | 否 | 合同成立时一年期 LPR（万分比），退款补偿利息按它计算；按公布值更新（原 `LUZ_LPR_1Y_BP`） |
+| `[prepaid] stop_prepaid` | false | true / false | 是 | 是 | 停止收取预付款（经营风险时）：储值与会员卡都停售，客户端隐藏入口（原 `LUZ_STOP_PREPAID`） |
+| `[wallet] split_policy` | "proportional" | proportional / principal_first | 是 | 否 | 消费时本金与赠送金的扣减顺序（原 `WALLET_SPLIT_POLICY`） |
+| `[wallet] pay_timeout_minutes` | 15 | 1–1440 | 是 | 否 | 充值待支付自动关闭（分钟）（原 `WALLET_PAY_TIMEOUT_MINUTES`） |
+| `[wallet] refund_requires_approval` | true | true / false | 是 | 否 | 储值退款需要后台审批（原 `WALLET_REFUND_REQUIRES_APPROVAL`） |
+| `[wallet] customer_refund_fee_bp` | 0 | 0–10000 | 是 | 否 | 顾客原因退款的手续费（万分比）（原 `WALLET_CUSTOMER_REFUND_FEE_BP`） |
+| `[wallet] adjust_max_cents` | 50_000 | 0–10000000 | 是 | 否 | 后台单次手工调整余额上限（分）（原 `WALLET_ADJUST_MAX_CENTS`） |
+| `[wallet] custom_amount_enabled` | false | true / false | 是 | 是 | 允许顾客输入自定义充值金额（原 `WALLET_CUSTOM_AMOUNT`） |
+| `[wallet] custom_amount_min_cents` | 100 | 1–10000000 | 是 | 是 | 自定义充值最低金额（分）（原 `WALLET_CUSTOM_AMOUNT_MIN_CENTS`） |
+| `[wallet] original_refund_max_days` | 365 | 1–365 | 是 | 否 | 支付后多少天内可以原路退回（天）（原 `WALLET_ORIGINAL_REFUND_MAX_DAYS`） |
+
+`[prepaid]` 由储值与 29-member-card 共用，只存一份。按门店不同的监管口径用 `set_policy_resolver` 注入。
 
 ## 10 错误码
 
@@ -167,7 +178,7 @@
 | 单笔 / 余额 / 合计 / 赠送比例 / 每日次数 / 调整上限 | 4225 | recharge_amount_cap / balance_cap / member_total_cap / gift_ratio_exceeded / daily_limit / adjust_cap |
 | 支付上游失败 | 5020 | — |
 
-## 11 测试清单（53 项）
+## 11 测试清单
 
 | 文件 | 覆盖 |
 |---|---|
@@ -188,7 +199,7 @@
 ## 13 定制点
 
 - 配置项：§9。
-- LPR：`LUZ_LPR_1Y_BP` 默认 300（3.00%，示例值，不是实时公布值）；经营者原因退款利息按合同成立时写入批次的 `lpr_bp` 计算，上线前与每月 20 日 LPR 公布后须更新配置。
+- LPR：`[prepaid] lpr_1y_bp` 默认 300（3.00%，示例值，不是实时公布值）；经营者原因退款利息按合同成立时写入批次的 `lpr_bp` 计算，上线前与每月 20 日 LPR 公布后须更新配置。
 - 会员查询：`find_member(phone=…)` 默认走 01-identity `find_user_by_phone`（规范化 + 盲索引哈希），`set_member_resolver` 可替换。
 - 部分冲回：`reverse(..., amount_cents, reversal_ref)` 供 08-order / 10-after-sales 余额支付订单的部分退款。
 - 扩展点：`set_policy_resolver(fn(store_id) -> PrepaidPolicy)`（按门店 / 城市）、`custom_policy(base, **overrides)`、`register_outstanding_provider(name, fn)`（其他预付业务计入合计上限）、`set_payment_port`（替换支付实现，测试用 `FakePaymentPort`）、`set_member_resolver`、`set_store_timezone_resolver`、`set_user_token_decoder`；`grant_bonus` 供营销模块发赠送金。

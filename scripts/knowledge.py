@@ -8,7 +8,7 @@ knowledge/
   index.html     generated human view (Luz Design shell)
 
 Freshness: a source or fact older than its kind's review period is "stale" and is re-read by the next
-research run; fresh ones are reused instead of crawling again (references/research.md §6).
+research run; fresh ones are reused instead of crawling again (references/research.md §5).
 Only public information belongs here — never merchant data, credentials or personal information.
 """
 

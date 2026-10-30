@@ -20,8 +20,8 @@ def resolver(db, user_id=None, phone=None):
 
 @pytest.fixture(autouse=True)
 def doubles():
-    mconfig.CONFIG = mconfig.CardConfig()
-    wconfig.CONFIG = wconfig.WalletConfig()
+    mconfig.reset_config()
+    wconfig.reset_config()
     set_policy_resolver(lambda store_id: CONSERVATIVE)
     port = wallet.FakePaymentPort()
     wallet.set_payment_port(port)

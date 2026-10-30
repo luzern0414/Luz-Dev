@@ -1,4 +1,4 @@
-# 模块：member-card（会员卡：次卡 / 期限卡 / 时段卡）`member_card`
+# 模块：29-member-card（会员卡：次卡 / 期限卡 / 时段卡）`member_card`
 
 ## 0 官方来源
 
@@ -17,7 +17,7 @@
 
 | 项 | 内容 |
 |---|---|
-| 状态 | **标准**；测试 50 项（`code/tests/`） |
+| 状态 | **标准**；测试在 `code/tests/` |
 | 依赖 | 00-framework；15-recharge `wallet`（PrepaidPolicy、支付 / 鉴权 / 会员适配层）；09-wechat-pay（支付、退款、钩子）；22-admin-rbac；01-identity |
 | 被依赖 | 门禁 / 预约 / 课程（调用 `consume`、`reverse_use`、`check_usable`）、16/17/18（`issue_gift`、`lottery.prize_won` 延期） |
 
@@ -49,7 +49,7 @@
 
 1. 卡种：kind ∈ count / period / time_slot（储值 → 15）；原价 ≥ 实付价；次卡用 sessions，期限 / 时段卡用 period_days；时段卡至少一个窗口（周几 + HH:MM，结束 ≤ 开始表示跨午夜）；single 门店恰一个、multi ≥ 1、all 不限。
 2. 预付限额（PrepaidPolicy，按门店）：期限 / 时段卡 ≤ `period_max_cents` 且 总天数 ≤ `period_max_days`；次卡 ≤ `count_max_cents` 且 总次数 ≤ `count_max_sessions`；赠送 / 付费单位 ≤ `gift_ratio_max_bp`；购买时再校验续约后同类剩余单位 ≤ 上限与会员合计（储值本金 + 卡未兑付价值）≤ `member_total_max_cents`。
-3. 购卡：在售、售卖窗、门店适用、限购（持有 + 未过期待支付单）、免费卡种只能门店发放、`LUZ_STOP_PREPAID`；购卡单先提交再调起支付；保存卡种与条款快照。
+3. 购卡：在售、售卖窗、门店适用、限购（持有 + 未过期待支付单）、免费卡种只能门店发放、`[prepaid] stop_prepaid`；购卡单先提交再调起支付；保存卡种与条款快照。
 4. 发卡：09 同事务钩子（主）/ `payment.succeeded` 事件（补偿）；`issue_ref` 唯一（`order:{id}` / 后台键 / `gift:{ref}`）保证只发一张；金额不符 → 人工；`needs_manual=true` 的支付事件不发卡。
 5. 生效：购买即生效（门店时区本地日算第 1 天，到期 = 第 N 天结束）；首次使用激活（`activation_deadline_days` 到期自动以截止时刻激活）；指定日期；期限卡续购（`renew_stack`）接在同卡种最晚到期之后，未到开始时间使用 → `card_not_activated`。
 6. 使用 `consume(card, store, at, ref)`：同 ref 返回首次结果（ref 属于其他卡 4090）；检查顺序与原因：冻结 / 挂失 / 停用 / 退款中 / 已退 / 过期 / 用完（4224）→ 未到开始 → 过期 → 门店不适用 → 时段外（4221，门店时区）→ 防借卡间隔；次卡条件扣减 `remaining >= 1`，用完转 `used_up`；只追加流水。
@@ -86,16 +86,16 @@ active|inactive|frozen*|used_up|expired|lost ─(申请退卡)→ refunding ─(
 
 | 方法 | 路径 | 幂等 | agent | 说明 |
 |---|---|---|---|---|
-| GET | `/products?store_id=&kind=` | — | yes | 门店可购卡种（游标） |
-| GET | `/products/{id}` | — | yes | 卡种详情（含条款） |
-| POST | `/orders` | 必须 | 需确认 | 购卡单 + pay_params |
-| POST | `/orders/{id}/pay` | 天然幂等 | — | 继续支付（购卡 / 转让手续费） |
-| GET | `/cards`、`/cards/{id}`、`/cards/{id}/ledger` | — | yes | 我的卡（游标）、详情（条款、退款）、流水（游标） |
-| POST | `/cards/{id}/freeze`、`/unfreeze` | 必须 | 需确认 | 请假 / 提前恢复（`MEMBER_CARD_APP_FREEZE`） |
-| GET | `/cards/{id}/refund-quote` | — | yes | 消费者原因报价 |
-| POST | `/cards/{id}/refund-request` | 必须 | 需确认 | 申请退卡 |
-| POST | `/cards/{id}/transfer` | 必须 | 需确认 | 转让（to_member_id 或 to_phone 二选一） |
-| POST | `/cards/{id}/report-lost` | 必须 | — | 挂失 |
+| GET | `/products?store_id=&kind=` | — | read | 门店可购卡种（游标） |
+| GET | `/products/{id}` | — | read | 卡种详情（含条款） |
+| POST | `/orders` | 必须 | write_high | 购卡单 + pay_params |
+| POST | `/orders/{id}/pay` | 天然幂等 | no | 继续支付（购卡 / 转让手续费） |
+| GET | `/cards`、`/cards/{id}`、`/cards/{id}/ledger` | — | read | 我的卡（游标）、详情（条款、退款）、流水（游标） |
+| POST | `/cards/{id}/freeze`、`/unfreeze` | 必须 | write_high | 请假 / 提前恢复（`[member_card] app_freeze_enabled`） |
+| GET | `/cards/{id}/refund-quote` | — | read | 消费者原因报价 |
+| POST | `/cards/{id}/refund-request` | 必须 | write_high | 申请退卡 |
+| POST | `/cards/{id}/transfer` | 必须 | write_high | 转让（to_member_id 或 to_phone 二选一） |
+| POST | `/cards/{id}/report-lost` | 必须 | no | 挂失 |
 
 后台 `/api/v1/admin/member-cards`（经 `wallet.require_permission` 薄别名直接用 `admin_rbac.require_permission(code, fresh=…)`；† = fresh=True，否则 4011 `reauth_required`）：
 
@@ -150,20 +150,30 @@ active|inactive|frozen*|used_up|expired|lost ─(申请退卡)→ refunding ─(
 
 ## 9 配置
 
-| 键 | 默认 | 说明 |
-|---|---|---|
-| `LUZ_PREPAID_POLICY` | conservative | 预设见 15-recharge §9 |
-| `LUZ_STOP_PREPAID` | false | 停止售卡 |
-| `LUZ_LPR_1Y_BP` | 300 | 一年期 LPR（合同成立时写入卡） |
-| `MEMBER_CARD_PAY_TIMEOUT_MINUTES` | 15 | 待支付超时 |
-| `MEMBER_CARD_APP_FREEZE` / `_APP_TRANSFER` | true / true | 顾客端自助冻结 / 转让 |
-| `MEMBER_CARD_REFUND_REQUIRES_APPROVAL` | true | 顾客退卡需审批 |
-| `MEMBER_CARD_REMINDER_DAYS` | 7,3,1 | 到期提醒档 |
-| `MEMBER_CARD_ORIGINAL_REFUND_MAX_DAYS` | 365 | 超过转线下退款 |
-| `MEMBER_CARD_ADJUST_MAX_SESSIONS` / `_DAYS` | 50 / 366 | 单次调整上限 |
-| `MEMBER_CARD_REPLACE_FEE_CENTS` | 0 | 补卡工本费（只记录） |
+运行参数写在 `backend/config/runtime/*.toml`，字段说明（类型、范围、能否热加载、是否下发客户端）在 `00-framework/code/luzback/runtime_config.py`；模块经 `luzback.module_config.ModuleConfig` 读取，热加载后下一次读取即生效。环境变量只放秘密与部署参数；迁移前的环境变量名仍设置着时，启动会打 `config.unknown_env` 警告并指出新键。测试用 `set_config(...)` 或 `luzback.testing.override_runtime(...)` 注入运行参数（写进一份测试用运行配置，测试结束撤销）。
 
-卡种级规则（冻结、转让、手续费、防借卡、激活、适用门店、限购）在卡种上配置，并随卡快照（改卡种不影响已售卡）。
+### 9.1 环境变量（秘密与部署参数）
+
+无：本模块没有秘密与部署参数。
+
+### 9.2 运行配置键
+
+| 键 | 默认 | 范围 | 热加载 | 下发客户端 | 说明（含单位） |
+|---|---|---|---|---|---|
+| `[member_card] pay_timeout_minutes` | 15 | 1–1440 | 是 | 否 | 购卡待支付自动关闭（分钟）（原 `MEMBER_CARD_PAY_TIMEOUT_MINUTES`） |
+| `[member_card] app_freeze_enabled` | true | true / false | 是 | 是 | 顾客可在小程序自助停卡（原 `MEMBER_CARD_APP_FREEZE`） |
+| `[member_card] app_transfer_enabled` | true | true / false | 是 | 是 | 顾客可在小程序自助转让（原 `MEMBER_CARD_APP_TRANSFER`） |
+| `[member_card] refund_requires_approval` | true | true / false | 是 | 否 | 会员卡退款需要后台审批（原 `MEMBER_CARD_REFUND_REQUIRES_APPROVAL`） |
+| `[member_card] reminder_days` | [7, 3, 1] | 正整数列表 | 是 | 否 | 到期前几天提醒（天，可多个）（原 `MEMBER_CARD_REMINDER_DAYS`） |
+| `[member_card] original_refund_max_days` | 365 | 1–365 | 是 | 否 | 支付后多少天内可以原路退回（天）（原 `MEMBER_CARD_ORIGINAL_REFUND_MAX_DAYS`） |
+| `[member_card] adjust_max_sessions` | 50 | 1–10000 | 是 | 否 | 后台单次手工调整次数上限（次）（原 `MEMBER_CARD_ADJUST_MAX_SESSIONS`） |
+| `[member_card] adjust_max_days` | 366 | 1–3650 | 是 | 否 | 后台单次手工调整有效期上限（天）（原 `MEMBER_CARD_ADJUST_MAX_DAYS`） |
+| `[member_card] replace_fee_cents` | 0 | 0–100000 | 是 | 否 | 补卡工本费（分）（原 `MEMBER_CARD_REPLACE_FEE_CENTS`） |
+| `[prepaid] policy` | "conservative" | conservative / shanghai_fitness_2025 / shanghai_fitness_draft_2026 / beijing_2022 / national_single_use_card / unlimited | 是 | 否 | 预付卡监管口径预设（单次、累计上限与冷静期等）；连锁跨城市可按门店另行注入（原 `LUZ_PREPAID_POLICY`） |
+| `[prepaid] lpr_1y_bp` | 300 | 0–2000 | 是 | 否 | 合同成立时一年期 LPR（万分比），退款补偿利息按它计算；按公布值更新（原 `LUZ_LPR_1Y_BP`） |
+| `[prepaid] stop_prepaid` | false | true / false | 是 | 是 | 停止收取预付款（经营风险时）：储值与会员卡都停售，客户端隐藏入口（原 `LUZ_STOP_PREPAID`） |
+
+卡种级规则（冻结、转让、手续费、防借卡、激活、适用门店、限购）在卡种上配置，并随卡快照（改卡种不影响已售卡）；`[prepaid]` 与 15-recharge 共用。
 
 ## 10 错误码
 
@@ -179,7 +189,7 @@ active|inactive|frozen*|used_up|expired|lost ─(申请退卡)→ refunding ─(
 | 限购、冻结次数 / 天数、转让次数、预付限额、调整上限 | 4225 | per_member_limit / freeze_times_exceeded / freeze_days_exceeded / transfer_times_exceeded / prepaid_amount_cap / prepaid_units_cap / prepaid_units_cap_after_renewal / member_total_cap / gift_ratio_exceeded / adjust_cap |
 | 支付上游失败 | 5020 | — |
 
-## 11 测试清单（52 项）
+## 11 测试清单
 
 | 文件 | 覆盖 |
 |---|---|
@@ -202,6 +212,6 @@ active|inactive|frozen*|used_up|expired|lost ─(申请退卡)→ refunding ─(
 ## 13 定制点
 
 - 配置项：§9；卡种字段（冻结、转让、手续费、防借卡、激活方式、续购叠加、适用门店、限购、退款手续费）。
-- LPR：`LUZ_LPR_1Y_BP` 默认 300（3.00%，示例值）；经营者原因退卡利息按发卡时写入的 `lpr_bp`，上线前与每月 LPR 公布后更新配置。
+- LPR：`[prepaid] lpr_1y_bp` 默认 300（3.00%，示例值）；经营者原因退卡利息按发卡时写入的 `lpr_bp`，上线前与每月 LPR 公布后更新配置。
 - 扩展点：`wallet.set_policy_resolver`（按门店的预付限额，含上海 / 北京预设）、`register_outstanding_provider`（本模块已注册会员卡未兑付价值）、`wallet.set_payment_port`、`set_member_resolver`（会员与手机号查询；默认 01-identity `find_user_by_phone`）、`set_store_timezone_resolver`（门店时区）、`check_usable` / `consume` / `reverse_use` 供门禁与预约模块调用、`issue_gift` 供营销模块调用、`lottery.prize_won` 延期。
 - 不包含：储值卡（15）；线上内容会员与小程序虚拟支付；未来日期开始的预约冻结与冻结审批流；卡密兑换卡；按次结算给教练的分账；门禁设备授权同步；资金存管与监管平台上报；自动续费；发票开具；借转让之名多人共用的行为识别（只提供防借卡间隔）。

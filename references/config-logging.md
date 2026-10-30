@@ -2,16 +2,17 @@
 
 后端的运行配置与日志怎么写、怎么查、存多久。运行参数写在代码仓库的配置文件里，服务端热加载，不在后台展示（用户 2026-10-29 决定）；日志一行一条 JSON，能按请求串起来，不含秘密与多余的个人信息，按法定期限集中留存。哪些参数要可配置、客户端怎么拉取与兜底，见 Luz System `references/config-design.html`；部署、监控与告警阈值见 `operations.md`；审计记录的表结构见模块详设 foundation，运行配置的接口与表见模块详设 config。相关规范：OPS-005、CONF-*、SECRET-*、OBS-*、AGENT-018。
 
-## 1. 四类设置分开放
+## 1. 五类设置分开放
 
 | 类别 | 例子 | 放在哪 | 谁改 | 怎么生效 |
 |---|---|---|---|---|
 | 秘密 | AppSecret、商户私钥、APIv3 密钥、数据库口令、签名密钥、字段加密密钥 | 密钥服务或服务器受限文件（`/etc/luz/secrets/`，compose secrets 挂载），由代码按文件读取 | 运维 | 轮换流程，新旧并存一段时间（SECRET-001、SECRET-002） |
 | 部署参数 | 数据库与 Redis 地址、端口、进程数、连接池、可信代理网段、服务名 | 环境变量（`/etc/luz/api.env`，模板 `assets/deploy/api.env.example`） | 运维 | 重启 |
 | 运行参数与开关 | 上传上限、超时与重试、轮询间隔、限流阈值、功能开关、最低可用版本、智能体上限、日志级别 | 代码仓库 `config/runtime/*.toml` + 字段说明 | 开发，经代码评审 | 服务端热加载（本篇 §2） |
-| 经营与运营内容 | 门店营业时间、起送价、配送费、公告、横幅、券、奖品 | 数据库，后台维护 | 运营 | 即时（配置闭环） |
+| 经营与运营内容 | 门店营业时间、起送价、配送费、公告、横幅、券、奖品 | 数据库（门店详设 `store_settings` 与各营销模块），后台维护 | 运营 | 即时，写审计（配置闭环） |
+| 前台文案与展示 | 小程序上的提示、空状态、须知、规则说明、弹窗文字；首页模块顺序与显隐、展示开关 | 数据库（模块详设 content：`ui_texts`、`display_settings`）；`admin_visible` 为否的项（通用控件词、系统级提示、法规固定文字、技术性展示配置）存在后端但不在后台展示 | 后台可见的由运营在“文案与展示”页改；隐藏的由开发经文案种子与迁移改 | 保存即生效，小程序下次显示该页时更新（MP-006、ADMIN-005） |
 
-运行参数不在后台展示，也不做配置中心页面，除非用户另行要求（用户 2026-10-29 决定）。分不清时问：这个值要不要商户日常自己改？要，就是经营内容进后台；只在排障或调优时改，就是运行参数进配置文件。
+运行参数不在后台展示，也不做配置中心页面，除非用户另行要求（用户 2026-10-29 决定）。前台的文字提示与展示配置尽量由后端下发、后台实时维护，不写死在小程序里；需要存在后端但不必给运营看的项标 `admin_visible` 为否（用户 2026-10-29 要求）。分不清时问：这个值要不要商户日常自己改？要，就是经营内容或文案与展示，进后台；只在排障或调优时改，就是运行参数，进配置文件。
 
 ## 2. 运行配置文件
 
@@ -59,7 +60,7 @@ backend/.../runtime_config.py   # 字段说明：Pydantic 模型，唯一的类�
 
 ### 2.5 热加载
 
-- 触发：`watchfiles` 监听整个配置目录（不是单个文件，编辑器保存常是先写临时文件再改名），防抖 1–2 秒；文件系统通知不可用时用轮询；另有内部 `POST /internal/config/reload`（只对内网开放并校验运维令牌，发布脚本同步完文件后调用）。
+- 触发：`watchfiles` 监听整个配置目录（不是单个文件，编辑器保存常是先写临时文件再改名），防抖 1–2 秒（骨架默认 1.5 秒）；文件系统通知不可用时用轮询；另有内部 `POST /internal/config/reload`（只对内网开放并校验运维令牌，发布脚本同步完文件后调用）。
 - 原子替换：在旁路把合并后的配置整份解析、校验成一个不可变快照，通过后一次性替换引用。禁止逐键修改或原地重新初始化（会出现半新半旧）。加载过程用一把锁串行，读取不加锁。
 - 请求内一致：每个请求、任务或智能体运行开始时取一次快照，全程用这一份；结算、支付与进行中的长任务不受中途变化影响。
 - 不能热加载的键：变化时不应用，写警告日志并在 `/internal/config` 列为“待重启生效”，下次滚动重启生效。
@@ -113,9 +114,9 @@ backend/.../runtime_config.py   # 字段说明：Pydantic 模型，唯一的类�
 | 安全事件 | 登录失败与锁定、越权、令牌异常、验签失败、限流命中、输入校验异常激增、管理员敏感操作 | stdout，按 `category=security` 单独成流并告警 | 安全、运维 | 6 个月 |
 | 审计记录 | 后台写操作、权限变更、导出、退款与改价、查看敏感明文 | 数据库 `audit_logs`，与业务同事务写入；应用账号只有插入权限（OBS-002） | 审计员只读，后台审计页 | 建议 1 年，见 §3.9 |
 | 业务状态流水 | 订单、支付、退款、核销的状态变化 | 业务库的状态流水表，不是日志文件 | 客服、运营（后台详情页） | 与订单相同 |
-| 智能体运行 | 每次运行一条 trace，步骤、耗时、token、工具与结果；默认不记原文 | trace 与运行日志 | 开发 | 6 个月（AGENT-018） |
+| 智能体运行 | 每次运行一条 trace，步骤、耗时、token、工具与结果；默认不记原文 | trace 与运行日志 | 开发 | 6 个月（OBS-004） |
 
-运行参数的变更不进审计表：改了什么看配置文件的提交，何时生效看 `config_loads` 与 `config.reloaded` 日志（§2.6）。
+运行参数的变更不进审计表：改了什么看配置文件的提交，何时生效看 `config_loads` 与 `config.reloaded` 日志（§2.6）。经营设置、前台文案与展示的修改在后台发生，写审计记录与 `content_revisions`（OBS-002）。
 
 ### 3.2 级别
 
@@ -257,13 +258,18 @@ backend/.../runtime_config.py   # 字段说明：Pydantic 模型，唯一的类�
 
 ## 4. Luz 骨架现状与接入
 
+骨架已按 §2、§3 补齐（2026-10-29）；项目接入时只补右列。
+
 | 骨架 | 已有 | 项目接入时补 |
 |---|---|---|
-| `luzback/config.py` | 全部来自环境变量的不可变 `Settings`；生产拒绝开发默认值 | 部署参数与秘密继续放这里；运行参数按 §2 新增 `config/runtime/*.toml` 与字段说明、加载器、热加载任务、`/internal/config` 接口与 `config_loads` 表（模块详设 config）。文件头注释里“后台可改的业务参数由 app_settings 覆盖”的说法以本篇为准：经营内容进后台，运行参数进配置文件 |
-| `luzback/logging.py` | JSON 一行一条；`ts`、`level`、`logger`、`msg`、`trace_id`、`request_id`、`user_id`、`store_id`；`redact` 脱敏；`log_event` | 加 `service`、`env`、`version`、`instance`、`config_version`、`span_id`、`outcome`；字段名黑名单脱敏；队列处理器与丢弃计数；控制字符转义与字段截断 |
-| `luzback/app.py` 请求中间件 | 沿用或生成 `X-Request-Id`、`X-Trace-Id` 并写回响应头 | 解析 W3C `traceparent`；写每个请求的汇总行；向下游与消息写入 `traceparent` |
+| `backend/config/runtime/` + `luzback/runtime_config.py` | `base.toml` 写全部键与默认值（每个键上方一行注释：用途、单位、范围），`dev.toml`、`staging.toml`、`prod.toml` 只写差异；字段说明是 Pydantic 模型，元数据 reloadable、client_visible、risk、owner、scope、platforms、client_since 放在 `Field(json_schema_extra=...)`，`extra="forbid"`、默认值也校验、跨字段校验；已迁入日志级别、请求体上限、语句超时、限流阈值、熔断、认证时间窗、上传上限、维护模式、最低可用版本、积分比例 | 项目自己的运行参数按同一写法登记；各模块 `config.py` 里仍从环境变量读的超时与上限（`ORDER_*`、`IDENTITY_*`、`WECHAT_PAY_*` 等）逐步迁入 |
+| `luzback/runtime_loader.py` | base + `<LUZ_ENV>`.toml 合并、整份校验成不可变快照；版本取规范化内容摘要前 12 位；启动失败逐条打印“键、当前值（秘密打码）、原因、允许范围”并以 2 退出；热加载失败保留旧快照、写 `config.reload_rejected`、`luz_config_reload_failures_total` 加一；不可热加载的键列为待重启；加载串行加锁、读取无锁；覆盖规则按门店、渠道、客户端版本、用户分桶；目录监听（watchfiles，防抖 1.5 秒，不可用时轮询）；请求、任务、事件投递各取一次快照；`python -m luzback.config_check --env all` | CI 跑 `config_check` 与秘密扫描；`prod.toml` 按项目调整；告警规则（`config.reload_rejected`、版本不一致超过 5 分钟） |
+| `luzback/config.py` | 只放秘密与部署参数（环境变量）；生产拒绝开发默认值；启动扫描已迁走与不认识的 `LUZ_` 变量并打警告 | 部署参数与秘密继续放这里，优先由编排挂载成文件读取 |
+| 23-app-settings | `GET /internal/config`、`POST /internal/config/reload`（内网 + `LUZ_OPS_TOKEN`）、`GET /api/v1/app/config`（只下发 client_visible 的键，按端与版本过滤，ETag / 304）、`config_loads` 表与迁移；文案与展示（`ui_texts`、`display_settings`、`content_revisions`，后台维护，`/api/v1/app/content`） | 客户端内置同一份默认值与缓存兜底；按交付的文案表补全文案种子 |
+| `luzback/logging.py` + `log_events.py` | 一行一条 JSON：`ts`（UTC 毫秒 Z）、`service`、`env`、`version`、`instance`、`config_version`、`trace_id`、`span_id`、`request_id`、`event`、`outcome`、`error.*`；字段名黑名单加正则脱敏；控制字符转义、字段截断 512、堆栈 2000；QueueHandler + QueueListener 有上限，满时丢 DEBUG / INFO 并计 `luz_log_dropped_total`，WARNING 以上与安全事件不丢；生产 `raiseExceptions = False`，日志自身异常不外抛；事件名集中登记，安全事件 `security.*` 带 `category=security` 且不受级别影响 | 各模块现有的日志调用改用 `log_event` 与登记的事件名；登录失败、越权、验签失败等安全事件按 OWASP 词汇补齐；`user_ref` 与 `store_id` 在鉴权依赖里绑定 |
+| `luzback/app.py` 请求中间件 + `luzback/tracing.py` | 解析 W3C `traceparent`（合法沿用 trace、新建 span，否则新建），兼容 `X-Request-Id`、`X-Trace-Id`；响应头返回 `X-Request-Id`、`X-Trace-Id`、`traceparent`；每个请求写一条 `http.request` 汇总行（路由模板、状态、耗时、结果）；未处理异常在请求上下文里记一次；发件箱事件与消息带 traceparent，消费端接上；定时任务每次新建 trace 并带 `job`、`run_id`；超时线程保留上下文 | 调内部下游服务的 HTTP 客户端加 `httpx_request_hook`；汇总行补数据库与外部调用的次数和耗时 |
 | `luzback/audit.py` | 审计记录与业务同事务写入 | 数据库账号只授插入；审计页只读；到期清理任务 |
-| `assets/deploy/docker-compose.prod.yml` | 每个服务 `json-file` 轮转 | 采集器与集中存储（方案里选定 Loki 或云日志服务），保留期限与对象锁 |
+| `assets/deploy/` | 每个服务 `json-file` 轮转；配置目录 `/opt/luz/config/runtime` 整目录只读挂载进 api、worker、scheduler；`api.env.example` 已删去迁走的键并注明去处；RUNBOOK §5 改运行配置与回滚 | 采集器与集中存储（方案里选定 Loki 或云日志服务），保留期限与对象锁；发布脚本同步配置目录并写 `COMMIT` |
 
 ## 5. 开发与验收检查
 

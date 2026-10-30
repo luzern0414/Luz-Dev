@@ -8,9 +8,12 @@
 - 同名任务同一时刻只有一个实例执行（锁 SET NX PX）。
 - 任务体必须幂等：按时间窗口 + 业务键判断，重复执行不产生副作用。
 - 每次运行写 scheduler_runs：开始、结束、状态、错误、主机。
+- 每次运行新建 trace，日志带 job 与 run_id（scheduler_runs.id）；开始时取一次运行配置快照，运行中热加载不影响本次；
+  结束写一条 job.finished（outcome、duration_ms），失败带堆栈记一次 ERROR。
 """
 from __future__ import annotations
 
+import logging
 import socket
 import threading
 import time
@@ -23,7 +26,13 @@ from typing import Any, Protocol
 from sqlalchemy import String, Text
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
+from . import log_events as ev
 from .db import Base, BigIdMixin, utcnow
+from .logging import bind_log_fields, log_event
+from .runtime_loader import use_snapshot
+from .tracing import new_trace
+
+log = logging.getLogger("luzback.scheduler")
 
 
 class LockProvider(Protocol):
@@ -116,27 +125,35 @@ def run_job(job: Job, session_factory: Callable[[], Session], lock: LockProvider
     token = lock.acquire(job.name, job.lock_ttl)
     if token is None:
         return "skipped"
-    db = session_factory()
-    run = SchedulerRun(job=job.name, host=socket.gethostname()[:64])
-    try:
-        db.add(run)
-        db.commit()
+    with new_trace(job=job.name), use_snapshot():
+        db = session_factory()
+        run = SchedulerRun(job=job.name, host=socket.gethostname()[:64])
+        started = time.perf_counter()
         try:
-            result = job.fn(db)
+            db.add(run)
             db.commit()
-            run.status = "ok"
-            run.result = str(result)[:2000] if result is not None else None
-        except Exception as exc:  # noqa: BLE001
-            db.rollback()
-            run.status = "error"
-            run.error = str(exc)[:500]
-        run.finished_at = utcnow()
-        db.add(run)
-        db.commit()
-        return run.status
-    finally:
-        db.close()
-        lock.release(job.name, token)
+            with bind_log_fields(run_id=str(run.id)):
+                failure: Exception | None = None
+                try:
+                    result = job.fn(db)
+                    db.commit()
+                    run.status = "ok"
+                    run.result = str(result)[:2000] if result is not None else None
+                except Exception as exc:  # noqa: BLE001
+                    db.rollback()
+                    run.status = "error"
+                    run.error = str(exc)[:500]
+                    failure = exc
+                run.finished_at = utcnow()
+                db.add(run)
+                db.commit()
+                log_event(log, ev.JOB_FINISHED, logging.ERROR if failure else logging.INFO, exc_info=failure,
+                          outcome="failure" if failure else "success",
+                          duration_ms=round((time.perf_counter() - started) * 1000, 1))
+            return run.status
+        finally:
+            db.close()
+            lock.release(job.name, token)
 
 
 class Scheduler:

@@ -54,7 +54,7 @@ def test_limit_per_user(db):
         create_address(db, 1, payload(detail=f"路 {i} 号"))
     with pytest.raises(AppError) as exc:
         create_address(db, 1, payload(detail="超出"))
-    assert exc.value.code == ErrorCode.BUSINESS_RULE
+    assert exc.value.code == ErrorCode.LIMIT_REACHED and exc.value.status == 422  # 4225：数量上限
 
 
 def test_deleting_default_promotes_latest_remaining(db):

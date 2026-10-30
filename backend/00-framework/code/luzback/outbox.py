@@ -5,10 +5,13 @@
 - worker 用 FOR UPDATE SKIP LOCKED 拉取（Postgres / MySQL），多实例不重复。
 - 失败按 1m / 5m / 30m / 2h / 12h 退避，5 次后 failed 并告警。
 - 消费者按 (consumer, event_id) 去重（ProcessedEvent）。
+- 链路：写入时记下当前的 traceparent 与 trace_id，投递时用 continue_trace 接上，订阅者的日志与入口请求同一个 trace；
+  每个事件投递前取一次运行配置快照。重试记 WARNING，进入 failed 记 ERROR（outbox.dead_lettered，需要告警）。
 """
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import time
 import uuid
@@ -20,7 +23,13 @@ from sqlalchemy import String, Text, UniqueConstraint, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
+from . import log_events as ev
 from .db import Base, BigIdMixin, supports_skip_locked, utcnow
+from .logging import log_event, trace_id_var
+from .runtime_loader import use_snapshot
+from .tracing import continue_trace, current_traceparent
+
+log = logging.getLogger("luzback.outbox")
 
 BACKOFF_SECONDS = (60, 300, 1800, 7200, 43200)
 
@@ -40,6 +49,8 @@ class OutboxEvent(Base, BigIdMixin):
     last_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
     occurred_at: Mapped[datetime] = mapped_column(default=utcnow)
     sent_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    traceparent: Mapped[str | None] = mapped_column(String(55), nullable=True)  # 生产者的 W3C 链路，消费端接上
+    trace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)     # 日志里的 trace_id（旧 X-Trace-Id 时与上面不同）
 
 
 class ProcessedEvent(Base, BigIdMixin):
@@ -66,6 +77,8 @@ def enqueue_event(
         aggregate_id=str(aggregate_id),
         version=version,
         payload_json=json.dumps(payload, default=str, ensure_ascii=False),
+        traceparent=current_traceparent(),
+        trace_id=trace_id_var.get(),
     )
     db.add(event)
     return event
@@ -95,29 +108,39 @@ def dispatch_pending(
     events = db.execute(stmt).scalars().all()
     counts = {"sent": 0, "retried": 0, "failed": 0}
     for event in events:
-        payload = json.loads(event.payload_json)
-        try:
-            try:
-                handler(event.topic, payload, event)
-            except TypeError as exc:
-                if "positional argument" not in str(exc):
-                    raise
-                handler(event.topic, payload)
-            event.status = "sent"
-            event.sent_at = now
-            counts["sent"] += 1
-        except Exception as exc:  # noqa: BLE001
-            event.attempts += 1
-            event.last_error = str(exc)[:500]
-            if event.attempts >= max_attempts:
-                event.status = "failed"
-                counts["failed"] += 1
-            else:
-                delay = BACKOFF_SECONDS[min(event.attempts - 1, len(BACKOFF_SECONDS) - 1)]
-                event.next_attempt_at = now + timedelta(seconds=delay)
-                counts["retried"] += 1
+        with continue_trace(event.traceparent, event.trace_id, topic=event.topic, event_id=event.event_id), use_snapshot():
+            _dispatch_one(event, handler, max_attempts, now, counts)
         db.commit()
     return counts
+
+
+def _dispatch_one(event: OutboxEvent, handler: Callable[..., None], max_attempts: int, now: datetime,
+                  counts: dict[str, int]) -> None:
+    payload = json.loads(event.payload_json)
+    try:
+        try:
+            handler(event.topic, payload, event)
+        except TypeError as exc:
+            if "positional argument" not in str(exc):
+                raise
+            handler(event.topic, payload)
+        event.status = "sent"
+        event.sent_at = now
+        counts["sent"] += 1
+    except Exception as exc:  # noqa: BLE001
+        event.attempts += 1
+        event.last_error = str(exc)[:500]
+        if event.attempts >= max_attempts:
+            event.status = "failed"
+            counts["failed"] += 1
+            log_event(log, ev.OUTBOX_DEAD_LETTERED, logging.ERROR, outcome="failure", attempts=event.attempts,
+                      **{"error.type": type(exc).__name__})
+        else:
+            delay = BACKOFF_SECONDS[min(event.attempts - 1, len(BACKOFF_SECONDS) - 1)]
+            event.next_attempt_at = now + timedelta(seconds=delay)
+            counts["retried"] += 1
+            log_event(log, ev.OUTBOX_DISPATCH_FAILED, logging.WARNING, outcome="failure", attempts=event.attempts,
+                      retry_in_s=delay, **{"error.type": type(exc).__name__})
 
 
 def mark_processed(db: Session, consumer: str, event_id: str) -> bool:

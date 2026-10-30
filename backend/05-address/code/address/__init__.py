@@ -47,7 +47,7 @@ def _count(db: Session, user_id: int) -> int:
 def create_address(db: Session, user_id: int, data: dict) -> Address:
     validate_phone(data.get("phone", ""))
     if _count(db, user_id) >= MAX_ADDRESSES_PER_USER:
-        raise AppError(ErrorCode.BUSINESS_RULE, f"at most {MAX_ADDRESSES_PER_USER} addresses")
+        raise AppError(ErrorCode.LIMIT_REACHED, f"at most {MAX_ADDRESSES_PER_USER} addresses")  # 数量上限 4225（SPEC §4）
     is_default = bool(data.get("is_default")) or _count(db, user_id) == 0  # 第一个地址自动设为默认
     if is_default:
         _clear_default(db, user_id)

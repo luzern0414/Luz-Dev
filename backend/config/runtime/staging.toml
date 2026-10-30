@@ -1,0 +1,8 @@
+# 预发环境：只写与 base.toml 不同的值（LUZ_ENV=staging）。与生产保持一致，压测或演练需要时在这里临时调整并在说明里写原因。
+
+# 灰度写法示例（按门店、渠道、客户端版本、用户百分比命中；条件之间是“且”，同一用户在同一条规则里总落在同一桶）：
+# [overrides.maintenance_drill]
+# stores = [1]
+# channels = ["miniprogram"]
+# [overrides.maintenance_drill.set]
+# "features.maintenance_mode" = true

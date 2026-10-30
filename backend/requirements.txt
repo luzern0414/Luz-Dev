@@ -11,3 +11,4 @@ httpx>=0.27,<1             # 微信服务端接口 / 支付 APIv3 客户端（we
 cryptography>=44,<47       # APIv3 RSA / AES-GCM、字段加密；≥44 自带 Argon2id（admin_rbac 无 argon2-cffi 时的后备）
 argon2-cffi>=23.1,<26      # 口令哈希 Argon2id（OWASP Password Storage）
 tzdata>=2024.1             # zoneinfo 时区数据（Windows / 精简镜像没有系统时区库）
+watchfiles>=1.1,<2         # 运行配置目录监听（热加载）；不可用时 luzback.runtime_loader 自动改为轮询。2026-10 核对最新 1.3.0

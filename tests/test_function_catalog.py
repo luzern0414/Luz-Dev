@@ -92,58 +92,39 @@ class CatalogDataTests(unittest.TestCase):
 
 
 class CatalogBuildTests(unittest.TestCase):
-    def test_builds_self_contained_html_with_embedded_data(self) -> None:
+    def test_builds_a_self_contained_reading_page(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "catalog.html"
             result = run_builder("--data", str(DATA_PATH), "--template", str(TEMPLATE_PATH), "--output", str(output))
             payload = json.loads(result.stdout)
             self.assertEqual(Path(payload["output"]), output.resolve())
             html = output.read_text(encoding="utf-8")
-            for control_id in (
-                "search-input",
-                "module-filter",
-                "edit-toggle",
-                "add-module",
-                "import-data",
-                "export-json",
-                "export-html",
-                "reset-local",
-                "result-decision-board",
-            ):
+            data = json.loads(DATA_PATH.read_text(encoding="utf-8"))
+            for control_id in ("search-input", "module-filter", "count", "result-policy"):
                 self.assertIn(f'id="{control_id}"', html)
-            self.assertIn('id="catalog-data"', html)
-            self.assertIn("textContent", html)
+            # A Luz Design reading page: the title first, no application shell, every function rendered statically.
+            self.assertRegex(html, r'<main class="doc">\s*<h1>')
+            for shell in ("<aside", "<nav", "<header", "<footer"):
+                self.assertNotIn(shell, html)
+            for module in data["modules"]:
+                self.assertIn(f'id="m-{module["id"]}"', html)
+                for function in module["functions"]:
+                    self.assertIn(f'id="{function["id"]}"', html)
             self.assertNotIn(".innerHTML", html)
             self.assertNotIn("<script src=", html)
             # The only <link> is the inline SVG tab icon; nothing is fetched from outside.
             self.assertEqual(html.count("<link rel="), 1)
             self.assertIn('<link rel="icon" href="data:image/svg+xml,', html)
             self.assertIn('aria-live="polite"', html)
-            self.assertIn("prefers-reduced-motion", html)
 
-    def test_generated_script_avoids_reserved_function_parameter(self) -> None:
-        html = OUTPUT_PATH.read_text(encoding="utf-8")
-        self.assertNotIn("renderFunction(module,moduleIndex,function,", html)
-        self.assertIn("renderFunction(module,moduleIndex,fn,functionIndex)", html)
+    def test_rendering_escapes_markup_in_catalog_text(self) -> None:
+        from scripts.build_function_catalog import render
 
-    def test_build_escapes_script_close_sequences(self) -> None:
-        from scripts.build_function_catalog import render_catalog
-
-        template = '<script id="catalog-data" type="application/json">{{CATALOG_DATA_JSON}}</script><main></main>'
-        malicious = {"value": "</script><script>alert(1)</script>"}
-        html = render_catalog(template, malicious)
-        self.assertNotIn("</script><script>alert(1)</script>", html)
-        self.assertIn("<\\/script>", html)
-        embedded = html.split('type="application/json">', 1)[1].split("</script>", 1)[0]
-        self.assertEqual(json.loads(embedded), malicious)
-
-    def test_template_uses_admin_shell_without_double_sidebar_offset(self) -> None:
-        template = TEMPLATE_PATH.read_text(encoding="utf-8")
-        self.assertIn(".app{display:grid;grid-template-columns:240px minmax(0,1fr)", template)
-        self.assertIn("@media(max-width:1439px)", template)
-        self.assertIn(".page-head>div:first-child{min-width:0}", template)
-        self.assertIn("--sidebar-bg:#FFFFFF", template)
-        self.assertNotIn(".workspace{margin-left:", template)
+        data = json.loads(DATA_PATH.read_text(encoding="utf-8"))
+        data["modules"][0]["functions"][0]["rows"][0]["value"] = "</td><script>alert(1)</script>"
+        page = render(data, TEMPLATE_PATH.read_text(encoding="utf-8"))
+        self.assertNotIn("<script>alert(1)</script>", page)
+        self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", page)
 
     def test_builder_rejects_invalid_catalog(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -163,12 +144,12 @@ class CatalogBuildTests(unittest.TestCase):
 
 
 class PackageCatalogIntegrationTests(unittest.TestCase):
-    def test_generated_html_matches_canonical_json(self) -> None:
-        from scripts.build_function_catalog import extract_embedded_catalog
+    def test_generated_html_is_current(self) -> None:
+        from scripts.build_function_catalog import render
 
-        canonical = json.loads(DATA_PATH.read_text(encoding="utf-8"))
-        embedded = extract_embedded_catalog(OUTPUT_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(embedded, canonical)
+        data = json.loads(DATA_PATH.read_text(encoding="utf-8"))
+        expected = render(data, TEMPLATE_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(OUTPUT_PATH.read_text(encoding="utf-8"), expected, "run scripts/build_function_catalog.py")
 
 
 if __name__ == "__main__":

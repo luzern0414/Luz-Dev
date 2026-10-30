@@ -75,6 +75,8 @@ Luz Dev 负责从开发到上线的全流程。本篇覆盖环境、部署、网
 
 回滚：`release.sh rollback` 回到上一 digest，不回退数据库（迁移遵循 expand/contract，CI 对未标 `# luz: contract` 的破坏性迁移直接失败）；迁移本身有误时前向修复，其次 CI 已验证的 `alembic downgrade`，最后才用发布前备份或 PITR。小程序可在后台回退到上一版本（以官方说明为准）。每次发布写发布记录：版本、digest、迁移 revision、执行人、结果（`release.sh` 自动写 `.release/history.tsv`）。细节见 `assets/deploy/RUNBOOK.md`。
 
+发布前齐备：带版本的源码与迁移、环境与秘密清单、功能开关与安全默认值、带来源证明的构建产物、接口与事件兼容说明、备份与恢复步骤、回滚触发条件与负责人、告警接收方。发布顺序：校验配置与秘密 → 先做向后兼容的表结构变更 → 部署能兼容新旧数据的生产者与消费者 → 平台支持时逐步切流 → 核对健康、关键链路、业务指标与用户可见状态 → 清理放到下一个版本。只有数据契约仍兼容时才回滚代码，不可逆的迁移用前向修复；回滚路径不明确的发布不算完成。
+
 ## 4. 监控与告警
 
 Prometheus 抓取 api 各副本（Docker DNS 发现）、sql-exporter（业务表）、postgres/node/blackbox exporter；规则在 `assets/monitoring/rules/`。critical → 电话/短信 webhook，warning → 群消息，Watchdog → 外部死人开关。

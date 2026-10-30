@@ -14,7 +14,8 @@ from identity import config as identity_config
 from identity import ports
 from luzback import AppError, ErrorCode, OutboxEvent, reload_settings, utcnow
 from luzback.audit import AuditLog
-from luzback.testing import memory_session
+from luzback.runtime_config import legacy_env_index
+from luzback.testing import memory_session, override_runtime
 from wechat_mp import FakeMiniProgram
 
 FIELD_KEY = base64.b64encode(b"k" * 32).decode()
@@ -48,9 +49,22 @@ def mp():
 
 
 def set_config(monkeypatch, **values):
+    """测试改配置：运行参数（旧环境变量名，如 IDENTITY_SMS_TTL）写进测试用运行配置，部署参数仍走环境变量。
+
+    运行参数不合法时抛 ConfigInvalid（ValueError）。
+    """
+    index = legacy_env_index()
+    runtime: dict[str, dict] = {}
     for key, value in values.items():
-        monkeypatch.setenv(key, str(value))
+        path = index.get(key)
+        if path is None:
+            monkeypatch.setenv(key, str(value))
+            continue
+        group, _, name = path.partition(".")
+        runtime.setdefault(group, {})[name] = value
     identity_config.reload_config()
+    if runtime:
+        override_runtime(runtime)
 
 
 def login(db, mp, code="c1", openid="o-1", **kw):

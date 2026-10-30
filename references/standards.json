@@ -123,7 +123,8 @@
     {
       "id": "agent",
       "name": "智能体",
-      "backend": "agent/"
+      "backend": "agent/",
+      "pattern": "references/agent-foundation.md"
     },
     {
       "id": "catalog",
@@ -183,7 +184,13 @@
     },
     {
       "id": "settings",
-      "name": "系统与门店配置",
+      "name": "运行配置",
+      "backend": "backend/23-app-settings",
+      "pattern": "references/config-logging.md"
+    },
+    {
+      "id": "content",
+      "name": "前台文案与展示配置",
       "backend": "backend/23-app-settings"
     },
     {
@@ -203,7 +210,7 @@
     },
     {
       "id": "design-integration",
-      "name": "接入 Luz Design 前端",
+      "name": "接入 Luz System 前端设计",
       "pattern": "references/design-integration.md"
     },
     {
@@ -385,8 +392,8 @@
       ],
       "sources": [
         {
-          "title": "开发规范 · 三、1 真实数据驱动",
-          "url": "file:///D:/Codes/开发规范.txt"
+          "title": "Luz 开发规范（内部）· 三、1 真实数据驱动；公开对应：SKILL.md Engineering rules",
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/SKILL.md#engineering-rules"
         }
       ]
     },
@@ -415,8 +422,8 @@
       ],
       "sources": [
         {
-          "title": "开发规范 · 九、逐项测试与真实验收",
-          "url": "file:///D:/Codes/开发规范.txt"
+          "title": "Luz 开发规范（内部）· 九、逐项测试与真实验收；公开对应：references/quality.md",
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/quality.md"
         }
       ]
     },
@@ -445,8 +452,8 @@
       ],
       "sources": [
         {
-          "title": "开发规范 · 五、前后端及小程序完整打通",
-          "url": "file:///D:/Codes/开发规范.txt"
+          "title": "Luz 开发规范（内部）· 五、前后端及小程序完整打通；公开对应：references/design-integration.md",
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/design-integration.md"
         }
       ]
     },
@@ -475,8 +482,8 @@
       ],
       "sources": [
         {
-          "title": "开发规范 · 十一、配置、安全与文档交付",
-          "url": "file:///D:/Codes/开发规范.txt"
+          "title": "Luz 开发规范（内部）· 十一、配置、安全与文档交付；公开对应：references/operations.md §1",
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/operations.md"
         }
       ]
     },
@@ -504,8 +511,8 @@
       ],
       "sources": [
         {
-          "title": "开发规范 · 八、持续调研与技术方案选择",
-          "url": "file:///D:/Codes/开发规范.txt"
+          "title": "Luz 开发规范（内部）· 八、持续调研与技术方案选择；公开对应：references/research.md",
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/research.md"
         }
       ]
     },
@@ -643,7 +650,7 @@
       ],
       "modules": [],
       "title": "后台密码安全存储与失败锁定",
-      "rule": "后台账号密码用 Argon2id 或 bcrypt 等慢摘要加盐存储；连续失败按账号和来源限速并锁定（界面设计 Admin 规范：5 次失败锁 15 分钟）；初始密码首次登录强制修改。",
+      "rule": "后台账号密码用 Argon2id 或 bcrypt 等慢摘要加盐存储；连续失败按账号和来源限速并锁定（标准模块 22-admin-rbac：5 次失败锁定 15 分钟，再次失败递增）；初始密码首次登录强制修改。",
       "why": "弱存储与无限重试是后台被撞库的主要原因。",
       "do": [
         "锁定提示显示剩余时间",
@@ -663,8 +670,8 @@
           "url": "https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html"
         },
         {
-          "title": "界面设计 · 管理后台规范 §10 状态（锁定）",
-          "url": "file:///D:/Codes/Luz-Design/design/admin/SPEC.md"
+          "title": "Luz Dev · backend/22-admin-rbac/MODULE.md（口令与失败锁定）",
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/backend/22-admin-rbac/MODULE.md"
         }
       ]
     },
@@ -678,7 +685,7 @@
       ],
       "modules": [],
       "title": "高权限账号启用二次验证与会话超时",
-      "rule": "超级管理员、财务、退款审批等高权限角色启用二次验证；后台会话无操作超时（Admin 规范为 2 小时，提前 5 分钟提醒）。",
+      "rule": "超级管理员、财务、退款审批等高权限角色启用 TOTP 二次验证；后台会话由服务端强制空闲 15 分钟、绝对 8 小时超时（标准模块 22-admin-rbac）；登出、改密、停用与角色变更立即撤销会话；敏感操作前重新验证。",
       "why": "高权限账号被盗的损失远大于普通账号。",
       "do": [
         "敏感操作前重新验证身份"
@@ -687,12 +694,16 @@
         "让高权限账号长期保持登录"
       ],
       "verify": [
-        "超时后请求返回 401 并保留未保存草稿"
+        "空闲 15 分钟与绝对 8 小时后请求返回 4010，前端保留未保存草稿"
       ],
       "sources": [
         {
-          "title": "界面设计 · 管理后台规范 §10、§15",
-          "url": "file:///D:/Codes/Luz-Design/design/admin/SPEC.md"
+          "title": "Luz Dev · backend/22-admin-rbac/MODULE.md（会话与二次验证）",
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/backend/22-admin-rbac/MODULE.md"
+        },
+        {
+          "title": "OWASP Session Management Cheat Sheet",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html"
         }
       ]
     },
@@ -751,7 +762,7 @@
       "sources": [
         {
           "title": "Luz Dev · backend/22-admin-rbac/MODULE.md",
-          "url": "file:///D:/Codes/Luz-Dev/backend/22-admin-rbac/MODULE.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/backend/22-admin-rbac/MODULE.md"
         }
       ]
     },
@@ -808,7 +819,7 @@
       "sources": [
         {
           "title": "Luz Dev 模式库 · 多门店隔离",
-          "url": "file:///D:/Codes/Luz-Dev/references/patterns/multi-store.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/patterns/multi-store.md"
         }
       ]
     },
@@ -896,7 +907,7 @@
       "sources": [
         {
           "title": "Luz Dev · backend/SPEC.md 错误信封",
-          "url": "file:///D:/Codes/Luz-Dev/backend/SPEC.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/backend/SPEC.md"
         }
       ]
     },
@@ -987,7 +998,7 @@
       "sources": [
         {
           "title": "Luz Dev · backend/09-wechat-pay/MODULE.md §1 步骤 2",
-          "url": "file:///D:/Codes/Luz-Dev/backend/09-wechat-pay/MODULE.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/backend/09-wechat-pay/MODULE.md"
         }
       ]
     },
@@ -1069,7 +1080,7 @@
       "sources": [
         {
           "title": "Luz Dev · backend/SPEC.md 状态机",
-          "url": "file:///D:/Codes/Luz-Dev/backend/SPEC.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/backend/SPEC.md"
         }
       ]
     },
@@ -1100,7 +1111,7 @@
       "sources": [
         {
           "title": "Luz Dev · backend/00-framework idempotency",
-          "url": "file:///D:/Codes/Luz-Dev/backend/00-framework/MODULE.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/backend/00-framework/MODULE.md"
         }
       ]
     },
@@ -1220,7 +1231,7 @@
       "sources": [
         {
           "title": "Luz Dev · backend/00-framework outbox",
-          "url": "file:///D:/Codes/Luz-Dev/backend/00-framework/MODULE.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/backend/00-framework/MODULE.md"
         }
       ]
     },
@@ -1249,7 +1260,7 @@
       "sources": [
         {
           "title": "Luz Dev 模式库 · 一致性 §2",
-          "url": "file:///D:/Codes/Luz-Dev/references/patterns/consistency.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/patterns/consistency.md"
         }
       ]
     },
@@ -1281,7 +1292,7 @@
       "sources": [
         {
           "title": "Luz Dev 模式库 · 库存与防超卖",
-          "url": "file:///D:/Codes/Luz-Dev/references/patterns/inventory.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/patterns/inventory.md"
         }
       ]
     },
@@ -1313,7 +1324,7 @@
       "sources": [
         {
           "title": "Luz Dev 模式库 · 商品与购物车",
-          "url": "file:///D:/Codes/Luz-Dev/references/patterns/catalog-cart.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/patterns/catalog-cart.md"
         }
       ]
     },
@@ -1348,7 +1359,7 @@
       "sources": [
         {
           "title": "Luz Dev · 门店模块详设",
-          "url": "file:///D:/Codes/Luz-Dev/references/module-specs/store.json"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/module-specs/store.json"
         },
         {
           "title": "Luz System · 交易与营销界面规范 营业状态与一键开停业",
@@ -1381,7 +1392,7 @@
       "sources": [
         {
           "title": "Luz Dev 模式库 · 预约名额",
-          "url": "file:///D:/Codes/Luz-Dev/references/patterns/reservation.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/patterns/reservation.md"
         }
       ]
     },
@@ -1413,7 +1424,7 @@
       "sources": [
         {
           "title": "Luz Dev 模式库 · 预约名额",
-          "url": "file:///D:/Codes/Luz-Dev/references/patterns/reservation.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/patterns/reservation.md"
         }
       ]
     },
@@ -1442,7 +1453,7 @@
       "sources": [
         {
           "title": "Luz Dev · 无人值守场馆门禁与设备接入做法",
-          "url": "file:///D:/Codes/Luz-Dev/references/patterns/access-control.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/patterns/access-control.md"
         }
       ]
     },
@@ -1473,7 +1484,7 @@
       "sources": [
         {
           "title": "Luz Dev · 无人值守场馆门禁与设备接入做法",
-          "url": "file:///D:/Codes/Luz-Dev/references/patterns/access-control.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/patterns/access-control.md"
         }
       ]
     },
@@ -1503,7 +1514,7 @@
       "sources": [
         {
           "title": "Luz Dev · 无人值守场馆门禁与设备接入做法",
-          "url": "file:///D:/Codes/Luz-Dev/references/patterns/access-control.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/patterns/access-control.md"
         }
       ]
     },
@@ -1533,7 +1544,7 @@
       "sources": [
         {
           "title": "Luz Dev · 无人值守场馆门禁与设备接入做法",
-          "url": "file:///D:/Codes/Luz-Dev/references/patterns/access-control.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/patterns/access-control.md"
         }
       ]
     },
@@ -1564,7 +1575,7 @@
       "sources": [
         {
           "title": "Luz Dev · 无人值守场馆门禁与设备接入做法",
-          "url": "file:///D:/Codes/Luz-Dev/references/patterns/access-control.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/patterns/access-control.md"
         }
       ]
     },
@@ -1594,7 +1605,7 @@
       "sources": [
         {
           "title": "Luz Dev · 无人值守场馆门禁与设备接入做法",
-          "url": "file:///D:/Codes/Luz-Dev/references/patterns/access-control.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/patterns/access-control.md"
         }
       ]
     },
@@ -1627,7 +1638,7 @@
       "sources": [
         {
           "title": "Luz Dev · 门店模块详设",
-          "url": "file:///D:/Codes/Luz-Dev/references/module-specs/store.json"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/module-specs/store.json"
         }
       ]
     },
@@ -2105,7 +2116,7 @@
         },
         {
           "title": "Luz Dev · references/result-patterns.md",
-          "url": "file:///D:/Codes/Luz-Dev/references/result-patterns.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/result-patterns.md"
         }
       ]
     },
@@ -2171,7 +2182,7 @@
       "sources": [
         {
           "title": "Luz Dev · backend/09-wechat-pay/MODULE.md §4",
-          "url": "file:///D:/Codes/Luz-Dev/backend/09-wechat-pay/MODULE.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/backend/09-wechat-pay/MODULE.md"
         }
       ]
     },
@@ -2350,7 +2361,7 @@
       "sources": [
         {
           "title": "Luz Dev 模式库 · 售后",
-          "url": "file:///D:/Codes/Luz-Dev/references/patterns/after-sales.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/patterns/after-sales.md"
         }
       ]
     },
@@ -2379,7 +2390,7 @@
       "sources": [
         {
           "title": "Luz Dev · backend/16-coupon/MODULE.md",
-          "url": "file:///D:/Codes/Luz-Dev/backend/16-coupon/MODULE.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/backend/16-coupon/MODULE.md"
         }
       ]
     },
@@ -2495,7 +2506,7 @@
       "sources": [
         {
           "title": "Luz Dev 模式库 · 优惠券",
-          "url": "file:///D:/Codes/Luz-Dev/references/patterns/coupon.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/patterns/coupon.md"
         }
       ]
     },
@@ -2524,7 +2535,7 @@
       "sources": [
         {
           "title": "Luz Dev · backend/14-membership/MODULE.md",
-          "url": "file:///D:/Codes/Luz-Dev/backend/14-membership/MODULE.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/backend/14-membership/MODULE.md"
         }
       ]
     },
@@ -2586,7 +2597,7 @@
       "sources": [
         {
           "title": "Luz Dev 模式库 · 余额、储值与积分",
-          "url": "file:///D:/Codes/Luz-Dev/references/patterns/accounts.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/patterns/accounts.md"
         }
       ]
     },
@@ -2896,7 +2907,7 @@
         "upload"
       ],
       "title": "上传文件校验类型、大小，存储与访问隔离",
-      "rule": "按白名单校验扩展名与文件内容类型；按用途限制大小，但用户无法自行改小的文件（系统相机拍的照片、相册原图）不因大小拒收：前端只接收并上传原图，不压缩；压缩统一在后台完成（缩放、重新编码、去元数据）；对象存储的上传策略只设远高于手机原图的防滥用上限（例如 100 MB）；服务端重命名为随机文件名；存放在对象存储或非执行目录；私有文件用短时签名 URL 访问；图片重新编码去除元数据。",
+      "rule": "按白名单校验扩展名与文件内容类型；按用途限制大小，但用户无法自行改小的文件（系统相机拍的照片、相册原图）不因大小拒收：前端只接收并上传原图，不压缩、不提示过大；服务端处理成功后生成高质量原档与清晰度优先的副本（先缩尺寸、后降质量，重新编码并去除元数据），再删除原始上传；有对象存储时预签名直传、服务端异步处理，没有对象存储时上传入口单独放宽到防滥用上限（远高于手机原图，例如 100 MB）；服务端重命名为随机文件名；存放在对象存储或非执行目录；私有文件用短时签名 URL 访问。",
       "why": "上传接口可被用来存放恶意文件、覆盖文件或耗尽存储。",
       "do": [
         "直传对象存储时服务端签发带限制的上传凭证"
@@ -3027,7 +3038,7 @@
       "sources": [
         {
           "title": "Luz Dev · 配置文件与日志",
-          "url": "file:///D:/Codes/Luz-Dev/references/config-logging.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/config-logging.md"
         },
         {
           "title": "Google SRE Workbook · Configuration Design and Best Practices",
@@ -3076,7 +3087,7 @@
       "sources": [
         {
           "title": "Luz Dev · 配置文件与日志",
-          "url": "file:///D:/Codes/Luz-Dev/references/config-logging.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/config-logging.md"
         },
         {
           "title": "nginx · Controlling nginx（重载失败沿用旧配置）",
@@ -3124,7 +3135,7 @@
       "sources": [
         {
           "title": "Luz Dev · 配置文件与日志",
-          "url": "file:///D:/Codes/Luz-Dev/references/config-logging.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/config-logging.md"
         },
         {
           "title": "Google SRE Workbook · Configuration Design and Best Practices",
@@ -3168,7 +3179,7 @@
       "sources": [
         {
           "title": "Luz Dev · backend/00-framework resilience",
-          "url": "file:///D:/Codes/Luz-Dev/backend/00-framework/MODULE.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/backend/00-framework/MODULE.md"
         }
       ]
     },
@@ -3195,8 +3206,8 @@
       ],
       "sources": [
         {
-          "title": "开发规范 · 六、异常处理、降级与熔断机制",
-          "url": "file:///D:/Codes/开发规范.txt"
+          "title": "Luz 开发规范（内部）· 六、异常处理、降级与熔断机制；公开对应：backend/SPEC.md §9",
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/backend/SPEC.md"
         }
       ]
     },
@@ -3223,7 +3234,7 @@
       "sources": [
         {
           "title": "Luz Dev · backend/00-framework ratelimit",
-          "url": "file:///D:/Codes/Luz-Dev/backend/00-framework/MODULE.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/backend/00-framework/MODULE.md"
         }
       ]
     },
@@ -3255,7 +3266,7 @@
       "sources": [
         {
           "title": "Luz Dev · 配置文件与日志",
-          "url": "file:///D:/Codes/Luz-Dev/references/config-logging.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/config-logging.md"
         },
         {
           "title": "OWASP Logging Cheat Sheet",
@@ -3285,7 +3296,7 @@
       ],
       "modules": [],
       "title": "关键操作写审计记录",
-      "rule": "退款、改价、改权限、导出、删除、配置变更、查看敏感明文等操作写入只追加的审计记录：操作人、对象、变更前后、原因、时间、来源；后台提供只读审计页。",
+      "rule": "退款、改价、改权限、导出、删除、经营设置与前台文案变更、查看敏感明文等操作写入只追加的审计记录：操作人、对象、变更前后、原因、时间、来源；后台提供只读审计页。",
       "why": "出现资金或数据问题时需要追溯到人。",
       "do": [
         "审计记录与业务变更同事务写入",
@@ -3300,12 +3311,12 @@
       ],
       "sources": [
         {
-          "title": "界面设计 · 管理后台规范 §13 审计",
-          "url": "file:///D:/Codes/Luz-Design/design/admin/SPEC.md"
+          "title": "Luz Dev · backend/22-admin-rbac/MODULE.md（审计查询与导出）",
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/backend/22-admin-rbac/MODULE.md"
         },
         {
           "title": "Luz Dev · 配置文件与日志",
-          "url": "file:///D:/Codes/Luz-Dev/references/config-logging.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/config-logging.md"
         },
         {
           "title": "美团技术团队 · 如何优雅地记录操作日志",
@@ -3366,7 +3377,7 @@
       "sources": [
         {
           "title": "Luz Dev · 配置文件与日志",
-          "url": "file:///D:/Codes/Luz-Dev/references/config-logging.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/config-logging.md"
         },
         {
           "title": "《中华人民共和国网络安全法》（2025 年修正）第二十三条",
@@ -3415,7 +3426,7 @@
       "sources": [
         {
           "title": "Luz Dev · 配置文件与日志",
-          "url": "file:///D:/Codes/Luz-Dev/references/config-logging.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/config-logging.md"
         },
         {
           "title": "Python · Logging HOWTO",
@@ -3455,7 +3466,7 @@
       "sources": [
         {
           "title": "Luz Dev · 配置文件与日志",
-          "url": "file:///D:/Codes/Luz-Dev/references/config-logging.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/config-logging.md"
         },
         {
           "title": "W3C · Trace Context",
@@ -3496,7 +3507,7 @@
       "sources": [
         {
           "title": "Luz Dev · 配置文件与日志",
-          "url": "file:///D:/Codes/Luz-Dev/references/config-logging.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/config-logging.md"
         },
         {
           "title": "Python · Logging Cookbook（QueueHandler、上下文注入）",
@@ -3545,7 +3556,7 @@
       "sources": [
         {
           "title": "Luz Dev · 配置文件与日志",
-          "url": "file:///D:/Codes/Luz-Dev/references/config-logging.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/config-logging.md"
         },
         {
           "title": "OWASP Logging Vocabulary Cheat Sheet",
@@ -3589,7 +3600,7 @@
       "sources": [
         {
           "title": "Luz Dev 模式库 · 定时与延迟任务",
-          "url": "file:///D:/Codes/Luz-Dev/references/patterns/jobs.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/patterns/jobs.md"
         }
       ]
     },
@@ -3616,7 +3627,7 @@
       "sources": [
         {
           "title": "Luz Dev 模式库 · 缓存与一致性",
-          "url": "file:///D:/Codes/Luz-Dev/references/patterns/cache.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/patterns/cache.md"
         }
       ]
     },
@@ -3645,7 +3656,7 @@
       "sources": [
         {
           "title": "Luz Dev 模式库 · 高并发抢购",
-          "url": "file:///D:/Codes/Luz-Dev/references/patterns/seckill.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/patterns/seckill.md"
         }
       ]
     },
@@ -3715,8 +3726,8 @@
       ],
       "sources": [
         {
-          "title": "开发规范 · 十一",
-          "url": "file:///D:/Codes/开发规范.txt"
+          "title": "Luz 开发规范（内部）· 十一、配置、安全与文档交付；公开对应：references/operations.md §5",
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/operations.md"
         }
       ]
     },
@@ -3774,7 +3785,7 @@
         },
         {
           "title": "Luz Dev · references/miniprogram.md",
-          "url": "file:///D:/Codes/Luz-Dev/references/miniprogram.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/miniprogram.md"
         }
       ]
     },
@@ -3897,6 +3908,43 @@
       ]
     },
     {
+      "id": "MP-006",
+      "domain": "mp",
+      "level": "MUST",
+      "platforms": [
+        "miniprogram",
+        "mobile"
+      ],
+      "modules": [
+        "content"
+      ],
+      "title": "文字提示与展示配置由后端下发，改了不用发版",
+      "rule": "小程序与 App 上确需的每处文字（提示、空状态、引导、须知、规则说明、弹窗与确认文字、营销副文案）有文案键，从 `GET /api/v1/app/content` 取当前文案；模块顺序、显示隐藏与展示开关同样从后端取。安装包只带同一份默认值兜底；启动时先用缓存再拉取，每次页面显示带内容版本检查，有新版本就刷新本页。拉取失败、缺键或值非法时用默认文案，不显示空白或键名；超长文字截断，不撑破版面。",
+      "why": "写死在前端的文字每次修改都要发版审核；运营无法及时调整提示与说明。",
+      "do": [
+        "文案键用“页面.位置”命名，并在种子文件登记字数上限与变量",
+        "变量在端上替换"
+      ],
+      "dont": [
+        "把提示、须知、规则说明写死在页面里",
+        "缺键时显示键名或空白"
+      ],
+      "verify": [
+        "后台改一处文案后，小程序再次进入该页即显示新文案",
+        "断网启动时显示默认文案"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 模块详设 content（文案与展示配置）",
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/module-specs/content.json"
+        },
+        {
+          "title": "Luz System · 界面通用规范“内容来源与维护闭环”",
+          "url": "https://github.com/luzern0414/Luz-System/blob/master/references/ui-standards.html"
+        }
+      ]
+    },
+    {
       "id": "ADMIN-001",
       "domain": "admin",
       "level": "MUST",
@@ -3918,8 +3966,8 @@
       ],
       "sources": [
         {
-          "title": "界面设计 · 管理后台规范 §9 交互规范",
-          "url": "file:///D:/Codes/Luz-Design/design/admin/SPEC.md"
+          "title": "Luz System · 网页管理后台设计规范（危险操作确认）",
+          "url": "https://github.com/luzern0414/Luz-System/blob/master/references/admin-design.html"
         }
       ]
     },
@@ -4004,11 +4052,48 @@
       "sources": [
         {
           "title": "Luz Dev · 门店模块详设",
-          "url": "file:///D:/Codes/Luz-Dev/references/module-specs/store.json"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/module-specs/store.json"
         },
         {
           "title": "Luz System · 交易与营销界面规范 营业状态与一键开停业",
           "url": "https://github.com/luzern0414/Luz-System/blob/master/references/commerce-design.html"
+        }
+      ]
+    },
+    {
+      "id": "ADMIN-005",
+      "domain": "admin",
+      "level": "MUST",
+      "platforms": [
+        "admin",
+        "backend"
+      ],
+      "modules": [
+        "content"
+      ],
+      "title": "后台实时维护前台文案与展示，隐藏项只由开发维护",
+      "rule": "后台“文案与展示”页按小程序页面分组列出 `admin_visible` 的文案与展示键：位置说明与示意、当前文案、默认文案、字数上限、可用变量；行内编辑、保存即生效并提示“已生效”，可恢复默认、查看历史并恢复上一版。服务端校验字数、变量与内容安全，按版本条件更新，写修改历史与审计。通用控件词、系统级提示、法规固定文字与技术性展示配置存在后端但不在后台展示，只通过种子与迁移修改；运行参数写在配置文件里（OPS-005）。",
+      "why": "运营需要实时调整前台文字与展示；把技术性或法规固定的内容放进后台会被误改。",
+      "do": [
+        "保存后给出该文案在小程序里的位置",
+        "两人同时修改时后保存的看到最新内容"
+      ],
+      "dont": [
+        "让后台接口修改隐藏键",
+        "为文字修改设置草稿与发布两步"
+      ],
+      "verify": [
+        "隐藏键不出现在后台列表且接口拒绝修改",
+        "超长、未知变量、违规内容被拒并说明原因"
+      ],
+      "sources": [
+        {
+          "title": "Luz Dev · 模块详设 content（文案与展示配置）",
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/module-specs/content.json"
+        },
+        {
+          "title": "Luz System · 界面通用规范“内容来源与维护闭环”",
+          "url": "https://github.com/luzern0414/Luz-System/blob/master/references/ui-standards.html"
         }
       ]
     },
@@ -4023,7 +4108,7 @@
       ],
       "modules": [],
       "title": "每个动态页面覆盖全部状态",
-      "rule": "加载、空、部分、失败、离线、超时、无权限、过期、成功等状态按 界面设计交接实现，失败状态告诉用户下一步可以做什么；加载状态不能代替其他状态。",
+      "rule": "加载、空、部分、失败、离线、超时、无权限、过期、成功等状态按已批准的 Luz System 设计（界面状态 S-）实现，失败状态告诉用户下一步可以做什么；加载状态不能代替其他状态。",
       "why": "只做正常状态的页面在弱网和异常下会卡死或误导。",
       "do": [
         "状态文案说明发生了什么和下一步"
@@ -4036,8 +4121,8 @@
       ],
       "sources": [
         {
-          "title": "界面设计 · SKILL Non-negotiable design rules",
-          "url": "file:///D:/Codes/Luz-Design/SKILL.md"
+          "title": "Luz System · 界面通用规范 四、页面与版式（界面状态）",
+          "url": "https://github.com/luzern0414/Luz-System/blob/master/references/ui-standards.html"
         }
       ]
     },
@@ -4066,7 +4151,7 @@
       "sources": [
         {
           "title": "Luz Dev · references/result-patterns.md",
-          "url": "file:///D:/Codes/Luz-Dev/references/result-patterns.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/result-patterns.md"
         }
       ]
     },
@@ -4094,8 +4179,8 @@
       ],
       "sources": [
         {
-          "title": "开发规范 · 三、2 用户视角与文案规范",
-          "url": "file:///D:/Codes/开发规范.txt"
+          "title": "Luz 开发规范（内部）· 三、2 用户视角与文案规范；公开对应：Luz System 界面通用规范 七、文案",
+          "url": "https://github.com/luzern0414/Luz-System/blob/master/references/ui-standards.html"
         }
       ]
     },
@@ -4125,7 +4210,7 @@
       "sources": [
         {
           "title": "Luz Dev · agent/backend/SPEC.md",
-          "url": "file:///D:/Codes/Luz-Dev/agent/backend/SPEC.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/agent/backend/SPEC.md"
         }
       ]
     },
@@ -4160,7 +4245,7 @@
       "sources": [
         {
           "title": "Luz Dev · 智能体底座 §2 接入层",
-          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/agent-foundation.md"
         },
         {
           "title": "WHATWG HTML Standard · Server-sent events",
@@ -4209,7 +4294,7 @@
       "sources": [
         {
           "title": "Luz Dev · 智能体底座 §2 接入层",
-          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/agent-foundation.md"
         },
         {
           "title": "WHATWG HTML Standard · Server-sent events",
@@ -4254,7 +4339,7 @@
       "sources": [
         {
           "title": "Luz Dev · 智能体底座 §2 接入层",
-          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/agent-foundation.md"
         },
         {
           "title": "Azure Architecture Center · Queue-Based Load Leveling pattern",
@@ -4298,7 +4383,7 @@
       "sources": [
         {
           "title": "Luz Dev · 智能体底座 §2 接入层、§6 工具层",
-          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/agent-foundation.md"
         },
         {
           "title": "Stripe API Reference · Idempotent requests",
@@ -4338,7 +4423,7 @@
       "sources": [
         {
           "title": "Luz Dev · 智能体底座 §14 稳定",
-          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/agent-foundation.md"
         },
         {
           "title": "Azure Architecture Center · Retry pattern",
@@ -4386,7 +4471,7 @@
       "sources": [
         {
           "title": "Luz Dev · 智能体底座 §14 稳定",
-          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/agent-foundation.md"
         },
         {
           "title": "Azure Architecture Center · Circuit Breaker pattern",
@@ -4428,7 +4513,7 @@
       "sources": [
         {
           "title": "Luz Dev · 智能体底座 §6 工具层",
-          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/agent-foundation.md"
         },
         {
           "title": "Anthropic · Writing effective tools for agents",
@@ -4488,7 +4573,7 @@
       "sources": [
         {
           "title": "Luz Dev · 智能体底座 §7 结构化输出",
-          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/agent-foundation.md"
         },
         {
           "title": "Pydantic · Models",
@@ -4528,7 +4613,7 @@
       "sources": [
         {
           "title": "Luz Dev · 智能体底座 §4 意图识别与路由",
-          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/agent-foundation.md"
         },
         {
           "title": "Anthropic · Building effective agents",
@@ -4572,7 +4657,7 @@
       "sources": [
         {
           "title": "Luz Dev · 智能体底座 §8 记忆",
-          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/agent-foundation.md"
         },
         {
           "title": "LangGraph · Memory overview",
@@ -4620,7 +4705,7 @@
       "sources": [
         {
           "title": "Luz Dev · 智能体底座 §9 知识库",
-          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/agent-foundation.md"
         },
         {
           "title": "Anthropic · Contextual retrieval",
@@ -4668,7 +4753,7 @@
       "sources": [
         {
           "title": "Luz Dev · 智能体底座 §3 输入护栏、§13 安全",
-          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/agent-foundation.md"
         },
         {
           "title": "OWASP GenAI · LLM01:2025 Prompt Injection",
@@ -4716,7 +4801,7 @@
       "sources": [
         {
           "title": "Luz Dev · 智能体底座 §10 输出护栏",
-          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/agent-foundation.md"
         },
         {
           "title": "OWASP GenAI · LLM Top 10 (2025)",
@@ -4760,7 +4845,7 @@
       "sources": [
         {
           "title": "Luz Dev · 智能体底座 §11 可观测与评测",
-          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/agent-foundation.md"
         },
         {
           "title": "LangSmith · Evaluation",
@@ -4804,7 +4889,7 @@
       "sources": [
         {
           "title": "Luz Dev · 智能体底座 §14 稳定、§16 上限",
-          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/agent-foundation.md"
         },
         {
           "title": "OWASP GenAI · LLM Top 10 (2025)",
@@ -4848,7 +4933,7 @@
       "sources": [
         {
           "title": "Luz Dev · 智能体底座 §14 稳定",
-          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/agent-foundation.md"
         },
         {
           "title": "LangGraph · Persistence",
@@ -4896,7 +4981,7 @@
       "sources": [
         {
           "title": "Luz Dev · 智能体底座 §11 可观测与评测",
-          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/agent-foundation.md"
         },
         {
           "title": "OpenAI Agents SDK · Tracing",
@@ -4936,7 +5021,7 @@
       "sources": [
         {
           "title": "Luz Dev · 智能体底座 §12 性能",
-          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/agent-foundation.md"
         },
         {
           "title": "Claude Platform Docs · Prompt caching",
@@ -4981,7 +5066,7 @@
       "sources": [
         {
           "title": "Luz Dev · 智能体底座 §5 编排",
-          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/agent-foundation.md"
         },
         {
           "title": "Anthropic · Building effective agents",
@@ -5008,7 +5093,7 @@
         "agent"
       ],
       "title": "模型只做决策，程序控制运行；执行轮次硬上限",
-      "rule": "模型每一步只输出一个经 Pydantic 校验的决策（调用哪些工具及参数、追问、请求审批或最终回答）；要不要执行、执行几次、重试、审批、终止与错误处理全部由程序判定，不写进提示等模型遵守。推理与行动交替（ReAct）实现为 plan 与 run_tools 两个节点，由程序的路由函数按状态与计数决定去向；每进入一次 plan 记一个决策轮次，超过 MAX_ROUNDS（默认 6）立即以 STEP_LIMIT 结束运行，不再调用模型收尾，也不自动加轮次；工具次数、同名同参重复与 recursion_limit 作兜底。每条用户消息是一次新运行，轮次、工具计数与工具禁用状态从零开始。",
+      "rule": "模型每一步只输出一个经 Pydantic 校验的决策（调用哪些工具及参数、追问、请求审批或最终回答）；要不要执行、执行几次、重试、审批、终止与错误处理全部由程序判定，不写进提示等模型遵守。推理与行动交替（ReAct）实现为 plan 与 run_tools 两个节点，由程序的路由函数按状态与计数决定去向；每进入一次 plan 记一个决策轮次，超过运行配置 `[agent] max_rounds`（默认 6）立即以 STEP_LIMIT 结束运行，不再调用模型收尾，也不自动加轮次；工具次数、同名同参重复与 recursion_limit 作兜底。每条用户消息是一次新运行，轮次、工具计数与工具禁用状态从零开始。",
       "why": "把控制权交给模型时，它会反复调用同一工具、出错后空转或绕开提示里的规则；只有程序里的硬上限与路由能保证每次运行一定结束。",
       "do": [
         "用模型原生的结构化工具调用",
@@ -5020,13 +5105,13 @@
         "达到上限后让模型再写一段总结冒充完成"
       ],
       "verify": [
-        "轮次上限测试：模型一直请求工具时，运行在第 MAX_ROUNDS 轮后以 STEP_LIMIT 结束，模型调用次数等于上限",
+        "轮次上限测试：模型一直请求工具时，运行在第 max_rounds 轮后以 STEP_LIMIT 结束，模型调用次数等于上限",
         "多轮测试：第二条消息的轮次与工具计数从零开始"
       ],
       "sources": [
         {
           "title": "Luz Dev · 智能体底座 §1 总原则、§5 编排、§16 上限",
-          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/agent-foundation.md"
         },
         {
           "title": "Yao et al. · ReAct (arXiv 2210.03629)",
@@ -5076,7 +5161,7 @@
       "sources": [
         {
           "title": "Luz Dev · 智能体底座 §6 工具层 规则 14、15",
-          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/agent-foundation.md"
         },
         {
           "title": "OWASP GenAI · LLM06:2025 Excessive Agency",
@@ -5123,7 +5208,7 @@
       "sources": [
         {
           "title": "Luz Dev · 智能体底座 §6 工具层 规则 10、12",
-          "url": "file:///D:/Codes/Luz-Dev/references/agent-foundation.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/agent-foundation.md"
         },
         {
           "title": "Model Context Protocol · Specification (latest) · Tools",
@@ -5165,8 +5250,8 @@
       ],
       "sources": [
         {
-          "title": "Luz Dev · references/delivery.md",
-          "url": "file:///D:/Codes/Luz-Dev/references/delivery.md"
+          "title": "Luz Dev · references/operations.md",
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/operations.md"
         }
       ]
     },
@@ -5253,8 +5338,8 @@
         "mobile"
       ],
       "modules": [],
-      "title": "前端开发前，界面设计已批准且批准后未改动",
-      "rule": "前端页面开发开始前，用 design_intake.py inspect --require architecture,system_design,prototype 核验 界面设计会话：各阶段已由用户批准，文件与批准时的 摘要 一致，原型有浏览器验收截图；结果写入方案“页面与前端接入”章节。",
+      "title": "前端开发前，Luz System 设计已批准且批准后未改动",
+      "rule": "前端页面开发开始前，用 design_intake.py inspect --require architecture,system_design,prototype 核验 Luz System 设计会话：各阶段已由用户批准，文件与批准时的内容摘要一致，原型有浏览器验收截图；结果写入方案“页面与前端接入”章节。",
       "why": "未批准或批准后被修改的设计不是可交付的依据，按它开发会返工或偏离用户确认的体验。",
       "do": [
         "设计更新后重新 inspect 并对比 ID 变化"
@@ -5267,8 +5352,8 @@
       ],
       "sources": [
         {
-          "title": "Luz Dev · 接入 界面设计 前端",
-          "url": "file:///D:/Codes/Luz-Dev/references/design-integration.md"
+          "title": "Luz Dev · 接入 Luz System 前端设计",
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/design-integration.md"
         }
       ]
     },
@@ -5297,8 +5382,8 @@
       ],
       "sources": [
         {
-          "title": "Luz Dev · 接入 界面设计 前端",
-          "url": "file:///D:/Codes/Luz-Dev/references/design-integration.md"
+          "title": "Luz Dev · 接入 Luz System 前端设计",
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/design-integration.md"
         }
       ]
     },
@@ -5312,8 +5397,8 @@
         "mobile"
       ],
       "modules": [],
-      "title": "改变用户可见的流程、权限或层级前先回到界面设计",
-      "rule": "实现中需要新增或改变页面、操作、权限规则、信息层级时，把平台约束与选项交给 界面设计 更新设计并重新批准，再实现；技术细节（接口字段、加载方式）可由 Luz Dev 补充。",
+      "title": "改变用户可见的流程、权限或层级前先回到 Luz System",
+      "rule": "实现中需要新增或改变页面、操作、权限规则、信息层级时，把平台约束与选项交给 Luz System 更新设计并重新批准，再实现；技术细节（接口字段、加载方式）可由 Luz Dev 补充。",
       "why": "绕过设计直接改体验会让设计与产品分叉，用户批准的内容失效。",
       "do": [
         "在实施记录写明每处偏差与设计方的批准"
@@ -5326,8 +5411,8 @@
       ],
       "sources": [
         {
-          "title": "Luz Dev · 接入 界面设计 前端",
-          "url": "file:///D:/Codes/Luz-Dev/references/design-integration.md"
+          "title": "Luz Dev · 接入 Luz System 前端设计",
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/design-integration.md"
         }
       ]
     },
@@ -5354,7 +5439,7 @@
       "sources": [
         {
           "title": "Luz Dev · 商业资质、备案与许可",
-          "url": "file:///D:/Codes/Luz-Dev/references/compliance.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/compliance.md"
         }
       ]
     },
@@ -5385,7 +5470,7 @@
         },
         {
           "title": "Luz Dev · 商业资质",
-          "url": "file:///D:/Codes/Luz-Dev/references/compliance.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/compliance.md"
         }
       ]
     },
@@ -5412,7 +5497,7 @@
       "sources": [
         {
           "title": "Luz Dev · 软件与素材许可",
-          "url": "file:///D:/Codes/Luz-Dev/references/compliance.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/compliance.md"
         }
       ]
     },
@@ -5439,7 +5524,7 @@
       "sources": [
         {
           "title": "Luz Dev · 用户协议与同意",
-          "url": "file:///D:/Codes/Luz-Dev/references/legal-documents.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/legal-documents.md"
         },
         {
           "title": "中华人民共和国个人信息保护法",
@@ -5470,7 +5555,7 @@
       "sources": [
         {
           "title": "Luz Dev · 用户协议与同意",
-          "url": "file:///D:/Codes/Luz-Dev/references/legal-documents.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/legal-documents.md"
         }
       ]
     },
@@ -5497,7 +5582,7 @@
       "sources": [
         {
           "title": "Luz Dev · 用户协议与同意",
-          "url": "file:///D:/Codes/Luz-Dev/references/legal-documents.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/legal-documents.md"
         }
       ]
     },
@@ -5525,7 +5610,7 @@
       "sources": [
         {
           "title": "Luz Dev · 运维与上线",
-          "url": "file:///D:/Codes/Luz-Dev/references/operations.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/operations.md"
         }
       ]
     },
@@ -5538,7 +5623,7 @@
       ],
       "modules": [],
       "title": "HTTPS、证书续期与服务器加固",
-      "rule": "对外服务只提供 HTTPS（TLS 1.2 及以上），HTTP 跳转 HTTPS，证书自动续期并在到期前 30 天告警；数据库与 Redis 不暴露公网；SSH 仅密钥登录；安全组只开放必要端口；管理后台可限制来源。",
+      "rule": "对外服务只提供 HTTPS（TLS 1.2 及以上），HTTP 跳转 HTTPS，证书自动续期，到期前 21 天预警、7 天严重告警；数据库与 Redis 不暴露公网；SSH 仅密钥登录；安全组只开放必要端口；管理后台可限制来源。",
       "why": "小程序只能请求 HTTPS 合法域名；暴露的数据库与弱口令 SSH 是最常见的入侵入口。",
       "do": [
         "Nginx 配置安全响应头与请求体大小限制"
@@ -5552,7 +5637,7 @@
       "sources": [
         {
           "title": "Luz Dev · 运维与上线",
-          "url": "file:///D:/Codes/Luz-Dev/references/operations.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/operations.md"
         },
         {
           "title": "微信开放文档 · 网络使用说明",
@@ -5583,7 +5668,7 @@
       "sources": [
         {
           "title": "Luz Dev · 上线检查表",
-          "url": "file:///D:/Codes/Luz-Dev/references/operations.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/operations.md"
         }
       ]
     },
@@ -5610,7 +5695,7 @@
       "sources": [
         {
           "title": "Luz Dev · 运维与上线",
-          "url": "file:///D:/Codes/Luz-Dev/references/operations.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/operations.md"
         }
       ]
     },
@@ -5645,7 +5730,7 @@
       "sources": [
         {
           "title": "Luz Dev · 配置文件与日志",
-          "url": "file:///D:/Codes/Luz-Dev/references/config-logging.md"
+          "url": "https://github.com/luzern0414/Luz-Dev/blob/master/references/config-logging.md"
         },
         {
           "title": "Luz System · 远程配置规范",
@@ -6677,7 +6762,7 @@
     {
       "id": "BL-MP-20",
       "projectType": "miniprogram",
-      "feature": "接入已批准的界面设计并通过覆盖检查",
+      "feature": "接入已批准的 Luz System 设计并通过覆盖检查",
       "requirement": "required",
       "condition": "",
       "modules": [
@@ -6693,7 +6778,7 @@
     {
       "id": "BL-AD-15",
       "projectType": "admin",
-      "feature": "接入已批准的界面设计并通过覆盖检查",
+      "feature": "接入已批准的 Luz System 设计并通过覆盖检查",
       "requirement": "required",
       "condition": "",
       "modules": [

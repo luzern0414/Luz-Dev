@@ -1,46 +1,38 @@
 # Merchant admin implementation
 
-The admin is an operational tool. Density, speed, and permission clarity matter more than matching the customer-facing screen one-for-one.
+The page patterns, layout, list defaults (20 rows per page, choice of 10/20/50/100), centred floating panels for detail, edit and confirm, inline switches, header filters, version display and copy are designed in Luz System (`references/admin-design.html`, cards `admin-*`) and arrive in the approved session. This page covers what the implementation adds.
 
 ## Defaults
 
-Vue 3, Vite, TypeScript, Pinia, Vue Router, Element Plus, and ECharts, unless an existing project has another approved stack.
+Vue 3, Vite, TypeScript, Pinia, Vue Router, Element Plus, and ECharts, unless an existing project has another approved stack. Appearance comes from the design tokens, not from the component library's defaults.
 
-## Shell
+## Routes and permissions
 
-Implement the layout from the approved design: navigation, top bar, breadcrumbs where useful, global search or command entry if specified, notifications, account menu, and organization/store scope.
+- Routes declare authentication, permission code, title and fallback. Client checks only shape the interface; the server enforces access and its denial is shown when policy changes after page load.
+- Use the permission codes of the backend contract (`<module>:<action>`, `backend/22-admin-rbac`); never invent client-only codes.
+- Store scope comes from the session (`GET /api/v1/admin/auth/me`); every list and detail request is filtered by the server.
 
-Routes declare authentication, role or permission requirements, title, and fallback. Permission checks in the client improve the experience; the server enforces access.
+## Lists, filters and export
 
-## Primary page patterns
-
-- **Overview:** a small number of decisions, trends, alerts, and shortcuts. Every metric defines its source, time range, freshness, and failure state.
-- **List:** URL-owned filters, cursor or page navigation, sort, selection, bulk actions, loading, empty, error, and export behavior.
-- **Detail:** stable identity, status, summary, actions, history, related records, and permission-aware visibility.
-- **Create/edit:** keyed form state, validation, unsaved-change protection, server error mapping, and success continuation.
-- **Wizard:** short steps, resumable state, clear validation, and a review page.
-- **Settings:** grouped changes, explicit save scope, audit of sensitive changes, and confirmation for destructive impact.
-
-## Data tables
-
-- Preserve filters and page state in the URL.
-- Show server-side sorting and pagination where the dataset can grow.
-- Use stable row identity.
-- Distinguish selection across pages from selection on the current page.
-- Explain partial bulk results and provide the result download.
+- Filters, sort and page live in the URL, so a refresh or a shared link restores the view.
+- Server-side pagination with `page` / `page_size` (default 20, at most 100) and filters declared through `ListSpec` (`backend/SPEC.md` §3.4); unknown parameters return 4001.
+- Selection across pages is distinct from selection on the current page; bulk actions report partial results and offer the failed rows for download.
+- Export uses the same filter declaration as the list, runs asynchronously above 5,000 rows, masks sensitive fields and writes an audit record (ADMIN-002).
 - Virtualize only when measurement shows a list cannot remain responsive.
 
-## Permissions and audit
+## Writes and audit
 
-Use the shared permission codes from the backend contract. Do not invent client-only codes. Render the action visibility and disabled explanation exactly as the approved design requires. The server remains authoritative and its denial is shown when policy changes after page load.
-
-Audit sensitive reads and all consequential writes with actor, organization/store scope, target, change summary, result, trace ID, and time. Never render sensitive fields to users outside the approved scope.
+- Writes carry `Idempotency-Key`; a version conflict (4090) reloads the record and keeps the user's input.
+- Dangerous operations state object, count, amount and consequence before confirming (ADMIN-001); sensitive ones require re-authentication (`reauth_required`).
+- Every consequential write and sensitive read is audited with actor, store scope, target, change summary, result, trace ID and time (OBS-002).
+- The admin shows the front and back versions from the build and the version API and offers a refresh when a new version is deployed (REL-002). Stores have one-click open and close with impact preview and open check (ADMIN-004, module spec `store`).
+- Texts and display settings the merchant maintains come from the content module (ADMIN-005); runtime parameters are never an admin page (OPS-005).
 
 ## Required tests
 
-- Login, session expiration, disabled account, and organization/store scope
-- Route and action permission behavior
-- List/filter/pagination/deep link and bulk partial failure
+- Login, session expiry (idle 15 minutes, absolute 8 hours), disabled account, MFA and store scope
+- Route and action permission behaviour, including denial after a permission change
+- List, filter, pagination, deep link and bulk partial failure
 - Form validation and server conflict mapping
-- Irreversible action confirmation and audit
-- Dashboard metric loading, empty, stale, and failure states
+- Dangerous-operation confirmation and audit
+- Dashboard metric loading, empty, stale and failure states

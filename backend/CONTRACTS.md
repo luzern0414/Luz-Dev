@@ -2,7 +2,7 @@
 
 其他模块只能调用这里列出的公开接口（各包 `__init__.py` 的 `__all__`；`identity.api` / `admin_rbac.api` 等路由依赖另列）。调用方在函数内延迟导入（`import wallet` 写在函数里）避免循环；被依赖模块未启用时用 `try: import x except ImportError` 退回默认实现。跨模块副作用一律走发件箱事件（同事务 `enqueue_event`），事件字段见 `MODULES.md` 事件总表，契约由 `tests/test_event_contracts.py` 自动核对（订阅者只能读生产者真实发出的字段）。
 
-状态：**标准** = 代码 + 测试 + MODULE.md；**基础** = 旧版代码；**规划** = 只有设计（见 `MODULES.md`），尚无可调用接口。
+状态列与 `MODULES.md` 一致（定义见那里）；规划模块尚无可调用接口。
 
 ## 框架 `luzback`（00-framework）
 
@@ -29,7 +29,7 @@
 
 | 模块 | 状态 | 契约 |
 |---|---|---|
-| inventory（07） | 标准 | `Sku`；`deduct(db, sku_id, qty, ref=None) -> bool`、`restore(db, sku_id, qty, ref=None) -> bool`（同一 ref 只生效一次）、`restocked(db, ref, sku_id)`；预占：`reserve`, `confirm`, `release`, `expired_refs`, `ledger_balance` |
+| inventory（07） | 基础 | `Sku`；`deduct(db, sku_id, qty, ref=None) -> bool`、`restore(db, sku_id, qty, ref=None) -> bool`（同一 ref 只生效一次）、`restocked(db, ref, sku_id)`；预占：`reserve`, `confirm`, `release`, `expired_refs`, `ledger_balance` |
 | order（08） | 标准 | `preview`, `create_order`, `pay`, `cancel_order`, `confirm_receipt`, `ship`, `mark_fulfilled`；售后用：`refund_quote`, `reserve_refund`, `release_refund`, `settle_refund`, `refund_balance(db, order_id, [(item_id, amount_cents)], ref)`；扩展：`register_line_kind`（goods / service / member_card）、`set_stock_port / set_coupon_port / set_wallet_port / set_member_card_port / set_payment_gateway / set_promotions_provider / set_terms_checker / set_address_provider / set_buyer_contact_provider` |
 | wechat_pay（09） | 标准 | `register_payable(business_type, fn) / register_on_paid / register_on_refunded`；`create_payment`, `pay_business`, `close_payment`, `create_refund(db, payment_id, amount_cents, reason, business_ref, actor)`, `find_active_refund(db, business_ref) -> RefundRecord \| None`, `get_refund_status`, `paid_total`, `query_and_reconcile`, `reconcile_bill`, `request_shipping_upload`；客户端：`WechatPayClient` / `HttpWechatPayClient`、`ShippingClient` / `HttpShippingClient(access_token=None → wechat_mp)`；`production_problems(cfg)` |
 | after_sales（10） | 标准 | `apply`, `approve`, `reject`, `receive_return`, `submit_refund`, `retry_refund`, `manual_settle`, `refundable`, `business_ref(case_id) = "after_sales:{id}"`；扩展：`set_refund_gateway`, `set_evidence_checker`；结果靠 `refund.*` 事件 |
@@ -59,7 +59,8 @@
 |---|---|---|
 | jobs（25） | 标准 | 约定：`<pkg>/jobs.py` 的 `JOBS`（`luzback.scheduler.Job`）、`<pkg>/events.py` 的 `SUBSCRIPTIONS = {topic: handler(db, payload, event_id)}`（幂等、不提交）；`discover_jobs`, `discover_subscriptions`, `EventRouter`, `make_scheduler`, `make_worker`；`python -m jobs scheduler \| worker \| list` |
 | address（05）/ geo（06）/ booking（13） | 基础 | address：`create_address`, `set_default`, `delete_address`；geo：`haversine_m`, `check_delivery_range`；booking：`book`, `cancel`, `check_in`, `mark_no_shows` |
-| store（02）/ catalog（03）/ cart（04）/ delivery（11）/ queue（12）/ media（21）/ app_settings（23）/ report（24）/ agent_support（26） | 规划 | 设计见 `MODULES.md`；实现时先在这里登记导出再写代码 |
+| app_settings（23） | 标准 | 运行配置：`install(store)`（进程入口登记 config_loads 加载记录）、`record_load`；读取运行参数用框架的 `luzback.current_config()` / `config_for(store_id=, user_ref=)`。文案与展示：`resolve_display(db, store_id)`, `public_content(db, store_id)`, `content_version(db)`, `update_text`, `reset_text`, `update_display`, `reset_display`, `restore_revision`；扩展：`register_display_key(DisplayKey(...))`, `set_text_checker(fn)`；种子：`load_seed`, `sync_texts`；`python -m app_settings sync \| check-seed` |
+| store（02）/ catalog（03）/ cart（04）/ delivery（11）/ queue（12）/ media（21）/ report（24）/ agent_support（26） | 规划 | 设计见 `MODULES.md`；实现时先在这里登记导出再写代码 |
 
 ## 支付业务注册（wechat_pay）
 

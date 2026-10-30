@@ -17,6 +17,8 @@
 #   monitoring 172.30.2.0/24 prometheus、alertmanager、blackbox、grafana、node-exporter
 #   api 只信任 nginx 的 X-Forwarded-For（FORWARDED_ALLOW_IPS / LUZ_TRUSTED_PROXIES = 172.30.0.10）；
 #   /metrics 只对 data 网段（Prometheus）开放（LUZ_INTERNAL_NETWORKS），且 Prometheus 带 Bearer 令牌。
+#   /internal/config、/internal/config/reload 另需运维令牌 LUZ_OPS_TOKEN；nginx 不转发 /internal/*，运维在容器内调用（RUNBOOK §5）。
+# 运行配置：/opt/luz/config/runtime 整目录只读挂载到三个应用服务，改配置不重建镜像、不重启（RUNBOOK §5）。
 name: luz-app
 
 x-logging: &logging
@@ -41,11 +43,15 @@ x-app: &app
   ulimits: { nofile: { soft: 65536, hard: 65536 } }
   volumes:
     - /etc/luz/keys:/etc/luz/keys:ro          # 微信支付私钥、平台公钥（属主 10001，权限 400）
+    # 运行配置（backend/config/runtime/*.toml）：整个目录只读挂载，api、worker、scheduler 都监听它并热加载。
+    # 必须挂目录、不能挂单个文件（编辑与同步是“写临时文件再改名”，单文件挂载看不到新文件）；同步只替换目录里的文件，不替换目录本身。
+    - /opt/luz/config/runtime:/srv/backend/config/runtime:ro
   environment: &app-env
     LUZ_ENV: prod
     FORWARDED_ALLOW_IPS: "172.30.0.10"        # uvicorn --proxy-headers 只信任 nginx
     LUZ_TRUSTED_PROXIES: "172.30.0.10/32"     # 应用层 client_ip 同样只信任 nginx
-    LUZ_INTERNAL_NETWORKS: "172.30.1.0/24"    # /metrics 只对 data 网段开放（nginx 不在其中）
+    LUZ_INTERNAL_NETWORKS: "172.30.1.0/24"    # /metrics 只对 data 网段开放（nginx 不在其中）；/internal/* 另允许容器本机
+    LUZ_CONFIG_WATCH: auto                    # 监听配置目录：auto（inotify，失败改轮询）| poll | off
     APP_VERSION: ${APP_VERSION:-unknown}
 
 services:
@@ -122,8 +128,8 @@ services:
   migrate:
     <<: *app
     # 一次性管理进程（12-Factor）：release.sh 在替换 api 之前执行
-    # 迁移后写入权限码与内置角色（幂等）；首个超级管理员另行执行 python -m admin_rbac.bootstrap <账号>
-    command: ["sh", "-c", "alembic upgrade head && python -m admin_rbac.bootstrap --seed"]
+    # 迁移后写入权限码与内置角色、同步文案种子（都幂等）；首个超级管理员另行执行 python -m admin_rbac.bootstrap <账号>
+    command: ["sh", "-c", "alembic upgrade head && python -m admin_rbac.bootstrap --seed && python -m app_settings sync"]
     restart: "no"
     profiles: ["release"]
     healthcheck: { disable: true }

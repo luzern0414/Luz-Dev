@@ -23,6 +23,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from luzback import AppError, ErrorCode, create_token, decode_token, enqueue_event, get_settings
+from luzback import log_events as ev
+from luzback.logging import log_event
 from luzback.crypto import FieldCipher
 
 from . import config
@@ -58,8 +60,13 @@ def _ua(user_agent: str | None) -> str | None:
 
 def _log(db: Session, user: AdminUser | None, username: str, factor: str, success: bool, reason: str,
          ip: str | None, user_agent: str | None, at: datetime) -> None:
+    """登录日志表（后台可查）+ 失败与锁定的安全事件（security.*，单独成流告警；不记用户名与口令）。"""
     db.add(AdminLoginLog(user_id=user.id if user else None, username=username[:64], factor=factor, success=success,
                          reason=reason, ip=ip, user_agent=(user_agent or "")[:500] or None, created_at=at))
+    if not success:
+        event = ev.SECURITY_AUTHN_LOGIN_LOCK if reason == "locked" else ev.SECURITY_AUTHN_LOGIN_FAIL
+        log_event(log, event, logging.WARNING, outcome="failure", reason=reason, factor=factor, actor="staff",
+                  staff_ref=f"staff:{user.id}" if user else None, source_ip=ip)
 
 
 # ---------- 节流 ----------

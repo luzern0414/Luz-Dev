@@ -23,8 +23,10 @@ CATALOG: dict[str, tuple[tuple[str, str], ...]] = {
     "campaign": (("campaign:read", "活动查看"), ("campaign:write", "活动配置")),
     "review": (("review:read", "评价查看"), ("review:moderate", "评价审核"), ("review:reply", "评价回复")),
     "store": (("store:read", "门店查看"), ("store:write", "门店编辑")),
+    "reservation": (("booking:read", "预约查看"), ("booking:manage", "预约签到与取消")),
+    "legal": (("legal:read", "协议查看"), ("legal:publish", "协议发布")),
     "agent_support": (("kb:read", "知识库查看"), ("kb:write", "知识库编辑"), ("agent:read", "智能体对话审计"),
-                      ("agent:config", "智能体配置")),
+                      ("agent:config", "智能体快捷回复与知识库设置")),
     "admin_rbac": (
         ("staff:read", "员工查看"), ("staff:write", "员工新建 / 编辑 / 停用 / 重置"),
         ("staff:sensitive", "员工手机号明文查看（写审计）"), ("role:read", "角色与权限码查看"),

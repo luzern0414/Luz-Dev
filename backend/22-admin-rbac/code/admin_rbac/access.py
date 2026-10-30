@@ -18,6 +18,8 @@ from sqlalchemy import Select, false, select
 from sqlalchemy.orm import Session
 
 from luzback import AppError, ErrorCode, write_audit
+from luzback import log_events as ev
+from luzback.logging import log_event
 
 from . import config
 from .models import STATUS_ACTIVE, AdminRole, AdminRolePermission, AdminStoreScope, AdminUser, AdminUserRole
@@ -134,8 +136,8 @@ def assert_permission(*args: Any) -> None:
         raise TypeError("at least one permission code is required")
     missing = [c for c in codes if not staff.has(c)]
     if missing:
-        log.warning("authz_denied", extra={"fields": {"event": "authz_denied", "staff_id": staff.id, "required": missing,
-                                                      "trace_id": staff.trace_id}})
+        log_event(log, ev.SECURITY_AUTHZ_FAIL, logging.WARNING, outcome="failure", reason="permission_missing",
+                  staff_ref=f"staff:{staff.id}", required=missing, source_ip=staff.ip)
         raise AppError(ErrorCode.FORBIDDEN, "permission denied", data={"required": missing})
 
 
@@ -150,6 +152,8 @@ def assert_in_scope(staff: Staff, store_id: int | None) -> None:
     if scope is None:
         return
     if not store_id or int(store_id) not in scope:
+        log_event(log, ev.SECURITY_AUTHZ_FAIL, logging.WARNING, outcome="failure", reason="store_out_of_scope",
+                  staff_ref=f"staff:{staff.id}", target_store_id=store_id, source_ip=staff.ip)
         raise AppError(ErrorCode.SCOPE_FORBIDDEN, "store out of scope", data={"store_id": store_id})
 
 

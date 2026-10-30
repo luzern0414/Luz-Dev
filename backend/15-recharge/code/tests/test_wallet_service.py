@@ -23,7 +23,7 @@ T0 = datetime(2026, 10, 1, 2, 0, tzinfo=timezone.utc)
 
 @pytest.fixture(autouse=True)
 def fresh_config():
-    wconfig.CONFIG = wconfig.WalletConfig()
+    wconfig.reset_config()
     set_policy_resolver(lambda store_id: CONSERVATIVE)
     port = wallet.FakePaymentPort()
     wallet.set_payment_port(port)
@@ -169,7 +169,7 @@ def test_custom_amount_disabled_by_default(db):
     with pytest.raises(AppError) as exc:
         svc.create_recharge_order(db, 1, None, None, 5000, at=T0)
     assert exc.value.code == ErrorCode.BAD_REQUEST
-    wconfig.CONFIG.custom_amount_enabled = True
+    wconfig.set_config(custom_amount_enabled=True)
     assert svc.create_recharge_order(db, 1, None, None, 5000, at=T0)["amount_cents"] == 5000
 
 
@@ -216,7 +216,7 @@ def test_policy_presets_and_custom():
 
 def test_stop_prepaid_switch(db):
     plan_id = plan(db)
-    wconfig.CONFIG.stop_prepaid = True
+    wconfig.set_config(stop_prepaid=True)
     with pytest.raises(AppError) as exc:
         svc.create_recharge_order(db, 1, None, plan_id, at=T0)
     assert exc.value.data["reason"] == "prepaid_stopped"
@@ -430,7 +430,7 @@ def utcnow_plus(days):
 
 
 def test_auto_approve_when_configured(db):
-    wconfig.CONFIG.refund_requires_approval = False
+    wconfig.set_config(refund_requires_approval=False)
     batch_id = paid(db, amount=1000, bonus=0)
     refund = svc.request_refund(db, batch_id, "customer", "x", "user:1", user_id=1, at=T0 + timedelta(days=1))
     assert refund["status"] == "processing"

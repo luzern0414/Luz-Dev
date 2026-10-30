@@ -1,0 +1,404 @@
+{
+  "id": "content",
+  "order": 22,
+  "name": "文案与展示配置",
+  "modules": [
+    "content"
+  ],
+  "summary": "小程序上的文字提示与数据展示方式尽量由后端下发：每处文字有文案键，后端存当前文案，安装包只带兜底默认值；运营在后台按页面实时维护，保存即生效；系统级与法规固定的文案和配置存在后端但不在后台展示，由开发维护。",
+  "features": [
+    {
+      "name": "文案库",
+      "description": "小程序每处可见文字有一个文案键（`页面.位置`，如 `order_confirm.pay_hint`）：提示、空状态、引导、须知、规则说明、弹窗与确认文字、按钮旁说明、营销副文案、失败的友好说明都在内。后端存当前文案、默认文案、字数上限与可用变量（如 `{store_name}`）；小程序安装包只带同一份默认值兜底。"
+    },
+    {
+      "name": "展示配置",
+      "description": "首页模块顺序与显示隐藏、各页展示开关（显示销量、剩余库存、评价）、标签与分类名称、展示数量上限，按全局或门店存在 `display_settings`；键在代码里登记类型、范围、默认值与是否在后台展示。门店的经营设置（起送价、配送费等）在门店详设的 `store_settings`。"
+    },
+    {
+      "name": "后台可见与隐藏",
+      "description": "每个文案键与展示键都标 `admin_visible`：运营需要改的在后台“文案与展示”页按小程序页面分组显示；通用控件词、系统级提示、法规固定文字与技术性展示配置存在后端但不在后台展示，开发通过数据种子与迁移修改并经代码评审。"
+    },
+    {
+      "name": "实时生效",
+      "description": "每次保存生成新的内容版本；小程序启动时拉取，每次页面显示时带版本检查，未变化返回未修改；改了文案无需发版，下一次进入该页即可看到。"
+    }
+  ],
+  "flows": [
+    {
+      "name": "运营修改文案或展示",
+      "steps": [
+        "后台“文案与展示”页按小程序页面分组列出可见的键：位置说明与截图示意、当前文案、默认文案、字数上限、可用变量。",
+        "运营在行内编辑后保存，调用 `PUT /api/v1/admin/content/texts/{key}`（展示开关与顺序用 `PUT /api/v1/admin/content/display/{key}`）；服务端校验字数、变量与内容安全，按版本条件更新。",
+        "保存成功写 `content_revisions` 与审计，内容版本加一；页面提示“已生效”，并给出在小程序里的位置。",
+        "需要撤回时在历史里恢复上一版，或调用 `POST /api/v1/admin/content/texts/{key}/reset` 恢复默认。"
+      ]
+    },
+    {
+      "name": "小程序取用",
+      "steps": [
+        "启动时先用本地缓存，再调用 `GET /api/v1/app/content?platform=&client_version=&content_version=&store_id=` 拉取文案与公开的展示配置；未变化返回未修改。",
+        "页面显示（onShow）时再用同一接口带版本检查，有新版本就替换缓存并刷新本页文字。",
+        "文案里的变量在端上替换；缺键、拉取失败或值非法时用安装包默认值，不显示空白或键名。"
+      ]
+    },
+    {
+      "name": "开发新增或修改隐藏键",
+      "steps": [
+        "新页面或新位置需要文字时，开发在文案种子文件里登记键、页面、位置说明、默认文案、字数上限、变量与是否后台可见，并写数据迁移。",
+        "隐藏键的文案只通过种子与迁移修改，走代码评审；后台接口拒绝修改隐藏键。",
+        "代码不再使用的键由迁移删除，后台列表随之消失。"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "page": "文案与展示（后台）",
+      "field": "text",
+      "label": "文案",
+      "type": "文本",
+      "required": false,
+      "rule": "不超过登记的字数上限；只能使用登记的变量；通过内容安全检测；留空表示用默认文案（标为可留空的键除外）。"
+    },
+    {
+      "page": "文案与展示（后台）",
+      "field": "value",
+      "label": "展示设置",
+      "type": "按登记类型",
+      "required": true,
+      "rule": "开关、顺序、数量与名称按登记的类型和范围校验。"
+    }
+  ],
+  "apis": [
+    {
+      "method": "GET",
+      "path": "/api/v1/app/content",
+      "caller": "小程序、App、H5",
+      "purpose": "拉取文案与公开的展示配置",
+      "request": "platform，client_version，content_version，store_id（可选）",
+      "response": "content_version，texts（键与文案），display（公开的展示配置，门店覆盖全局）；未变化返回未修改",
+      "errors": "—"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/content/texts",
+      "caller": "后台",
+      "purpose": "按页面列出后台可见的文案键",
+      "request": "page，keyword",
+      "response": "键、页面、位置说明、当前文案、默认文案、字数上限、变量、最近修改人与时间、版本",
+      "errors": "FORBIDDEN"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/admin/content/texts/{key}",
+      "caller": "后台",
+      "purpose": "修改文案，保存即生效",
+      "request": "text，version（条件更新）",
+      "response": "新文案、版本与内容版本",
+      "errors": "CONTENT_TEXT_TOO_LONG，CONTENT_VARIABLE_UNKNOWN，CONTENT_UNSAFE，CONTENT_KEY_HIDDEN，CONTENT_CONFLICT"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/content/texts/{key}/reset",
+      "caller": "后台",
+      "purpose": "恢复默认文案",
+      "request": "无",
+      "response": "默认文案与新的内容版本",
+      "errors": "CONTENT_KEY_HIDDEN"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/content/display",
+      "caller": "后台",
+      "purpose": "列出后台可见的展示设置",
+      "request": "store_id（可选，空为全局）",
+      "response": "键、说明、当前值、默认值、覆盖来源（全局或门店）、类型与范围、版本",
+      "errors": "FORBIDDEN"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/admin/content/display/{key}",
+      "caller": "后台",
+      "purpose": "修改展示设置，保存即生效",
+      "request": "store_id（可选），value，version（条件更新）",
+      "response": "生效后的值与新的内容版本",
+      "errors": "VALIDATION_FAILED，CONTENT_KEY_HIDDEN，CONTENT_CONFLICT"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/content/revisions",
+      "caller": "后台",
+      "purpose": "修改历史，可恢复到某一版",
+      "request": "key，page",
+      "response": "修改前后的值、修改人、时间；恢复操作再生成一条新版本",
+      "errors": "FORBIDDEN"
+    }
+  ],
+  "results": [
+    {
+      "case": "保存成功",
+      "page": "文案与展示",
+      "display": "行内显示“已生效”与修改时间；小程序下一次显示该页时换成新文案。"
+    },
+    {
+      "case": "超出字数或变量不对",
+      "page": "文案与展示",
+      "display": "保存按钮旁写明允许的字数与可用变量，不保存。"
+    },
+    {
+      "case": "小程序拉取失败",
+      "page": "任意页面",
+      "display": "照常显示缓存或安装包默认文案，不提示错误。"
+    }
+  ],
+  "writes": [
+    {
+      "when": "修改或恢复文案",
+      "table": "ui_texts、content_revisions、audit_logs",
+      "content": "新文案与版本；修改前后的值与修改人；审计。"
+    },
+    {
+      "when": "修改展示设置",
+      "table": "display_settings、content_revisions、audit_logs",
+      "content": "全局或门店的值；修改前后的值与修改人；审计。"
+    }
+  ],
+  "tables": [
+    {
+      "name": "ui_texts",
+      "label": "文案库",
+      "purpose": "小程序每处可见文字的当前文案与约束",
+      "fields": [
+        {
+          "name": "key",
+          "type": "VARCHAR(80)",
+          "required": true,
+          "default": "—",
+          "comment": "文案键，`页面.位置`"
+        },
+        {
+          "name": "page",
+          "type": "VARCHAR(48)",
+          "required": true,
+          "default": "—",
+          "comment": "所在页面，后台按它分组"
+        },
+        {
+          "name": "slot_label",
+          "type": "VARCHAR(60)",
+          "required": true,
+          "default": "—",
+          "comment": "给运营看的位置说明，如“确认订单页 · 支付按钮上方”"
+        },
+        {
+          "name": "text",
+          "type": "TEXT",
+          "required": false,
+          "default": "—",
+          "comment": "当前文案；空表示用默认文案"
+        },
+        {
+          "name": "default_text",
+          "type": "TEXT",
+          "required": true,
+          "default": "—",
+          "comment": "默认文案，与安装包内置值一致"
+        },
+        {
+          "name": "max_length",
+          "type": "SMALLINT",
+          "required": true,
+          "default": "—",
+          "comment": "字数上限，按版面实测"
+        },
+        {
+          "name": "variables",
+          "type": "TEXT[]",
+          "required": false,
+          "default": "{}",
+          "comment": "可用变量，如 store_name、amount"
+        },
+        {
+          "name": "allow_empty",
+          "type": "BOOLEAN",
+          "required": true,
+          "default": "false",
+          "comment": "可留空时该位置不显示"
+        },
+        {
+          "name": "admin_visible",
+          "type": "BOOLEAN",
+          "required": true,
+          "default": "true",
+          "comment": "是否在后台展示；否表示只由开发维护"
+        },
+        {
+          "name": "sort_order",
+          "type": "INTEGER",
+          "required": true,
+          "default": "0",
+          "comment": "同页内的排列顺序"
+        },
+        {
+          "name": "version",
+          "type": "INTEGER",
+          "required": true,
+          "default": "1",
+          "comment": "条件更新用的版本"
+        },
+        {
+          "name": "updated_by",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "最近修改人"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(key)",
+        "INDEX(page, sort_order)"
+      ]
+    },
+    {
+      "name": "display_settings",
+      "label": "展示设置",
+      "purpose": "全局或门店的展示配置：模块顺序与显隐、展示开关、名称与数量上限",
+      "fields": [
+        {
+          "name": "store_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "门店；为空表示全局"
+        },
+        {
+          "name": "key",
+          "type": "VARCHAR(64)",
+          "required": true,
+          "default": "—",
+          "comment": "展示键，如 home.module_order、product.show_sales"
+        },
+        {
+          "name": "value",
+          "type": "JSONB",
+          "required": true,
+          "default": "—",
+          "comment": "按登记类型保存的值"
+        },
+        {
+          "name": "admin_visible",
+          "type": "BOOLEAN",
+          "required": true,
+          "default": "true",
+          "comment": "是否在后台展示；否表示只由开发维护"
+        },
+        {
+          "name": "version",
+          "type": "INTEGER",
+          "required": true,
+          "default": "1",
+          "comment": "条件更新用的版本"
+        },
+        {
+          "name": "updated_by",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "最近修改人"
+        }
+      ],
+      "indexes": [
+        "UNIQUE(store_id, key) NULLS NOT DISTINCT"
+      ]
+    },
+    {
+      "name": "content_revisions",
+      "label": "内容修改历史",
+      "purpose": "文案与展示设置每次修改的前后值，编号即内容版本",
+      "fields": [
+        {
+          "name": "target_type",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "—",
+          "comment": "text 或 display"
+        },
+        {
+          "name": "target_key",
+          "type": "VARCHAR(80)",
+          "required": true,
+          "default": "—",
+          "comment": "文案键或展示键"
+        },
+        {
+          "name": "store_id",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "门店范围的展示设置"
+        },
+        {
+          "name": "old_value",
+          "type": "JSONB",
+          "required": false,
+          "default": "—",
+          "comment": "修改前"
+        },
+        {
+          "name": "new_value",
+          "type": "JSONB",
+          "required": false,
+          "default": "—",
+          "comment": "修改后"
+        },
+        {
+          "name": "changed_by",
+          "type": "BIGINT",
+          "required": false,
+          "default": "—",
+          "comment": "修改人；迁移写入时为空"
+        },
+        {
+          "name": "source",
+          "type": "VARCHAR(16)",
+          "required": true,
+          "default": "admin",
+          "comment": "admin、migration、restore"
+        }
+      ],
+      "indexes": [
+        "INDEX(target_type, target_key, created_at)"
+      ]
+    }
+  ],
+  "exceptions": [
+    {
+      "case": "两人同时修改同一文案",
+      "handling": "按 version 条件更新，后保存的返回 CONTENT_CONFLICT 并显示最新内容。"
+    },
+    {
+      "case": "文案超长或撑破版面",
+      "handling": "保存时按字数上限拒绝；端上仍对超长文字截断加省略号，不让布局错位。"
+    },
+    {
+      "case": "文案含违规内容",
+      "handling": "保存前做内容安全检测，不通过返回 CONTENT_UNSAFE。"
+    },
+    {
+      "case": "旧版本小程序没有新键或新位置",
+      "handling": "旧版本忽略不认识的键；新键只在新版本使用，默认值随新版本发布。"
+    },
+    {
+      "case": "后台接口试图修改隐藏键",
+      "handling": "返回 CONTENT_KEY_HIDDEN；隐藏键只通过种子与迁移修改。"
+    },
+    {
+      "case": "运营误改导致文案错误",
+      "handling": "在历史里恢复上一版或恢复默认，恢复也生成新版本并写审计。"
+    },
+    {
+      "case": "内容接口不可用",
+      "handling": "小程序用缓存与安装包默认值照常使用；服务端恢复后下次页面显示时更新。"
+    }
+  ]
+}

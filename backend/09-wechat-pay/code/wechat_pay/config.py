@@ -1,35 +1,28 @@
-"""wechat_pay 配置：全部来自环境变量，代码里没有真实密钥。
+"""wechat_pay 配置：秘密与部署参数（环境变量，代码里没有真实密钥）+ 运行参数（config/runtime 的 `[wechat_pay]`）。
 
-项目定制只改环境变量，或在启动时 `set_config(WechatPayConfig(...))`。
-生产启动时调用 `assert_production_ready()`：缺密钥、仍用假客户端、回调地址不合规一律拒绝启动。
+- 环境变量：客户端模式、AppID、商户号、APIv3 密钥、商户私钥与证书序列号、微信支付公钥或平台证书、回调地址、
+  接口地址、User-Agent、商户订单号前缀、时区。
+- 运行参数（超时与重试、查单节奏、支付单有效期、退款、账单、发货信息）的类型、范围与默认值登记在
+  `luzback/runtime_config.py` 的 WechatPaySettings；这里的数据类是读取时的合并结果，属性名与键同名。
+`set_config(WechatPayConfig(...))` 只给项目启动与测试用（其中的运行参数转成测试用运行配置，生产环境不能用）；
+`set_config(None)` 恢复为环境变量与运行配置。生产启动时调用 `assert_production_ready()`：缺密钥、仍用假客户端、
+回调地址不合规一律拒绝启动。
 """
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field, replace
+from functools import partial
 from urllib.parse import urlparse
 
 from luzback import get_settings
+from luzback.module_config import ModuleConfig, runtime_default
+
+_rt = partial(runtime_default, "wechat_pay")
 
 
 def _env(name: str, default: str = "") -> str:
     return os.getenv(name, default)
-
-
-def _int(name: str, default: int) -> int:
-    return int(os.getenv(name, str(default)))
-
-
-def _float(name: str, default: float) -> float:
-    return float(os.getenv(name, str(default)))
-
-
-def _bool(name: str, default: bool) -> bool:
-    return os.getenv(name, "true" if default else "false").lower() in {"1", "true", "yes", "on"}
-
-
-def _ints(name: str, default: str) -> tuple[int, ...]:
-    return tuple(int(x) for x in os.getenv(name, default).split(",") if x.strip())
 
 
 def _pairs(name: str) -> tuple[tuple[str, str], ...]:
@@ -44,7 +37,7 @@ def _pairs(name: str) -> tuple[tuple[str, str], ...]:
 
 @dataclass(frozen=True)
 class WechatPayConfig:
-    # ---- 客户端 ----
+    # ---- 秘密与部署参数（环境变量）：客户端 ----
     client_mode: str = field(default_factory=lambda: _env("WECHAT_PAY_CLIENT", "fake"))  # fake | http
     appid: str = field(default_factory=lambda: _env("WECHAT_PAY_APPID", get_settings().wechat_appid))
     mchid: str = field(default_factory=lambda: _env("WECHAT_PAY_MCHID", get_settings().wechat_mch_id))
@@ -62,64 +55,59 @@ class WechatPayConfig:
     base_url: str = field(default_factory=lambda: _env("WECHAT_PAY_BASE_URL", "https://api.mch.weixin.qq.com"))
     backup_base_url: str = field(default_factory=lambda: _env("WECHAT_PAY_BACKUP_BASE_URL", "https://api2.mch.weixin.qq.com"))
     user_agent: str = field(default_factory=lambda: _env("WECHAT_PAY_USER_AGENT", "luz-backend-wechatpay/2.0"))
-
-    # ---- 超时与重试（SPEC §9：下单 8s 0 次重试、查询 5s 2 次、退款 10s 0 次由任务重试）----
-    timeout_prepay_s: float = field(default_factory=lambda: _float("WECHAT_PAY_TIMEOUT_PREPAY", 8))
-    timeout_query_s: float = field(default_factory=lambda: _float("WECHAT_PAY_TIMEOUT_QUERY", 5))
-    timeout_close_s: float = field(default_factory=lambda: _float("WECHAT_PAY_TIMEOUT_CLOSE", 5))
-    timeout_refund_s: float = field(default_factory=lambda: _float("WECHAT_PAY_TIMEOUT_REFUND", 10))
-    timeout_bill_s: float = field(default_factory=lambda: _float("WECHAT_PAY_TIMEOUT_BILL", 30))
-    query_attempts: int = field(default_factory=lambda: _int("WECHAT_PAY_QUERY_ATTEMPTS", 3))
-    close_attempts: int = field(default_factory=lambda: _int("WECHAT_PAY_CLOSE_ATTEMPTS", 2))
-    bulkhead: int = field(default_factory=lambda: _int("WECHAT_PAY_BULKHEAD", 30))
-    timestamp_skew_s: int = field(default_factory=lambda: _int("WECHAT_PAY_TIMESTAMP_SKEW", 300))
-
-    # ---- 支付单 ----
     out_trade_no_prefix: str = field(default_factory=lambda: _env("WECHAT_PAY_OUT_TRADE_NO_PREFIX", "P"))
-    default_expire_minutes: int = field(default_factory=lambda: _int("WECHAT_PAY_EXPIRE_MINUTES", 15))
-    prepay_reuse_seconds: int = field(default_factory=lambda: _int("WECHAT_PAY_PREPAY_REUSE_SECONDS", 7200 - 300))
-    app_sync_min_interval_s: int = field(default_factory=lambda: _int("WECHAT_PAY_APP_SYNC_INTERVAL", 3))
-    # 官方主动查单方案一：下单后 5s / 30s / 1m / 3m / 5m / 10m / 30m
-    query_schedule_s: tuple[int, ...] = field(default_factory=lambda: _ints("WECHAT_PAY_QUERY_SCHEDULE", "5,30,60,180,300,600,1800"))
-    auto_refund_orphans: bool = field(default_factory=lambda: _bool("WECHAT_PAY_AUTO_REFUND_ORPHANS", True))
     tz: str = field(default_factory=lambda: _env("WECHAT_PAY_TZ", "Asia/Shanghai"))
 
+    # ---- 运行参数（[wechat_pay]）：超时与重试（SPEC §9：下单 8s 0 次重试、查询 5s 2 次、退款 10s 0 次由任务重试）----
+    timeout_prepay_s: float = field(default_factory=_rt("timeout_prepay_s"))
+    timeout_query_s: float = field(default_factory=_rt("timeout_query_s"))
+    timeout_close_s: float = field(default_factory=_rt("timeout_close_s"))
+    timeout_refund_s: float = field(default_factory=_rt("timeout_refund_s"))
+    timeout_bill_s: float = field(default_factory=_rt("timeout_bill_s"))
+    query_attempts: int = field(default_factory=_rt("query_attempts"))
+    close_attempts: int = field(default_factory=_rt("close_attempts"))
+    bulkhead: int = field(default_factory=_rt("bulkhead"))
+    timestamp_skew_s: int = field(default_factory=_rt("timestamp_skew_s"))
+    # ---- 支付单 ----
+    default_expire_minutes: int = field(default_factory=_rt("default_expire_minutes"))
+    prepay_reuse_seconds: int = field(default_factory=_rt("prepay_reuse_seconds"))
+    app_sync_min_interval_s: int = field(default_factory=_rt("app_sync_min_interval_s"))
+    # 官方主动查单方案一：下单后 5s / 30s / 1m / 3m / 5m / 10m / 30m
+    query_schedule_s: tuple[int, ...] = field(default_factory=_rt("query_schedule_s"))
+    auto_refund_orphans: bool = field(default_factory=_rt("auto_refund_orphans"))
     # ---- 退款 ----
-    refund_max_times: int = field(default_factory=lambda: _int("WECHAT_PAY_REFUND_MAX_TIMES", 50))
-    refund_min_interval_s: int = field(default_factory=lambda: _int("WECHAT_PAY_REFUND_MIN_INTERVAL", 60))
-    refund_window_days: int = field(default_factory=lambda: _int("WECHAT_PAY_REFUND_WINDOW_DAYS", 365))
-    refund_submit_max_attempts: int = field(default_factory=lambda: _int("WECHAT_PAY_REFUND_MAX_ATTEMPTS", 5))
-    refund_query_fast_s: int = field(default_factory=lambda: _int("WECHAT_PAY_REFUND_QUERY_FAST", 60))
-    refund_query_fast_window_s: int = field(default_factory=lambda: _int("WECHAT_PAY_REFUND_QUERY_FAST_WINDOW", 300))
-    refund_query_backoff_min: tuple[int, ...] = field(default_factory=lambda: _ints("WECHAT_PAY_REFUND_QUERY_BACKOFF", "5,10,20,30"))
-
+    refund_max_times: int = field(default_factory=_rt("refund_max_times"))
+    refund_min_interval_s: int = field(default_factory=_rt("refund_min_interval_s"))
+    refund_window_days: int = field(default_factory=_rt("refund_window_days"))
+    refund_submit_max_attempts: int = field(default_factory=_rt("refund_submit_max_attempts"))
+    refund_query_fast_s: int = field(default_factory=_rt("refund_query_fast_s"))
+    refund_query_fast_window_s: int = field(default_factory=_rt("refund_query_fast_window_s"))
+    refund_query_backoff_min: tuple[int, ...] = field(default_factory=_rt("refund_query_backoff_min"))
     # ---- 账单 ----
-    bill_ready_hour: int = field(default_factory=lambda: _int("WECHAT_PAY_BILL_READY_HOUR", 10))
-    bill_retry_minutes: int = field(default_factory=lambda: _int("WECHAT_PAY_BILL_RETRY_MINUTES", 30))
-    bill_max_days: int = field(default_factory=lambda: _int("WECHAT_PAY_BILL_MAX_DAYS", 90))
-
+    bill_ready_hour: int = field(default_factory=_rt("bill_ready_hour"))
+    bill_retry_minutes: int = field(default_factory=_rt("bill_retry_minutes"))
+    bill_max_days: int = field(default_factory=_rt("bill_max_days"))
     # ---- 小程序发货信息管理 ----
-    shipping_enabled: bool = field(default_factory=lambda: _bool("WECHAT_PAY_SHIPPING_ENABLED", True))
-    shipping_max_attempts: int = field(default_factory=lambda: _int("WECHAT_PAY_SHIPPING_MAX_ATTEMPTS", 8))
+    shipping_enabled: bool = field(default_factory=_rt("shipping_enabled"))
+    shipping_max_attempts: int = field(default_factory=_rt("shipping_max_attempts"))
 
     def with_(self, **changes) -> "WechatPayConfig":
         return replace(self, **changes)
 
 
-_config: WechatPayConfig | None = None
+_module = ModuleConfig("wechat_pay", WechatPayConfig)
 
 
 def get_config() -> WechatPayConfig:
-    global _config
-    if _config is None:
-        _config = WechatPayConfig()
-    return _config
+    return _module.get()
 
 
 def set_config(config: WechatPayConfig | None) -> None:
-    """项目启动或测试时替换配置；None 表示下次重新从环境变量读取。"""
-    global _config
-    _config = config
+    """项目启动或测试时替换配置；None 表示恢复为环境变量与运行配置（撤销测试覆盖）。"""
+    if config is None:
+        _module.reset()
+    else:
+        _module.set(config)
 
 
 def _https_without_query(url: str) -> bool:

@@ -1,4 +1,4 @@
-# 10-after-sales（售后：仅退款 / 退货退款）`after_sales`
+# 模块：10-after-sales（售后：仅退款 / 退货退款）`after_sales`
 
 ## 0 官方来源
 
@@ -19,7 +19,7 @@
 
 | 项 | 内容 |
 |---|---|
-| 状态 | 标准（可复用）；测试 27 项（另有端到端在 `backend/tests/test_integration.py`） |
+| 状态 | 标准（可复用）；测试在 `code/tests/`（另有端到端在 `backend/tests/test_integration.py`） |
 | 依赖 | 00-framework；08-order（refund_quote / reserve_refund / release_refund / settle_refund / refund_balance / get_owned / admin_get）；09-wechat-pay（create_refund、RefundRecord 只读防重、refund.* 事件）；15-recharge（经 08 冲回余额）；16-coupon（经 08 退券）；29-member-card（经 08 行种类取退卡上限）；01-identity（current_user）；22-admin-rbac（权限、二次验证、门店范围） |
 | 被依赖 | 20-notification（消费 after_sale.* 事件）、29-member-card（建议消费 after_sale.completed 终止卡，见 §13） |
 
@@ -45,22 +45,22 @@
 ## 4 业务规则
 
 1. 只有已支付且未全退的订单（paid / fulfilling / fulfilled / completed）可申请；他人订单 4040；未支付 4090；0 元订单无可退款项 4220。
-2. 窗口：订单未签收（fulfilled_at 为空）随时可申请；已签收的，`no_reason` 签收次日起 AFTER_SALE_NO_REASON_DAYS（≥ 7）日内、其他原因 AFTER_SALE_WINDOW_DAYS（默认 15）日内，截止到当地 24:00；超出 4220 `window_closed`。
+2. 窗口：订单未签收（fulfilled_at 为空）随时可申请；已签收的，`no_reason` 签收次日起 `[after_sales] no_reason_days`（≥ 7）日内、其他原因 `[after_sales] window_days`（默认 15）日内，截止到当地 24:00；超出 4220 `window_closed`。
 3. `no_reason` 只适用于下单快照 `returnable=true` 的行（法定除外 / 购买时已确认不适用的商品），否则 4220 `not_returnable`。
 4. 类型：`refund_only` 任意行（qty 可为 0 表示按金额部分退，如服务瑕疵补偿）；`return_and_refund` 只适用实物（goods）且 qty > 0（否则 4220 `return_not_applicable`）。
 5. 金额：每行上限取 08 `refund_quote`（行实付按数量累计公式；退完剩余数量时 = 剩余实付；会员卡取 29 退卡试算为上限）；未传金额默认上限；超过 4220 `exceeds_refundable`（带 max_cents）。
 6. 同一订单行同时只能有一个进行中售后（4090 `after_sale_open`）；额度在 08 用条件 UPDATE 占用，并发下合计永远不超过实付。
 7. 余额支付的订单可整行或部分退，退款按消费流水部分冲回（原路，`wallet.reverse` 按 `after_sales:{id}:item:{item_id}` 幂等）。
-8. 凭证最多 AFTER_SALE_MAX_EVIDENCE（默认 9）个 media id；可接 21-media 校验归属（`set_evidence_checker`）。
+8. 凭证最多 `[after_sales] max_evidence`（默认 9）个 media id；可接 21-media 校验归属（`set_evidence_checker`）。
 9. 审核：同意 / 驳回需 `after_sale:approve`；同意还要求近期二次验证（`require_permission(..., fresh=True)` → 4011）；员工代客发起的申请，审批人不能是发起人（4030 `separation_of_duties`）。驳回原因 2–200 字。
-10. 同意后：仅退款 → refunding（立即原路退款）；退货退款 → awaiting_return（截止 AFTER_SALE_RETURN_SHIP_DAYS，默认 7 天）。
+10. 同意后：仅退款 → refunding（立即原路退款）；退货退款 → awaiting_return（截止 `[after_sales] return_ship_days`，默认 7 天）。
 11. 买家寄回填写快递公司与单号 → return_shipped；商家确认收货 → refunding（收货当时即发起退款，满足“收到退货 7 日内退款”）；也可在收货环节驳回（货物不符）。
 12. 回库：退货退款收到货的实物行回库；仅退款且订单仍是 paid（未发货）的实物行回库；其余不回库。
 13. 微信原路退款：事务提交后调用 09 `create_refund(business_ref=after_sales:{id})`；提交前用 `wechat_pay.find_active_refund(db, business_ref)` 查有效退款单（崩溃重提不会重复退款）；4220 `refund_interval` / 5xx → 延后重提（due_at，`after_sales.submit_refunds` 任务）；其他规则拒绝（如超 365 天）→ refund_failed（人工）。
 14. 退款结果（事件）：`refund.succeeded` → completed：08 计入已退、回库存、16 按券策略退券（默认整单全额退款才退）、全部退完订单 refunded；`refund.failed`（含 CLOSED）→ refund_failed；`refund.abnormal` → refund_abnormal（09 后台异常退款后再 succeeded → completed）。旧的退款尝试结果（refund_id 不符）忽略。
 15. 人工处理（`after_sale:refund` + 二次验证）：重试（refund_failed → refunding，09 生成新退款单号）；线下结清（refund_failed / refund_abnormal → completed，说明必填，须与消费者约定）；关闭（refund_failed → closed，释放额度）。
 16. 买家可在 pending_review / awaiting_return 撤销；驳回、撤销、关闭都释放 08 额度。
-17. 超时：AFTER_SALE_AUTO_APPROVE_DAYS > 0 时，商家逾期未审自动同意（系统身份，不做职责分离检查）；买家逾期未寄回自动关闭。
+17. 超时：`[after_sales] auto_approve_days` > 0 时，商家逾期未审自动同意（系统身份，不做职责分离检查）；买家逾期未寄回自动关闭。
 18. 所有后台写操作写审计；后台门店范围外按 4040；列表与导出共用同一 ListSpec。
 
 ## 5 状态机 / 关键流程
@@ -88,15 +88,15 @@ apply ─(08 reserve_refund)▶ pending_review ─approve(fresh, SoD)▶ refundi
 
 | 方法 | 路径 | 鉴权 | 幂等 | 权限码 | agent | 说明 |
 |---|---|---|---|---|---|---|
-| GET | `/api/v1/app/after-sales/orders/{order_id}/refundable` | 会员（他人 4040） | — | — | yes（只读） | 每行可退数量 / 金额、截止时间 |
-| POST | `/api/v1/app/after-sales` | 会员 | 必须 | — | yes（草稿，需确认） | 申请 `{order_id, type, reason_code, reason_text?, evidence?, lines:[{item_id, qty, amount_cents?}]}` |
-| GET | `/api/v1/app/after-sales` | 会员 | — | — | yes | `tab`=all/processing/done，游标，附计数 |
-| GET | `/api/v1/app/after-sales/{id}` | 会员（他人 4040） | — | — | yes | 详情（行、时间线） |
-| POST | `/api/v1/app/after-sales/{id}/cancel` | 会员 | 必须 | — | yes（需确认） | 撤销 |
+| GET | `/api/v1/app/after-sales/orders/{order_id}/refundable` | 会员（他人 4040） | — | — | read | 每行可退数量 / 金额、截止时间 |
+| POST | `/api/v1/app/after-sales` | 会员 | 必须 | — | write_high | 申请 `{order_id, type, reason_code, reason_text?, evidence?, lines:[{item_id, qty, amount_cents?}]}` |
+| GET | `/api/v1/app/after-sales` | 会员 | — | — | read | `tab`=all/processing/done，游标，附计数 |
+| GET | `/api/v1/app/after-sales/{id}` | 会员（他人 4040） | — | — | read | 详情（行、时间线） |
+| POST | `/api/v1/app/after-sales/{id}/cancel` | 会员 | 必须 | — | write_high | 撤销 |
 | POST | `/api/v1/app/after-sales/{id}/return-shipment` | 会员 | 必须 | — | no | 寄回 `{company, tracking_no}` |
-| GET | `/api/v1/admin/after-sales` | 员工 | — | after_sale:read | yes | 列表（见下） |
+| GET | `/api/v1/admin/after-sales` | 员工 | — | after_sale:read | read | 列表（见下） |
 | GET | `/api/v1/admin/after-sales/export` | 员工 | — | after_sale:export | no | CSV（审计） |
-| GET | `/api/v1/admin/after-sales/{id}` | 员工（范围外 4040） | — | after_sale:read | yes | 详情（含审核人、退款单、错误） |
+| GET | `/api/v1/admin/after-sales/{id}` | 员工（范围外 4040） | — | after_sale:read | read | 详情（含审核人、退款单、错误） |
 | POST | `/api/v1/admin/after-sales` | 员工 | 必须 | after_sale:create | no | 代客发起 |
 | POST | `/api/v1/admin/after-sales/{id}/approve` | 员工 + 二次验证 | 必须 | after_sale:approve | no | 同意（职责分离） |
 | POST | `/api/v1/admin/after-sales/{id}/reject` | 员工 | 必须 | after_sale:approve | no | 驳回（原因） |
@@ -142,7 +142,26 @@ apply ─(08 reserve_refund)▶ pending_review ─approve(fresh, SoD)▶ refundi
 
 ## 9 配置
 
-见 §13。
+运行参数写在 `backend/config/runtime/*.toml`，字段说明（类型、范围、能否热加载、是否下发客户端）在 `00-framework/code/luzback/runtime_config.py`；模块经 `luzback.module_config.ModuleConfig` 读取，热加载后下一次读取即生效。环境变量只放秘密与部署参数；迁移前的环境变量名仍设置着时，启动会打 `config.unknown_env` 警告并指出新键。测试用 `set_config(...)` 或 `luzback.testing.override_runtime(...)` 注入运行参数（写进一份测试用运行配置，测试结束撤销）。
+
+### 9.1 环境变量（秘密与部署参数）
+
+无：本模块没有秘密与部署参数。
+
+### 9.2 运行配置键
+
+| 键 | 默认 | 范围 | 热加载 | 下发客户端 | 说明（含单位） |
+|---|---|---|---|---|---|
+| `[after_sales] no_reason_days` | 7 | 7–30 | 是 | 否 | 七日无理由退货期（天，不少于 7：网络购买商品七日无理由退货暂行办法第十条）（原 `AFTER_SALE_NO_REASON_DAYS`） |
+| `[after_sales] window_days` | 15 | 1–365 | 是 | 否 | 质量等其他原因的申请窗口（天）（原 `AFTER_SALE_WINDOW_DAYS`） |
+| `[after_sales] auto_approve_days` | 0 | 0–30 | 是 | 否 | 商家多少天未处理自动同意（天，0 = 关闭）（原 `AFTER_SALE_AUTO_APPROVE_DAYS`） |
+| `[after_sales] return_ship_days` | 7 | 1–30 | 是 | 否 | 同意退货后买家寄回的期限（天）（原 `AFTER_SALE_RETURN_SHIP_DAYS`） |
+| `[after_sales] max_evidence` | 9 | 0–20 | 是 | 是 | 申请最多上传几张凭证图（原 `AFTER_SALE_MAX_EVIDENCE`） |
+| `[after_sales] refund_retry_seconds` | 60 | 10–3600 | 是 | 否 | 退款失败后多久重试（秒）（原 `AFTER_SALE_REFUND_RETRY_SECONDS`） |
+| `[after_sales] job_batch` | 200 | 1–10000 | 是 | 否 | 售后定时任务每批几条（原 `AFTER_SALE_JOB_BATCH`） |
+| `[coupon] return_policy` | "full_refund" | never / full_refund / any_refund | 是 | 否 | 退款后是否退券：never 不退、full_refund 整单全额退款才退、any_refund 任何退款都退（原 `COUPON_RETURN_POLICY`） |
+
+退款后是否退券由 16-coupon 的 `[coupon] return_policy` 决定（上表最后一行）。
 
 ## 10 错误码
 
@@ -157,13 +176,13 @@ apply ─(08 reserve_refund)▶ pending_review ─approve(fresh, SoD)▶ refundi
 | 窗口已过、不适用无理由、不能退货、超过可退、无可退支付 | 4220 | 422 |
 | 幂等键不同请求体 | 4093 | 422 |
 
-## 11 测试清单（27 项，`10-after-sales/code/tests/`）
+## 11 测试清单（`10-after-sales/code/tests/`）
 
 | 文件 | 覆盖 |
 |---|---|
-| `test_after_sales_service.py`（22） | 可退视图；金额累计公式与超额 4220；同一行进行中 4090；各类拒绝（他人、行不存在、数量、原因、凭证、未支付）；七日无理由窗口（签收次日起、当地 24:00）与质量窗口；退货只适用实物；仅退款全流程（提交、防重复、回调、订单 refunded、回库、退券、事件、重复回调幂等）；发货后部分退不回库；退货退款全流程；驳回 / 撤销 / 超时未寄回释放额度与审计；退款关闭 → 重试新单号成功；异常 → 成功；线下结清；关闭失败单；1 分钟间隔延后重提；崩溃后采纳已有退款；不可重试错误转人工；余额原路冲回与部分退拒绝；会员卡上限；职责分离；自动同意；状态机全边；事件订阅幂等与旧尝试忽略；任务接线 |
-| `test_after_sales_http.py`（3） | 4010 / 4001 / 4093 / 信封、可退视图、申请重放、列表页签与计数、详情 4040、寄回校验、撤销；后台 4010 / 4030、二次验证 4011、同意后即时退款、筛选 / 关键词 / 区间 / 未知参数、导出与审计、驳回校验、门店范围；代客发起职责分离、退货退款经 HTTP 收货退款、人工动作状态校验、权限码登记 |
-| `test_after_sales_concurrency.py`（2） | 文件 SQLite + 50 线程：整行申请只成一单；逐件申请合计不超过实付 |
+| `test_after_sales_service.py` | 可退视图；金额累计公式与超额 4220；同一行进行中 4090；各类拒绝（他人、行不存在、数量、原因、凭证、未支付）；七日无理由窗口（签收次日起、当地 24:00）与质量窗口；退货只适用实物；仅退款全流程（提交、防重复、回调、订单 refunded、回库、退券、事件、重复回调幂等）；发货后部分退不回库；退货退款全流程；驳回 / 撤销 / 超时未寄回释放额度与审计；退款关闭 → 重试新单号成功；异常 → 成功；线下结清；关闭失败单；1 分钟间隔延后重提；崩溃后采纳已有退款；不可重试错误转人工；余额原路冲回与部分退拒绝；会员卡上限；职责分离；自动同意；状态机全边；事件订阅幂等与旧尝试忽略；任务接线 |
+| `test_after_sales_http.py` | 4010 / 4001 / 4093 / 信封、可退视图、申请重放、列表页签与计数、详情 4040、寄回校验、撤销；后台 4010 / 4030、二次验证 4011、同意后即时退款、筛选 / 关键词 / 区间 / 未知参数、导出与审计、驳回校验、门店范围；代客发起职责分离、退货退款经 HTTP 收货退款、人工动作状态校验、权限码登记 |
+| `test_after_sales_concurrency.py` | 文件 SQLite + 50 线程：整行申请只成一单；逐件申请合计不超过实付 |
 
 ## 12 前端对接
 
@@ -176,18 +195,7 @@ apply ─(08 reserve_refund)▶ pending_review ─approve(fresh, SoD)▶ refundi
 
 ## 13 定制点
 
-配置（环境变量 → 默认值）：
-
-| 键 | 默认 | 说明 |
-|---|---|---|
-| AFTER_SALE_NO_REASON_DAYS | 7 | 七日无理由天数（不得小于 7） |
-| AFTER_SALE_WINDOW_DAYS | 15 | 其他原因的申请窗口（签收次日起） |
-| AFTER_SALE_AUTO_APPROVE_DAYS | 0 | 商家逾期未审自动同意天数，0 = 关闭 |
-| AFTER_SALE_RETURN_SHIP_DAYS | 7 | 买家寄回期限 |
-| AFTER_SALE_MAX_EVIDENCE | 9 | 凭证图片上限 |
-| AFTER_SALE_REFUND_RETRY_SECONDS | 60 | 退款延后重提的默认间隔（微信同笔退款间隔 ≥ 1 分钟） |
-| AFTER_SALE_JOB_BATCH | 200 | 任务每轮处理量 |
-| COUPON_RETURN_POLICY（16） | full_refund | 退款后是否退券由券模块决定 |
+配置：§9（运行参数在 `[after_sales]`）。
 
 扩展钩子：`set_refund_gateway(RefundGateway)`（替换退款渠道）、`set_evidence_checker(fn)`（凭证归属校验）、`set_config(...)`；订单侧的 `LineKind.refund_cap` / `on_refunded`（行种类自定义可退上限与退款后处理，见 08 §13）。
 

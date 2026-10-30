@@ -2,6 +2,8 @@
 
 One JSON file per business module. A new implementation plan copies the specs whose `modules` intersect the plan's modules into `raw/plan.json` → `moduleSpecs`; the agent then adapts the copy to the project (names, fields, rules, errors). The library stays generic; plans own their copies.
 
+**Standard modules come first.** Eleven specs share their id with a standard module in `references/standard-modules.json`: login, admin, payment, order, refund, membership, wallet, coupon, lottery, notification, foundation. A plan that adopts the standard module drops the copied spec (`tech_plan.py standard NN --sync`), and the spec then only supplies table names for other specs' writes. Behaviour, values and API paths are those of `backend/NN-name/MODULE.md`; where a spec here differs, MODULE.md wins and the spec is corrected to match. Modules without a standard module (store, content, config, face, iot, access, booking, report, upload, catalog, legal) are designed from these specs.
+
 Each module renders as its own numbered chapter with these parts (empty parts are skipped):
 
 | Part | Key | Content |
@@ -21,7 +23,8 @@ Conventions every spec follows (also rendered in the plan's 数据库设计 chap
 - PostgreSQL; `id BIGINT`, `created_at`, `updated_at` exist on every table and are not listed.
 - Money is integer cents in `*_cents` fields. Field types: `BIGINT INTEGER SMALLINT BOOLEAN DATE TIMESTAMPTZ TEXT JSONB UUID VARCHAR(n) CHAR(n) NUMERIC(p,s)`, optional `[]`.
 - Status fields change only through conditional updates; balances, counts and stock change through append-only ledgers with a unique `(ref_type, ref_id, reason)`.
-- API paths: `/api/v1/app` (member token), `/api/v1/admin` (permission code), `/api/v1/device` (device credential). Writes carry `Idempotency-Key`. Errors are stable upper-case codes.
+- API paths: `/api/v1/app` (member token), `/api/v1/admin` (permission code), `/api/v1/device` (device credential). Writes carry `Idempotency-Key`.
+- Errors: the envelope `{code, message, data}` carries a numeric `code` from `luzback.errors.ErrorCode`, and the HTTP status follows the same table (`backend/00-framework/code/luzback/errors.py`; for example 4093, an idempotency key reused with another body, is HTTP 422). An upper-case error name in a spec (`FILE_TOO_LARGE`, `OPEN_CHECK_FAILED`) is the design name of the case: implement it as the nearest ErrorCode plus a stable lower-case reason in `data`.
 - Text is page content: it must pass Luz Design's `check_document.py` (no 审核人, 发布时间, 校验通过, 以下, 请注意 …).
 
 Commands:

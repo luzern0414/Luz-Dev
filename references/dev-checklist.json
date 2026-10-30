@@ -2,7 +2,7 @@
   "schemaVersion": "1.0",
   "updatedAt": "2026-10-29",
   "title": "后端开发到运营清单",
-  "description": "每个 Luz 项目从方案到运营逐项核对。标准模块已经满足的项写在“底座”列，项目只需核对定制部分。",
+  "description": "每个 Luz 项目从方案到运营逐项核对。标准模块已经满足的项写在“底座”列，项目只需核对定制部分。两位编号（REL-01）是本清单的检查项，三位编号（REL-001）是 standards.json 的规范规则，两者不是一回事。",
   "stages": [
     {
       "id": "plan",
@@ -19,7 +19,7 @@
       "name": "接口契约",
       "items": [
         ["API-01", "统一信封与错误码", "返回 {code, message, data}；只用 ErrorCode；他人资源 4040", "test_*_http 覆盖 4001/4010/4030/4040", "luzback.errors"],
-        ["API-02", "写接口幂等", "写接口必带 Idempotency-Key（8–128 位）；同键同体返回首次结果，同键异体 422", "幂等重放测试", "luzback.idempotency"],
+        ["API-02", "写接口幂等", "写接口必带 Idempotency-Key（8–128 位）；同键同体返回首次结果，同键异体返回 4093（HTTP 422）", "幂等重放测试", "luzback.idempotency"],
         ["API-03", "列表接口标准化", "筛选、排序白名单、分页、关键词全部用 ListSpec 声明；未知参数 4001；后台页码 ≤100，顾客端游标 ≤20", "列表测试含筛选、排序、越界", "luzback.listing（SPEC §3.4）"],
         ["API-04", "导出", "与列表同一筛选；同步 ≤5000 行、上限 20 万；防公式注入；敏感字段脱敏；写审计", "导出测试", "luzback.export"],
         ["API-05", "权限码声明", "后台接口按 `模块:动作` 校验，默认拒绝；门店范围过滤", "4030 / 4031 测试", "admin_rbac.require_permission"],

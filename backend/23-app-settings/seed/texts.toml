@@ -1,0 +1,105 @@
+# 文案种子（23-app-settings MODULE.md §4）：小程序每处可见文字的键、页面、位置说明、默认文案、字数上限、变量与是否后台可见。
+# - 键为“页面.位置”，小写蛇形；page 必须是键的前缀，后台按它分组。
+# - default 与小程序安装包内置的兜底值一致：改默认文案要同时改安装包；字数上限按版面实测，变量占位符也算字数。
+# - variables 只写端上会替换的变量（{store_name}）；文案里出现未登记的变量会被拒绝。
+# - admin_visible = false：通用控件词、系统级提示、法规固定文字。照常下发，但后台不展示、不能改，只能改这里并经代码评审。
+# - allow_empty = true：运营可以把它清空，清空后该位置不显示。
+# - 同步：python -X utf8 -m app_settings sync（发布时在 alembic upgrade head 之后执行，幂等）；检查：python -X utf8 -m app_settings check-seed
+# 这里只是骨架示例，项目按 Luz System 交付的文案表（copy-key table）补全。
+
+# ---------------------------------------------------------------- 首页
+[texts."home.search_placeholder"]
+page = "home"
+slot = "首页 · 顶部搜索框占位"
+default = "搜索商品"
+max_length = 12
+sort = 10
+
+[texts."home.welcome"]
+page = "home"
+slot = "首页 · 门店名下方欢迎语"
+default = "欢迎光临{store_name}"
+max_length = 24
+variables = ["store_name"]
+allow_empty = true
+sort = 20
+
+# ---------------------------------------------------------------- 点菜
+[texts."menu.empty"]
+page = "menu"
+slot = "点菜页 · 分类下没有商品时"
+default = "这个分类还没有商品，去看看别的吧"
+max_length = 24
+sort = 10
+
+[texts."cart.min_order_hint"]
+page = "cart"
+slot = "购物车栏 · 未达起送价时"
+default = "还差 {amount} 元起送"
+max_length = 20
+variables = ["amount"]
+sort = 10
+
+# ---------------------------------------------------------------- 确认订单与支付
+[texts."order_confirm.pay_hint"]
+page = "order_confirm"
+slot = "确认订单页 · 支付按钮上方"
+default = "请在 {minutes} 分钟内完成支付，超时订单将自动取消"
+max_length = 40
+variables = ["minutes"]
+sort = 10
+
+[texts."order_confirm.remark_placeholder"]
+page = "order_confirm"
+slot = "确认订单页 · 备注输入框占位"
+default = "口味、偏好等要求（选填）"
+max_length = 20
+sort = 20
+
+[texts."order_detail.cancel_rule"]
+page = "order_detail"
+slot = "订单详情页 · 取消按钮下方说明"
+default = "商家接单前可直接取消；接单后请联系门店处理"
+max_length = 60
+allow_empty = true
+sort = 10
+
+[texts."payment.failed"]
+page = "payment"
+slot = "支付结果页 · 支付未完成时"
+default = "支付没有完成，订单已保留，可在订单列表继续支付"
+max_length = 40
+sort = 10
+
+# ---------------------------------------------------------------- 隐藏键：存后端、照常下发，后台不展示
+[texts."common.network_error"]
+page = "common"
+slot = "全局 · 网络异常提示"
+default = "网络不太稳定，请稍后重试"
+max_length = 20
+admin_visible = false
+sort = 10
+
+[texts."common.confirm"]
+page = "common"
+slot = "全局 · 弹窗确认按钮"
+default = "确定"
+max_length = 4
+admin_visible = false
+sort = 20
+
+[texts."common.cancel"]
+page = "common"
+slot = "全局 · 弹窗取消按钮"
+default = "取消"
+max_length = 4
+admin_visible = false
+sort = 30
+
+[texts."wallet.prepaid_notice"]
+page = "wallet"
+slot = "储值页 · 充值按钮上方须知"
+default = "储值余额仅限本店消费，不可提现或转让；退款按储值协议办理"
+max_length = 60
+admin_visible = false
+sort = 10

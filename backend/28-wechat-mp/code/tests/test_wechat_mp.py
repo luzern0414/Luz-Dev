@@ -17,7 +17,7 @@ import wechat_mp
 from luzback import AppError, ErrorCode, UpstreamError, create_app
 from luzback.db import get_session_factory
 from luzback.resilience import CircuitOpenError
-from luzback.testing import FakeClock, memory_session
+from luzback.testing import override_runtime, FakeClock, memory_session
 from wechat_mp import (
     AccessTokenCache, DbTokenStore, FakeMiniProgram, FakeWechatServer, InvalidCode, PushCrypto, RateLimited,
     SubscriptionRefused, TemplateInvalid,
@@ -491,11 +491,13 @@ def test_distributed_lock_waits_for_other_instance():
     assert cache.get() == "FROM-OTHER" and waited
 
 
-def test_env_config_validation(monkeypatch):
-    monkeypatch.setenv("WECHAT_MP_STATE", "bogus")
+def test_config_validation(monkeypatch):
+    with pytest.raises(ValueError):  # 运行参数：不认识的版本由运行配置校验拒绝
+        override_runtime(wechat_mp={"miniprogram_state": "bogus"})
+    monkeypatch.setenv("WECHAT_MP_PUSH_AES_KEY", "too-short")  # 秘密的格式仍在模块里校验
     with pytest.raises(ValueError):
         wechat_mp.reload_config()
-    monkeypatch.delenv("WECHAT_MP_STATE")
+    monkeypatch.delenv("WECHAT_MP_PUSH_AES_KEY")
     wechat_mp.reload_config()
 
 

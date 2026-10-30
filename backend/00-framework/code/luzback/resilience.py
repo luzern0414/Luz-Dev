@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import contextvars
 import random
 import threading
 import time
@@ -155,8 +156,11 @@ _executor = ThreadPoolExecutor(max_workers=64, thread_name_prefix="luz-timeout")
 
 
 def call_with_timeout(fn: Callable[[], T], timeout_s: float) -> T:
-    """同步调用加硬超时。超时抛 TransientError；底层线程继续运行到结束（仅用于幂等的外部调用）。"""
-    future = _executor.submit(fn)
+    """同步调用加硬超时。超时抛 TransientError；底层线程继续运行到结束（仅用于幂等的外部调用）。
+
+    在调用方的上下文副本里执行：链路编号、运行配置快照与日志字段在超时线程里同样可用。
+    """
+    future = _executor.submit(contextvars.copy_context().run, fn)
     try:
         return future.result(timeout=timeout_s)
     except FutureTimeout as exc:

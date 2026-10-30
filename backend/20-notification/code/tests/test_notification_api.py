@@ -1,5 +1,7 @@
 """HTTP：鉴权 4010、权限 4030、参数 4001、幂等、信封；会员站内信与订阅上报；后台日志、导出、重发、模板、员工站内信。"""
 import uuid
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi import Request
@@ -167,9 +169,12 @@ def test_admin_delivery_log_export_resend_stats(ctx):
     env, c = ctx
     failed = _seed_failed(env)
     h = staff(1)
+    # 记录按真实时间写入：区间取门店时区的前一天到后一天，不依赖运行日期，也不怕跨午夜
+    now = datetime.now(ZoneInfo("Asia/Shanghai"))
+    since, until = (now - timedelta(days=1)).date().isoformat(), (now + timedelta(days=1)).date().isoformat()
     r = c.get("/api/v1/admin/notifications/deliveries",
               params={"status": "failed", "errcode": "40037", "channel": "subscribe", "keyword": "1",
-                      "created_at_from": "2026-10-28", "created_at_to": "2026-10-28", "page": 1, "page_size": 10}, headers=h)
+                      "created_at_from": since, "created_at_to": until, "page": 1, "page_size": 10}, headers=h)
     body = r.json()["data"]
     assert body["total"] == 1 and body["items"][0]["id"] == failed and body["page_size"] == 10
     assert c.get("/api/v1/admin/notifications/deliveries", params={"nope": 1}, headers=h).json()["code"] == 4001
@@ -178,7 +183,7 @@ def test_admin_delivery_log_export_resend_stats(ctx):
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/csv")
     assert "40037" in r.content.decode("utf-8-sig")
     r = c.get("/api/v1/admin/notifications/deliveries/export",
-              params={"created_at_from": "2026-01-01", "created_at_to": "2026-10-28"}, headers=h)
+              params={"created_at_from": (now - timedelta(days=40)).date().isoformat(), "created_at_to": until}, headers=h)
     assert r.json()["code"] == 4001  # 导出跨度上限 31 天
     hk = {**h, **key()}
     r = c.post(f"/api/v1/admin/notifications/deliveries/{failed}/resend", json={"reason": "fixed"}, headers=hk)

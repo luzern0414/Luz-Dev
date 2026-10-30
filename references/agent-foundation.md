@@ -10,15 +10,17 @@
 | `agent/backend/SPEC.md` v2 | 门店业务助手的应用规范：意图表、工具清单、确认与降级文案、核验规则。文首列出了被本文取代的条目 |
 | `agent/shared/protocol.md` v3 | 前后端协议细节：请求体、卡片、审批面板数据；事件名与 SSE 规则来自本文 §2 |
 | `agent/README.md` | 代码现状与差距待办表 |
-| `references/agent.md` | 入口与职责边界摘要 |
+| `agent/requirements/_template.md` | 项目定制清单 |
 | `references/standards.json` → `AGENT-*` | 可核对规则；`agent` 类型方案自动带入核对表 |
 | Luz-System `references/agent-design.html` | 界面：排队、逐步耗时、审批、记忆入口、引用、错误与降级的表达 |
+
+职责边界：智能体可以理解意图、追问、检索已审核的知识、调用登记过的工具、发起审批、把用户引回页面；不能绕过鉴权、权限、审批、预算、幂等和交易规则，不能直接执行支付、退款、改价、改库存、改权限，不能自行决定身份，不能编造订单号、金额和时间。
 
 读法：§1 看全貌；§2–§14 每个环节固定四段——**规则**（可核对）、**契约**（Pydantic）、**默认值**、**依据**（〔E编号 来源〕，全文与链接见 §18）；§15 是代码目录，§16 是全部超时与上限，§17 是检查清单。
 
 改动纪律：
 - 改契约（意图表、工具契约、状态、事件、错误码）要升 `schema_version`，并跑 §11 评测回归。
-- 改超时或上限，同时改 §16 与 `agent/00-core/code/agent_core/config.py`；方案里改默认值要写理由。
+- 改超时或上限，同时改 §16、运行配置 `[agent]` 的字段说明与默认值（代码默认值在 `agent/00-core/code/agent_core/config.py`）；方案里改默认值要写理由。
 - 新环节、新事件名、新错误码先改本文，再改代码。
 
 ## 1 固定流水线
@@ -102,7 +104,7 @@ HTTP 接口（路径前缀 `/api/v1/agent`）：
 | GET / DELETE | `/memory`、`/memory/{id}` | 查看、删除长期记忆（§8） | `200` / `204` | 404 |
 | GET | `/health` | 依赖健康与熔断状态 | `200` | — |
 
-事件契约（`agent/contracts/run_event.json` 由此生成）：
+事件契约（生成到 `agent/contracts/run_event.json`，待建）：
 
 ```python
 from datetime import datetime
@@ -214,7 +216,7 @@ v2 → v3 对照（`agent/shared/protocol.md` v2 的写法一律按此改）：
 
 ### 默认值
 
-`SSE_RETRY_MS = 3000` · `SSE_PING_INTERVAL_S = 15` · `EVENT_LOG_TTL_S = 86400` · `DEDUP_TTL_S = 86400` · `run.queued` 更新最多每秒一次 · 首事件 ≤ 1 秒。并发、队列、限流上限见 §16。
+`sse_retry_ms = 3000` · `sse_ping_interval_s = 15` · `event_log_ttl_s = 86400` · `dedup_ttl_s = 86400` · `run.queued` 更新最多每秒一次 · 首事件 ≤ 1 秒。并发、队列、限流上限见 §16。
 
 ### 依据
 
@@ -253,7 +255,7 @@ class GuardrailVerdict(Contract):
 
 ### 默认值
 
-`MAX_INPUT_CHARS` 小程序与 H5 500 字、后台 2000 字；请求体 ≤ 8 KB（不含附件）；附件类型白名单与大小上限按项目配置；遮蔽规则：手机号保留前 3 后 4，证件号与卡号全部遮蔽。小模型护栏超时见 §16。
+`max_input_chars` 小程序与 H5 500 字、后台 2000 字；请求体 ≤ 8 KB（不含附件）；附件类型白名单与大小上限按项目配置，拍照与相册图片不因大小拒收、只设防滥用上限（FILE-001）；遮蔽规则：手机号保留前 3 后 4，证件号与卡号全部遮蔽。小模型护栏超时见 §16。
 
 ### 依据
 
@@ -311,7 +313,7 @@ class IntentResult(Contract):
 
 ### 默认值
 
-`INTENT_HIGH = 0.75` · `INTENT_LOW = 0.5` · `MAX_CLARIFY_ROUNDS = 2` · 快捷回复 ≤ 4 · 每个意图示例句 ≥ 5 · 分类输入最近 6 条消息 · 语义路由阈值按评测集校准（误判率 ≤ 2% 时才允许直接判定）。
+`intent_high = 0.75` · `intent_low = 0.5` · `max_clarify_rounds = 2` · 快捷回复 ≤ 4 · 每个意图示例句 ≥ 5 · 分类输入最近 6 条消息 · 语义路由阈值按评测集校准（误判率 ≤ 2% 时才允许直接判定）。
 
 ### 依据
 
@@ -330,9 +332,9 @@ class IntentResult(Contract):
 4. **节点会重跑。** 恢复时节点从头执行，所以节点内的写操作必须幂等（幂等键、upsert、先查后写）；写操作放在审批 `interrupt()` 之后，或放进单独节点。
 5. 同一节点不混用普通边和动态路由；并行分支（知识库两路召回、互不依赖的只读工具）用多条出边或 `Send`，汇合的字段要有 reducer。
 6. **多智能体有条件。** 只在子任务可并行、彼此独立、单个上下文装不下时使用（多智能体的 token 用量约为普通对话的 15 倍）；每个子智能体要有目标、输出格式、可用工具和边界，结果以精简摘要回传。门店业务助手默认单智能体工作流。
-7. 显式设置 `recursion_limit = MAX_GRAPH_STEPS`（LangGraph 1.0.6 起默认 1000 步，不能依赖）。
+7. 显式设置 `recursion_limit = max_graph_steps`（LangGraph 1.0.6 起默认 1000 步，不能依赖）。
 8. **发布与图变更。** 有中断中的线程时，只允许新增节点，不改名、不删节点、不改状态键名；新旧版本并行运行、逐步切流。
-9. **推理与行动交替（ReAct）由程序驱动。** `plan` 节点让模型输出一个决策；`route` 是普通函数，按状态与计数决定去 `run_tools`、`clarify`、`approve`、`respond` 还是结束；`run_tools` 先过权限（§6 规则 15）与参数校验（§6 规则 10），再执行，结果作为观察写回状态。每进入一次 `plan` 记一个决策轮次（`rounds`），超过 `MAX_ROUNDS`（§16）立即发 `run.failed`（`STEP_LIMIT`，`partial: true`），不再调用模型收尾，也不自动加轮次；工具次数、同名同参重复与 `recursion_limit` 只是兜底。循环只有五个出口：最终回答、追问、等待审批、报错、达到上限。用模型原生的结构化工具调用，不用依赖停止词解析文字的 ReAct 模板。
+9. **推理与行动交替（ReAct）由程序驱动。** `plan` 节点让模型输出一个决策；`route` 是普通函数，按状态与计数决定去 `run_tools`、`clarify`、`approve`、`respond` 还是结束；`run_tools` 先过权限（§6 规则 15）与参数校验（§6 规则 10），再执行，结果作为观察写回状态。每进入一次 `plan` 记一个决策轮次（`rounds`），超过 `max_rounds`（§16）立即发 `run.failed`（`STEP_LIMIT`，`partial: true`），不再调用模型收尾，也不自动加轮次；工具次数、同名同参重复与 `recursion_limit` 只是兜底。循环只有五个出口：最终回答、追问、等待审批、报错、达到上限。用模型原生的结构化工具调用，不用依赖停止词解析文字的 ReAct 模板。
 10. **多轮对话。** 每条用户消息是一次新运行：`rounds`、`tool_calls_made`、`tool_call_counts`、`call_signatures`、`used_single` 等轮次级字段在 `guard` 重置；跨消息只保留 `messages`（较早部分压成 `summary`，旧的工具结果只留一句话，§8）、已确认的意图参数与长期记忆。追问是一次运行的正常结束（§4），连续追问上限见 §16。
 
 ### 契约
@@ -354,7 +356,7 @@ class AgentState(TypedDict, total=False):
     verdict: GuardrailVerdict | None
     intent: IntentResult | None
     context: RetrievedContext | None
-    rounds: int                                # 决策轮次：每进入一次 plan 加 1，超过 MAX_ROUNDS 即 STEP_LIMIT
+    rounds: int                                # 决策轮次：每进入一次 plan 加 1，超过 max_rounds 即 STEP_LIMIT
     tool_calls_made: int
     tool_call_counts: dict[str, int]           # 每个工具本次运行的调用次数（multi 对照 max_calls_per_run）
     used_single: list[str]                     # 已成功的 single 工具：移出 tools，再调即拒绝
@@ -563,7 +565,7 @@ Decision = Annotated[Union[AnswerDecision, ToolDecision], Field(discriminator="t
 
 ### 默认值
 
-`STRUCTURED_RETRIES = 1`；分类与结构化调用温度 0；模型超时与重试见 §16。
+`structured_retries = 1`；分类与结构化调用温度 0；模型超时与重试见 §16。
 
 ### 依据
 
@@ -749,7 +751,7 @@ class VerifyResult(Contract):
 
 ### 默认值
 
-`APPROVAL_TTL_S = 600` · 核验不通过重生成 1 次 · 回答长度：小程序与 H5 ≤ 600 字，后台 ≤ 1500 字 · 每个回答至少 1 个页面入口。
+`approval_ttl_s = 600` · 核验不通过重生成 1 次 · 回答长度：小程序与 H5 ≤ 600 字，后台 ≤ 1500 字 · 每个回答至少 1 个页面入口。
 
 ### 依据
 
@@ -767,9 +769,9 @@ class VerifyResult(Contract):
 
 1. 每次运行一条 trace（`trace_id`），`group_id = conversation_id`；span 类型固定：`run`、`queue`、`guardrail`、`intent`、`retrieve`、`llm`（模型、输入 / 输出 / 缓存读取 token、首 token 时延、耗时、是否回退）、`tool`（名称、参数摘要、状态、重试次数、耗时）、`approval`、`verify`、`memorize`。属性名采用 OpenTelemetry 生成式 AI 语义约定（本次只采到“已迁移”提示页，落地时到其新仓库核对属性名）。
 2. 默认不记录模型输入输出与工具参数原文，只记长度、摘要、错误码；排障时按租户短时打开并自动过期。脱敏和导出放在同一个导出器里，脱敏失败就丢弃这一批，只记一条不含内容的日志。
-3. 日志每行带 `request_id`、`run_id`、`trace_id`；不记录密钥、令牌、完整手机号。
+3. 日志每行带 `request_id`、`run_id`、`trace_id`；不记录密钥、令牌、完整手机号；运行记录与 trace 集中留存 6 个月（OBS-004，`config-logging.md` §3.9）。
 4. 线上指标：运行成功率、按错误码的错误率、超时率、取消率、首事件时延、首 token 时延、整轮时长（平均与 P95）、队列深度与等待时间、熔断状态变化、回退率、追问率、审批通过率、点踩率、每次运行 token 与费用、提示缓存命中率。
-5. 告警：错误率 > 5%（5 分钟）、P95 超过目标 2 倍、熔断打开、回退率 > 10%、排队等待 P95 > 30 秒、费用达到预算 80%。
+5. 告警：错误率 > 5%（5 分钟）、P95 超过目标 2 倍、熔断打开、回退率 > 10%、排队等待 P95 > 30 秒、费用达到预算 80%。监控队列深度与最老积压；重试用尽仍失败的运行与后台任务进入死信，死信 > 0 即告警（与 OBS-003、`operations.md` §4 的发件箱死信同一做法）。
 
 评测：
 
@@ -926,53 +928,54 @@ class VerifyResult(Contract):
 
 ## 16 上限与超时（总表）
 
-数值是 Luz 默认值；依据说明原则来源，具体数值按项目的模型配额与评测结果调整，并写进技术方案。表中的配置键都写在运行配置文件里（模块详设 config、OPS-005、`references/config-logging.md`），不在后台展示；改文件经评审合并后服务端热加载：超时、重试与上限即时生效，并发数与队列长度这类需要重建连接池的标为重启生效。
+数值是 Luz 默认值；依据说明原则来源，具体数值按项目的模型配额与评测结果调整，并写进技术方案。表中的配置键都写在运行配置文件 `config/runtime/*.toml` 的 `[agent]` 表里，小写蛇形、单位写进键名（模块详设 config、OPS-005、`references/config-logging.md` §2），不在后台展示；改文件经评审合并后服务端热加载：超时、重试与上限即时生效，并发数与队列长度这类需要重建连接池的标为重启生效。
 
 | 类别 | 项 | 默认 | 配置键 | 触发后 | 依据 |
 |---|---|---|---|---|---|
 | 接入 | 首个事件 | ≤ 1 秒（P95） | — | 界面先显示“已收到” | E12 |
 | 接入 | 代理读超时 | ≥ 60 秒（大于心跳） | 网关配置 | 连接被断 | E11 |
-| 排队 | 全局并发运行 | 每实例 32（按模型配额调） | `AGENT_MAX_RUNNING` | 入队 | E06 |
-| 排队 | 每用户并发运行 | 2 | `USER_MAX_RUNNING` | 入队 | E06 |
+| 排队 | 全局并发运行 | 每实例 32（按模型配额调） | `max_running` | 入队 | E06 |
+| 排队 | 每用户并发运行 | 2 | `user_max_running` | 入队 | E06 |
 | 排队 | 每会话并发运行 | 1（固定） | — | 会话内排队 | — |
-| 排队 | 每会话待发送 | 3 | `CONVERSATION_PENDING_MAX` | 429 `QUEUE_FULL` | E06 |
-| 排队 | 队列长度 | 200 | `QUEUE_MAX` | 429 `QUEUE_FULL` + `Retry-After` | E06、E10 |
-| 排队 | 预计等待上限 | 60 秒 | `QUEUE_MAX_WAIT_S` | 429 `QUEUE_FULL` + `Retry-After` | E06、E12 |
-| 排队 | 最长排队 | 120 秒 | `QUEUE_TIMEOUT_S` | `run.failed` `QUEUE_TIMEOUT` | E06 |
-| 限流 | 每用户每分钟运行 | 20 | `USER_RUNS_PER_MIN` | 429 `RATE_LIMITED` | E05 |
-| 预算 | 每用户每日运行 | 200 | `USER_DAILY_TURNS` | 429 `BUDGET_EXCEEDED` | E38 LLM10 |
-| 预算 | 租户每日费用 | 项目指定 | `TENANT_DAILY_BUDGET_CENTS` | 80% 告警，100% 429 | E38 LLM10 |
-| 超时 | 模型整次调用 | 20 秒 | `LLM_TIMEOUT_S` | 重试或回退 | E04 |
-| 超时 | 模型首 token | 8 秒 | `LLM_FIRST_TOKEN_TIMEOUT_S` | 切备用模型 | E04 |
-| 超时 | 小模型（路由、护栏、核验） | 3 秒 | `SMALL_LLM_TIMEOUT_S` | 规则兜底 | E15 |
+| 排队 | 每会话待发送 | 3 | `conversation_pending_max` | 429 `QUEUE_FULL` | E06 |
+| 排队 | 队列长度 | 200 | `queue_max` | 429 `QUEUE_FULL` + `Retry-After` | E06、E10 |
+| 排队 | 预计等待上限 | 60 秒 | `queue_max_wait_s` | 429 `QUEUE_FULL` + `Retry-After` | E06、E12 |
+| 排队 | 最长排队 | 120 秒 | `queue_timeout_s` | `run.failed` `QUEUE_TIMEOUT` | E06 |
+| 限流 | 每用户每分钟运行 | 20 | `user_runs_per_min` | 429 `RATE_LIMITED` | E05 |
+| 预算 | 每用户每日运行 | 200 | `user_daily_runs` | 429 `BUDGET_EXCEEDED` | E38 LLM10 |
+| 预算 | 租户每日费用 | 项目指定 | `tenant_daily_budget_cents` | 80% 告警，100% 429 | E38 LLM10 |
+| 超时 | 模型整次调用 | 20 秒 | `llm_timeout_s` | 重试或回退 | E04 |
+| 超时 | 模型首 token | 8 秒 | `llm_first_token_timeout_s` | 切备用模型 | E04 |
+| 超时 | 小模型（路由、护栏、核验） | 3 秒 | `small_llm_timeout_s` | 规则兜底 | E15 |
 | 超时 | 只读工具 / 写工具 / 批量工具 | 3 / 5 / 8 秒 | 工具契约 `timeout_s` | 重试或 `TOOL_TIMEOUT` | E41 |
-| 超时 | 知识检索 | 1.5 秒 | `KB_TIMEOUT_S` | 跳过检索（L1） | E08 |
+| 超时 | 知识检索 | 1.5 秒 | `kb_timeout_s` | 跳过检索（L1） | E08 |
 | 超时 | MCP 调用 | 5 秒 | 工具契约 `timeout_s` | 重试或降级 | E22 |
-| 超时 | 整轮执行（不含排队与审批） | 120 秒 | `RUN_TIMEOUT_S` | `run.failed` `RUN_TIMEOUT`，保留部分结果 | E15 |
-| 超时 | 审批有效期 | 600 秒 | `CONFIRM_TTL_S` | 自动取消并通知 | E32 |
-| 重试 | 自动重试上限 | 3 次 | `MAX_RETRIES` | 降级或失败 | E07、E41 |
-| 重试 | 退避 | 基数 0.5 秒、×2、上限 8 秒、全抖动 | `RETRY_BASE_S`、`RETRY_CAP_S` | — | E07 |
-| 重试 | 模型 | 2 次后回退备用模型 | `LLM_MAX_RETRIES` | 回退链 | E04 |
+| 超时 | 整轮执行（不含排队与审批） | 120 秒 | `run_timeout_s` | `run.failed` `RUN_TIMEOUT`，保留部分结果 | E15 |
+| 超时 | 审批有效期 | 600 秒 | `approval_ttl_s` | 自动取消并通知 | E32 |
+| 重试 | 自动重试上限 | 3 次 | `max_retries` | 降级或失败 | E07、E41 |
+| 重试 | 退避 | 基数 0.5 秒、×2、上限 8 秒、全抖动 | `retry_base_s`、`retry_cap_s` | — | E07 |
+| 重试 | 模型 | 2 次后回退备用模型 | `llm_max_retries` | 回退链 | E04 |
 | 重试 | 写工具 | 有幂等键 3 次；无幂等键 0 次 | 工具契约 | `NEEDS_USER` | E07、E09 |
-| 熔断 | 打开条件 | 60 秒内 ≥ 10 次且失败率 ≥ 50% | `BREAKER_WINDOW_S`、`BREAKER_MIN_FAILS`、`BREAKER_FAIL_RATE` | 打开 | E08 |
-| 熔断 | 打开时长 | 30 秒，再次失败翻倍，最长 300 秒 | `BREAKER_OPEN_S`、`BREAKER_OPEN_MAX_S` | 半开 | E08 |
-| 熔断 | 半开探测 | 3 个请求 | `BREAKER_HALF_OPEN_PROBES` | 关闭或重新打开 | E08 |
-| 上限 | 每次运行决策轮次 | 6 | `MAX_ROUNDS` | `run.failed` `STEP_LIMIT`，保留部分结果，不让模型收尾 | E15、E51 |
-| 上限 | 每次运行工具调用 | 5 | `MAX_TOOL_CALLS` | `STEP_LIMIT` | E15 |
+| 熔断 | 打开条件 | 60 秒内 ≥ 10 次且失败率 ≥ 50% | `breaker_window_s`、`breaker_min_fails`、`breaker_fail_rate` | 打开 | E08 |
+| 熔断 | 打开时长 | 30 秒，再次失败翻倍，最长 300 秒 | `breaker_open_s`、`breaker_open_max_s` | 半开 | E08 |
+| 熔断 | 半开探测 | 3 个请求 | `breaker_half_open_probes` | 关闭或重新打开 | E08 |
+| 上限 | 每次运行决策轮次 | 6 | `max_rounds` | `run.failed` `STEP_LIMIT`，保留部分结果，不让模型收尾 | E15、E51 |
+| 上限 | 每次运行工具调用 | 5 | `max_tool_calls` | `STEP_LIMIT` | E15 |
 | 上限 | 单一结果工具 | 每次运行成功 1 次 | 工具契约 `result_kind` | 移出工具清单，再调返回 `TOOL_NOT_AVAILABLE` | E54 |
 | 上限 | 多种结果工具调用 | 每次运行 3 次（≤ 5） | 工具契约 `max_calls_per_run` | 返回 `TOOL_NOT_AVAILABLE` | E16 |
-| 上限 | 每次运行图步数 | 25（即 `recursion_limit`） | `MAX_GRAPH_STEPS` | `STEP_LIMIT` | E33 |
-| 上限 | 同名同参重复调用 | 3 次即停止 | `MAX_SAME_CALL` | `STEP_LIMIT` | E15 |
-| 上限 | 每步并行工具调用 | 3 | `MAX_PARALLEL_TOOLS` | 超出部分顺序执行 | E41 |
-| 上限 | 每次运行 token（不含缓存读取） | 8000 | `MAX_TURN_TOKENS` | `TOKEN_LIMIT` | E38 LLM10 |
-| 上限 | 工具结果 | 2000 字符、列表 10 项 | `TOOL_RESULT_MAX_CHARS` | 截断并说明 | E16 |
+| 上限 | 每次运行图步数 | 25（即 `recursion_limit`） | `max_graph_steps` | `STEP_LIMIT` | E33 |
+| 上限 | 同名同参重复调用 | 3 次即停止 | `max_same_call` | `STEP_LIMIT` | E15 |
+| 上限 | 每步并行工具调用 | 3 | `max_parallel_tools` | 超出部分顺序执行 | E41 |
+| 上限 | 每次运行 token（不含缓存读取） | 8000 | `max_turn_tokens` | `TOKEN_LIMIT` | E38 LLM10 |
+| 上限 | 工具结果 | 2000 字符、列表 10 项 | `tool_result_max_chars` | 截断并说明 | E16 |
 | 上限 | 参数自我纠正 | 每工具每运行 2 次 | — | 计入工具调用 | E16 |
-| 上限 | 结构化输出重试 | 1 次 | `STRUCTURED_RETRIES` | 降级 | E25 |
+| 上限 | 结构化输出重试 | 1 次 | `structured_retries` | 降级 | E25 |
 | 上限 | 核验重生成 | 1 次 | — | 模板回答 | — |
-| 上限 | 追问轮数 | 2 | `MAX_CLARIFY_ROUNDS` | 给页面入口 | — |
+| 上限 | 追问轮数 | 2 | `max_clarify_rounds` | 给页面入口 | — |
 | 上限 | 工具数量 | 每智能体 ≤ 20，每轮暴露 ≤ 5 | — | 注册失败 | E41、E16 |
-| 保留 | 事件日志 / 幂等记录 | 24 小时 | `EVENT_LOG_TTL_S`、`DEDUP_TTL_S` | 过期后按历史接口取结果 | E09 |
-| 保留 | 会话、检查点 | 30 天 | `CONVERSATION_TTL_S` | 清理 | E31 |
+| 保留 | 事件日志 / 幂等记录 | 24 小时 | `event_log_ttl_s`、`dedup_ttl_s` | 过期后按历史接口取结果 | E09 |
+| 保留 | 会话、检查点 | 30 天 | `conversation_ttl_s` | 清理 | E31 |
+| 保留 | 运行记录与 trace（运行、标识与提供对象，不含原文） | 6 个月 | 日志平台留存策略 | 到期删除 | OBS-004 |
 
 ## 17 底座检查清单
 
@@ -1021,7 +1024,7 @@ class VerifyResult(Contract):
 | F39 | 改提示词、模型、工具、意图表、契约、检索参数会触发评测回归，下降超过 2 个百分点阻止发布 | CI 配置与一次阻止记录 | AGENT-015 |
 | F40 | 提示按固定顺序拼装并设缓存断点，缓存命中率有监控 | 用量记录中的缓存读取 token | AGENT-019 |
 | F41 | 默认单智能体工作流；用多智能体时方案写明并行理由与成本 | 方案审查 | AGENT-020 |
-| F42 | 模型只输出决策，执行、重试、审批、终止都在程序里；决策轮次超过 `MAX_ROUNDS` 以 `STEP_LIMIT` 失败，不再调用模型收尾 | 轮次上限测试（模型一直请求工具） | AGENT-021 |
+| F42 | 模型只输出决策，执行、重试、审批、终止都在程序里；决策轮次超过 `max_rounds` 以 `STEP_LIMIT` 失败，不再调用模型收尾 | 轮次上限测试（模型一直请求工具） | AGENT-021 |
 | F43 | `single` 工具成功后，下一次模型请求的 `tools` 不含它，强行调用被拒绝；`multi` 工具超过 `max_calls_per_run` 被拒绝 | 工具分级测试 | AGENT-022 |
 | F44 | 每轮工具清单 = 角色 ∩ 意图 ∩ 本次运行可用 ∩ MCP 白名单；越权调用不执行，后端没有收到请求 | 权限测试 | AGENT-022 |
 | F45 | 参数错误结果含 `received_args`、`problems`、`how_to_fix`、`attempts_left`，后端调用为 0；MCP `isError` 结果转成同一格式 | 参数错误测试 | AGENT-023 |

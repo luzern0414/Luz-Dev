@@ -1,6 +1,9 @@
 """coupon 配置与扩展钩子。
 
-配置键（环境变量，均有安全默认值）见 MODULE.md §9；项目可在启动时 `set_config(...)` 覆盖。
+配置：部署参数只有时区 COUPON_TIMEZONE（默认 LUZ_TIMEZONE）；运行参数（退券策略、兑换码长度与锁定、批量上限、
+提醒时间、每单叠加张数）在 config/runtime 的 `[coupon]`（热加载），类型、范围与默认值登记在
+`luzback/runtime_config.py` 的 CouponSettings，见 MODULE.md §9。`set_config(...)` 只给项目启动与测试用
+（运行参数转成测试用运行配置，生产环境不能用）。
 扩展钩子：
 - 人群判断 `set_audience_checker(fn)`：fn(db, user_id, audience: dict, now) -> None（符合）或原因字符串。
   默认实现只认 `all`；其他人群类型需要先 `set_member_profile_provider(fn)`（会员注册时间、等级、标签）。
@@ -11,68 +14,53 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import datetime
+from functools import partial
 from typing import Any
+
+from luzback.module_config import ModuleConfig, runtime_default
 
 RETURN_NEVER = "never"                # 退款一律不退券
 RETURN_FULL_REFUND = "full_refund"    # 默认：整单全额退款才退券（七日办法第十五条“按原方式退回”）
 RETURN_ANY_REFUND = "any_refund"      # 任何退款都退券（商户让利）
 RETURN_POLICIES = (RETURN_NEVER, RETURN_FULL_REFUND, RETURN_ANY_REFUND)
 
-
-def _env(name: str, default: str) -> str:
-    return os.environ.get(name, default)
-
-
-def _int(name: str, default: int) -> int:
-    try:
-        return int(os.environ.get(name, default))
-    except ValueError:
-        return default
+_rt = partial(runtime_default, "coupon")
 
 
 @dataclass(frozen=True)
 class CouponConfig:
-    timezone: str = field(default_factory=lambda: _env("COUPON_TIMEZONE", _env("LUZ_TIMEZONE", "Asia/Shanghai")))
-    return_policy: str = field(default_factory=lambda: _env("COUPON_RETURN_POLICY", RETURN_FULL_REFUND))
-    return_window_hours: int = field(default_factory=lambda: _int("COUPON_RETURN_WINDOW_HOURS", 0))  # 0 = 只看有效期
-    code_length: int = field(default_factory=lambda: _int("COUPON_CODE_LENGTH", 12))
-    code_max_failures: int = field(default_factory=lambda: _int("COUPON_CODE_MAX_FAILURES", 5))
-    code_window_seconds: int = field(default_factory=lambda: _int("COUPON_CODE_WINDOW_SECONDS", 600))
-    code_batch_max: int = field(default_factory=lambda: _int("COUPON_CODE_BATCH_MAX", 10000))
-    issue_batch_max: int = field(default_factory=lambda: _int("COUPON_ISSUE_BATCH_MAX", 10000))
-    expire_batch_size: int = field(default_factory=lambda: _int("COUPON_EXPIRE_BATCH", 500))
-    remind_before_hours: int = field(default_factory=lambda: _int("COUPON_REMIND_BEFORE_HOURS", 48))
-    issue_job_batch: int = field(default_factory=lambda: _int("COUPON_ISSUE_JOB_BATCH", 200))
-    max_coupons_per_order: int = field(default_factory=lambda: _int("COUPON_MAX_PER_ORDER", 3))
-
-    def __post_init__(self) -> None:
-        if self.return_policy not in RETURN_POLICIES:
-            raise ValueError(f"COUPON_RETURN_POLICY must be one of {RETURN_POLICIES}")
-        if not 8 <= self.code_length <= 32:
-            raise ValueError("COUPON_CODE_LENGTH must be between 8 and 32")
+    # ---- 部署参数（环境变量）----
+    timezone: str = field(default_factory=lambda: os.environ.get("COUPON_TIMEZONE",
+                                                                 os.environ.get("LUZ_TIMEZONE", "Asia/Shanghai")))
+    # ---- 运行参数（[coupon]）----
+    return_policy: str = field(default_factory=_rt("return_policy"))
+    return_window_hours: int = field(default_factory=_rt("return_window_hours"))  # 0 = 只看有效期
+    code_length: int = field(default_factory=_rt("code_length"))
+    code_max_failures: int = field(default_factory=_rt("code_max_failures"))
+    code_window_seconds: int = field(default_factory=_rt("code_window_seconds"))
+    code_batch_max: int = field(default_factory=_rt("code_batch_max"))
+    issue_batch_max: int = field(default_factory=_rt("issue_batch_max"))
+    expire_batch_size: int = field(default_factory=_rt("expire_batch_size"))
+    remind_before_hours: int = field(default_factory=_rt("remind_before_hours"))
+    issue_job_batch: int = field(default_factory=_rt("issue_job_batch"))
+    max_coupons_per_order: int = field(default_factory=_rt("max_coupons_per_order"))
 
 
-_config: CouponConfig | None = None
+_module = ModuleConfig("coupon", CouponConfig)
 
 
 def get_config() -> CouponConfig:
-    global _config
-    if _config is None:
-        _config = CouponConfig()
-    return _config
+    return _module.get()
 
 
 def set_config(config: CouponConfig | None = None, **overrides: Any) -> CouponConfig:
-    global _config
-    _config = replace(config or get_config(), **overrides)
-    return _config
+    return _module.set(config, **overrides)
 
 
 def reset_config() -> None:
-    global _config
-    _config = None
+    _module.reset()
 
 
 # ---------------------------------------------------------------- 会员画像与人群

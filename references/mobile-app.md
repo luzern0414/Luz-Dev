@@ -1,6 +1,6 @@
 # Mobile app implementation
 
-Read the approved screen specification and mobile handoff first. A cross-platform toolkit does not remove platform-specific navigation, permission, accessibility, or release work.
+Read the approved Luz System session and the project's `design-bindings.json` first (`references/design-integration.md`; `HANDOFF.json` only when the session ships one). A cross-platform toolkit does not remove platform-specific navigation, permission, accessibility, or release work.
 
 ## Stack selection
 
@@ -21,7 +21,7 @@ Use one state pattern consistently. Avoid putting network or persistence logic d
 
 ## Navigation and lifecycle
 
-Implement the handoff route map, deep links, tab restoration, system back, modal dismissal, and session recovery. Protect unsaved work across backgrounding and process death. Define what happens when an update or remote configuration makes a screen unavailable.
+Implement the design's route map, deep links, tab restoration, system back, modal dismissal, and session recovery. Protect unsaved work across backgrounding and process death. Define what happens when an update or remote configuration makes a screen unavailable.
 
 ## Offline and synchronization
 

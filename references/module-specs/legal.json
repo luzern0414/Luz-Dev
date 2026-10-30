@@ -41,8 +41,8 @@
     {
       "name": "专项同意",
       "steps": [
-        "前端在进入人脸录入、储值、购卡确认前调用 `GET /api/v1/app/agreements/{kind}` 展示条款。",
-        "会员勾选同意后调用 `POST /api/v1/app/me/consents`，服务端校验版本为当前发布版本后写入同意记录。",
+        "前端在进入人脸录入、储值、购卡确认前调用 `GET /api/v1/app/legal/{kind}` 展示条款。",
+        "会员勾选同意后调用 `POST /api/v1/app/legal/consents`，服务端校验版本与正文摘要为当前生效版本后写入同意记录。",
         "相关业务接口在服务端再次校验存在有效同意记录，缺失时返回 CONSENT_REQUIRED。"
       ]
     },
@@ -99,34 +99,34 @@
   "apis": [
     {
       "method": "GET",
-      "path": "/api/v1/app/agreements/{kind}",
+      "path": "/api/v1/app/legal/{kind}",
       "caller": "小程序",
       "purpose": "读取当前协议",
-      "request": "kind（user_terms、privacy、face、prepaid、refund_rules）",
+      "request": "kind（terms、privacy、face_consent、prepaid、refund、activity、purchase）",
       "response": "version，title，content，summary_of_changes，published_at",
       "errors": "NOT_FOUND"
     },
     {
       "method": "GET",
-      "path": "/api/v1/app/me/consents",
+      "path": "/api/v1/app/legal/pending",
       "caller": "小程序",
-      "purpose": "我的授权",
+      "purpose": "待同意的必需文档",
       "request": "无",
-      "response": "每类协议的最新动作、版本与时间",
+      "response": "当前用户尚未同意的生效文档：kind、version、title、summary_of_changes",
       "errors": "—"
     },
     {
       "method": "POST",
-      "path": "/api/v1/app/me/consents",
+      "path": "/api/v1/app/legal/consents",
       "caller": "小程序",
       "purpose": "记录同意",
-      "request": "kind，version，scene",
+      "request": "document_id，version，digest（客户端展示文本的摘要），scene",
       "response": "consent_id，consented_at",
       "errors": "VERSION_OUTDATED"
     },
     {
       "method": "POST",
-      "path": "/api/v1/app/me/consents/{kind}/withdraw",
+      "path": "/api/v1/app/legal/consents/{kind}/withdraw",
       "caller": "小程序",
       "purpose": "撤回授权",
       "request": "无",
@@ -135,16 +135,16 @@
     },
     {
       "method": "POST",
-      "path": "/api/v1/admin/agreements",
+      "path": "/api/v1/admin/legal/documents",
       "caller": "后台",
       "purpose": "创建协议草稿",
       "request": "kind，version，title，content，summary_of_changes，need_reconsent",
-      "response": "agreement_id",
+      "response": "document_id",
       "errors": "VERSION_EXISTS"
     },
     {
       "method": "POST",
-      "path": "/api/v1/admin/agreements/{id}/publish",
+      "path": "/api/v1/admin/legal/documents/{id}/publish",
       "caller": "后台",
       "purpose": "发布协议",
       "request": "无",
@@ -177,7 +177,7 @@
     },
     {
       "when": "发布协议",
-      "table": "agreement_versions",
+      "table": "legal_documents",
       "content": "status=published、digest、published_at；旧版本 status=retired。"
     },
     {
@@ -188,7 +188,7 @@
   ],
   "tables": [
     {
-      "name": "agreement_versions",
+      "name": "legal_documents",
       "label": "协议版本",
       "purpose": "协议正文与发布状态",
       "fields": [
@@ -197,7 +197,7 @@
           "type": "VARCHAR(32)",
           "required": true,
           "default": "—",
-          "comment": "user_terms、privacy、face、prepaid、refund_rules"
+          "comment": "terms、privacy、face_consent、prepaid、refund、activity、purchase"
         },
         {
           "name": "version",

@@ -1,6 +1,6 @@
 # WeChat mini-program implementation
 
-Read the approved mini-program design specification and the project's `HANDOFF.json` before changing UI.
+Read the approved Luz System session (architecture, system design, prototype; `references/design-integration.md`) and the project's `packages/contracts/design-bindings.json` before changing UI; `HANDOFF.json` only when the session ships one. Page patterns, copy and visual rules are Luz System's `references/miniprogram-design.html`; this page covers the implementation.
 
 ## Defaults
 
@@ -8,6 +8,7 @@ Read the approved mini-program design specification and the project's `HANDOFF.j
 - TDesign Mini Program or Vant Weapp for behavior and accessibility when needed; override appearance through product tokens.
 - No platform design language may replace the project's approved visual system.
 - API access through one request layer with authentication refresh, error normalization, retries where safe, and request cancellation.
+- Texts and display settings come from `GET /api/v1/app/content` with the bundled defaults as fallback (MP-006, module spec `content`); runtime parameters from `GET /api/v1/app/config` (module spec `config`).
 
 ## App structure
 
@@ -39,14 +40,14 @@ Keep package boundaries aligned with the product lifecycle. Use subpackages when
 
 ## Data and state
 
-Every screen implements its handoff state matrix. Normalize API errors into stable product states. The request layer owns authentication expiry, timeout, rate limits, and retry policy; page code owns rendering and recovery.
+Every screen implements the states its design defines (`S-` IDs, `data-state-kind` in the prototype). Normalize API errors into stable product states. The request layer owns authentication expiry, timeout, rate limits, and retry policy; page code owns rendering and recovery.
 
 Use local storage only for non-sensitive preferences, drafts, and cache with explicit expiry. Sensitive tokens and payment details stay in platform-supported secure storage and are never logged.
 
 ## Performance
 
 - Keep the initial package small; defer noncritical surfaces.
-- Resize and compress images to the display target. Reserve layout space to avoid jumps.
+- Request display images at the size the screen shows (the backend or CDN serves the resized copy); photos the user uploads go up as originals, never compressed on the device (FILE-001). Reserve layout space to avoid jumps.
 - Cache repeatable catalog/content requests with TTL and invalidation.
 - Measure cold launch, first meaningful content, interaction latency, and scroll smoothness.
 - Avoid work in scroll handlers that can be scheduled or batched.

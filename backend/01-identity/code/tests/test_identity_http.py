@@ -15,6 +15,7 @@ from identity import FakeSmsSender, User
 from identity_testkit import *  # noqa: F401,F403
 from identity_testkit import MODULES, audits
 from luzback import AppError, ErrorCode, Settings, create_app
+from luzback.testing import override_runtime
 from luzback.audit import AuditLog
 from luzback.db import get_session_factory
 from luzback.testing import make_test_app
@@ -243,7 +244,7 @@ def test_media_check_push_reaches_identity_handler(env, monkeypatch):
     assert resp["data"]["avatar_pending"] is True
     trace_id = next(iter(mp.server.media_checks))
     monkeypatch.setenv("WECHAT_MP_PUSH_TOKEN", "tok")
-    monkeypatch.setenv("WECHAT_MP_PUSH_REQUIRE_AES", "false")
+    override_runtime(wechat_mp={"push_require_aes": False})  # 运行参数：测试用运行配置
     wechat_mp.reload_config()
     q = {"signature": wechat_mp.url_signature("tok", "1", "n"), "timestamp": "1", "nonce": "n"}
     pushed = client.post("/api/v1/webhooks/wechat-mp/push", params=q, content=json.dumps(mp.media_result(trace_id, "pass")))
@@ -251,7 +252,6 @@ def test_media_check_push_reaches_identity_handler(env, monkeypatch):
     me = client.get("/api/v1/app/me", headers=H(tokens["access_token"])).json()["data"]
     assert me["avatar_url"] == "https://cdn.example.com/a.png" and me["avatar_pending"] is False
     monkeypatch.delenv("WECHAT_MP_PUSH_TOKEN")
-    monkeypatch.delenv("WECHAT_MP_PUSH_REQUIRE_AES")
     wechat_mp.reload_config()
 
 
@@ -317,3 +317,49 @@ def test_reveal_phone_requires_fresh_admin_auth(env):
         assert resp.json()["code"] == 4011 and resp.json()["data"]["reason"] == "reauth_required"
     finally:
         rbac_config.set_clock(None)
+
+
+# ================================================================ 安全事件与请求上下文
+
+def _logged(caplog, event: str) -> list[dict]:
+    return [getattr(r, "fields", {}) for r in caplog.records if getattr(r, "fields", {}).get("event") == event]
+
+
+def test_member_requests_and_logins_are_logged_with_user_ref(env, caplog):
+    import logging
+
+    from luzback import log_events as ev
+
+    client, mp, sms = env
+    caplog.set_level(logging.INFO)
+    tokens = do_login(client, mp)
+    [success] = _logged(caplog, ev.SECURITY_AUTHN_LOGIN_SUCCESS)
+    assert success["user_ref"] == str(tokens["user_id"]) and success["method"] == "wechat"
+    assert client.get("/api/v1/app/me", headers=H(tokens["access_token"])).status_code == 200
+    summary = _logged(caplog, ev.HTTP_REQUEST)[-1]
+    assert summary["user_ref"] == str(tokens["user_id"]) and summary["http.route"] == "/api/v1/app/me"
+    # 短信登录输错验证码：security.authn_login_fail，不记手机号与验证码
+    sent = client.post("/api/v1/app/auth/sms/send", json={"phone": "13800138000", "purpose": "login"}).json()["data"]
+    bad = client.post("/api/v1/app/auth/sms/login", json={"phone": "13800138000", "request_id": sent["request_id"],
+                                                         "code": "000001"})
+    assert bad.status_code in (400, 401)
+    [fail] = _logged(caplog, ev.SECURITY_AUTHN_LOGIN_FAIL)
+    assert fail["method"] == "sms" and fail["actor"] == "member" and fail["outcome"] == "failure"
+    text = " ".join(repr(getattr(r, "fields", {})) for r in caplog.records)
+    assert "13800138000" not in text and "000001" not in text
+
+
+def test_refresh_token_reuse_is_a_security_event(env, caplog):
+    import logging
+
+    from luzback import log_events as ev
+
+    client, mp, _ = env
+    caplog.set_level(logging.INFO)
+    tokens = do_login(client, mp)
+    client.post("/api/v1/app/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
+    override_runtime(identity={"refresh_reuse_grace_seconds": 0})
+    replay = client.post("/api/v1/app/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
+    assert replay.status_code == 401
+    [reuse] = _logged(caplog, ev.SECURITY_AUTHN_TOKEN_REUSE)
+    assert reuse["user_ref"] == str(tokens["user_id"]) and reuse["reason"] == "refresh_reuse"

@@ -341,10 +341,8 @@ def test_sms_gateway_failure_is_5020_and_does_not_block_resend(db, sms):
 def test_sms_invalid_input_and_config_limits(db, sms, monkeypatch):
     raises(ErrorCode.BAD_REQUEST, identity.send_sms_code, db, "12345", "bind", sms)
     raises(ErrorCode.BAD_REQUEST, identity.send_sms_code, db, PHONE, "reset", sms)
-    monkeypatch.setenv("IDENTITY_SMS_TTL", "900")
-    with pytest.raises(ValueError):
-        identity.reload_config()
-    monkeypatch.delenv("IDENTITY_SMS_TTL")
+    with pytest.raises(ValueError):  # 超过 10 分钟：运行配置校验拒绝
+        set_config(monkeypatch, IDENTITY_SMS_TTL=900)
     set_config(monkeypatch, IDENTITY_SMS_ENABLED="false")
     raises(ErrorCode.BUSINESS_RULE, identity.send_sms_code, db, PHONE, "bind", sms)
 

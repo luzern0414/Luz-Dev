@@ -1,10 +1,10 @@
-# 模块：jobs（定时任务与事件消费进程）
+# 模块：25-jobs（定时任务与事件消费进程）`jobs`
 
 | 项 | 内容 |
 |---|---|
-| 状态 | 标准：任务发现、事件路由、心跳、调度与投递进程；测试 6 项 |
+| 状态 | 标准：任务发现、事件路由、心跳、调度与投递进程；测试在 `code/tests/` |
 | 代码 | `25-jobs/code/jobs/`，测试 `25-jobs/code/tests/` |
-| 依赖 | framework（`luzback.scheduler`、`luzback.outbox`）；各模块的 `jobs.py`、`events.py` |
+| 依赖 | 00-framework（`luzback.scheduler`、`luzback.outbox`）；各模块的 `jobs.py`、`events.py` |
 
 ## 0 官方来源
 
@@ -32,6 +32,9 @@
 5. 只加载启用的模块（`LUZ_FEATURES`）。
 6. 生产环境的 scheduler 必须配置 `LUZ_REDIS_URL` 作分布式锁，否则拒绝启动。
 7. 每轮写 `LUZ_WORKER_HEARTBEAT_FILE`；SIGTERM 后完成当前一轮退出。
+8. 启动先加载运行配置（与 api 同一个 `start_process`，校验失败逐条打印并以 2 退出），数据库就绪后登记 `config_loads` 加载记录；运行中监听配置目录热加载，SIGHUP 立即重新加载（`docker compose kill -s HUP worker scheduler`）。
+9. 链路与快照：每次任务运行新建 trace，日志带 `job`、`run_id`，结束写 `job.finished`；事件投递接上生产者的 trace（`topic`、`event_id`）；任务与事件开始时各取一次运行配置快照。订阅者失败写 `event.subscriber_failed`（带堆栈，只记一次）。
+10. `python -m jobs list` 只打印 JSON，不配置日志、不加载运行配置。
 
 ## 6 运行
 
@@ -51,6 +54,7 @@ python -m jobs worker
 |---|---|---|
 | `--tick` | 1 秒 | 循环间隔 |
 | `LUZ_WORKER_HEARTBEAT_FILE` | 未设置 | 健康检查读取的心跳文件 |
-| `LUZ_FEATURES` | 全部模块 | 只运行启用模块的任务与订阅 |
+| `LUZ_FEATURES` | 全部模块 | 只运行启用模块的任务与订阅（23-app-settings 总是装配） |
+| `LUZ_CONFIG_WATCH` | `auto` | 运行配置目录监听：auto / poll / off |
 
 不包含：Cron 表达式（只支持固定间隔；按日任务在任务体里判断窗口）、跨进程消息队列消费者组。

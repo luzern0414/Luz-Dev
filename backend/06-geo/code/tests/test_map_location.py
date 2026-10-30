@@ -22,7 +22,7 @@ def test_within_range_returns_distance():
 def test_out_of_range_reports_distance():
     with pytest.raises(AppError) as exc:
         check_delivery_range(PEOPLE_SQUARE, XUJIAHUI, max_km=3)
-    assert exc.value.code == ErrorCode.BUSINESS_RULE
+    assert exc.value.code == ErrorCode.OUT_OF_RANGE and exc.value.status == 422  # 4222
     assert exc.value.data["max_km"] == 3 and exc.value.data["distance_m"] > 3000
 
 

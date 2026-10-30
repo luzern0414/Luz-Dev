@@ -1,10 +1,10 @@
-# 模块：reservation（预约名额）
+# 模块：13-reservation（预约名额）`booking`
 
 | 项 | 内容 |
 |---|---|
-| 状态 | 已实现：时段名额原子占位、一人一约、时间冲突、候补与自动递补、取消截止、签到窗口、爽约任务；测试 7 项（含 40 并发抢 8 个名额） |
+| 状态 | 已实现：时段名额原子占位、一人一约、时间冲突、候补与自动递补、取消截止、签到窗口、爽约任务；测试在 `code/tests/`（含 40 并发抢 8 个名额） |
 | 代码 | `13-reservation/code/booking/`、测试 `13-reservation/code/tests/test_booking.py` |
-| 依赖 | framework（StateMachine、发件箱） |
+| 依赖 | 00-framework（StateMachine、发件箱） |
 | 模式 | `references/patterns/reservation.md`；规则 RSV-001、RSV-002 |
 
 ## 1 数据

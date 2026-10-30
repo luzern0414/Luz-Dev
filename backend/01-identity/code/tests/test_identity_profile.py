@@ -175,10 +175,8 @@ def test_cooling_off_is_configurable_but_capped_at_15_days(db, mp, monkeypatch):
     tokens = login(db, mp)
     out = identity.request_deletion(db, tokens["user_id"], fresh_claims(tokens))
     assert _span(out) == timedelta(days=7)
-    monkeypatch.setenv("IDENTITY_DELETION_COOLING_DAYS", "16")
-    with pytest.raises(ValueError):
-        identity.reload_config()
-    monkeypatch.delenv("IDENTITY_DELETION_COOLING_DAYS")
+    with pytest.raises(ValueError):  # 超过 15 天：运行配置校验拒绝
+        set_config(monkeypatch, IDENTITY_DELETION_COOLING_DAYS=16)
 
 
 # ================================================================ 任务

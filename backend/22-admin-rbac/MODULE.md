@@ -14,7 +14,7 @@
 | 会话 | OWASP Session Management Cheat Sheet https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html ；ASVS V7 https://github.com/OWASP/ASVS/blob/master/5.0/en/0x16-V7-Session-Management.md | 令牌 ≥128 bit CSPRNG；空闲 15–30 分钟、绝对 4–8 小时，服务端强制；登录 / 重新认证 / 改密后换发令牌（7.2.4）；停用即终止会话（7.4.2）；用户可查看并终止自己的会话（7.5.2）；管理员可终止他人会话（7.4.5）；敏感属性修改前重新认证（7.5.1） | 2026-10-28 |
 | 授权 | OWASP Authorization Cheat Sheet https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html ；ASVS V8 https://github.com/OWASP/ASVS/blob/master/5.0/en/0x17-V8-Authorization.md | 默认拒绝；每请求服务端校验；最小权限；多租户（门店）隔离（8.4.1） | 2026-10-28 |
 | 日志 | OWASP Logging Cheat Sheet https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html ；ASVS V16 https://github.com/OWASP/ASVS/blob/master/5.0/en/0x25-V16-Security-Logging-and-Error-Handling.md | 记录全部认证尝试（含因素）、授权失败、权限变更、管理员操作、敏感数据访问、导出；不记口令 / 令牌 | 2026-10-28 |
-| 日志留存 | 《网络安全法》第二十一条 https://www.cac.gov.cn/2016-11/07/c_1119867116_2.htm | 网络日志留存不少于六个月 → 登录日志默认 180 天 | 2026-10-28 |
+| 日志留存 | 《网络安全法》第二十三条（2025 年修正，2026-01-01 施行）https://www.cac.gov.cn/2025-12/29/c_1768735112911946.htm | 网络日志留存不少于六个月 → 登录日志默认 186 天 | 2026-10-29 |
 | 操作权限 | 《个人信息保护法》第五十一条 https://www.cac.gov.cn/2021-08/20/c_1631050028355286.htm | 合理确定个人信息处理的操作权限 → 手机号明文需 `staff:sensitive` 并审计 | 2026-10-28 |
 | 列表与导出 | 本仓库 SPEC §3.4 / `luzback.listing`（依据 Google AIP-158/132、Azure REST 指南，见 R5 调研） | 声明式筛选 / 排序 / 关键词；未知参数 4001；导出复用同一声明并记审计 | 2026-10-28 |
 
@@ -70,7 +70,7 @@
 | `admin_store_scopes` | (user_id, store_id) | 复合主键；store_id | all_stores=False 时生效 |
 | `admin_sessions` | staff_id, token_hash, stage(mfa_pending\|active), amr(pwd\|pwd+otp\|pwd+recovery), created_at, auth_at, last_seen_at, expires_at, revoked_at, revoke_reason, ip, user_agent | token_hash 唯一；staff_id | 令牌明文不落库 |
 | `admin_login_throttles` | username(PK, 规范化), failures, window_started_at, locked_until, lock_count, last_failure_at | 主键 | 不存在的账号名同样计数 |
-| `admin_login_logs` | user_id?, username, factor, success, reason, ip, user_agent, created_at | (username, created_at)；user_id；created_at | 保留 180 天 |
+| `admin_login_logs` | user_id?, username, factor, success, reason, ip, user_agent, created_at | (username, created_at)；user_id；created_at | 保留 186 天（不少于 6 个月） |
 | `admin_recovery_codes` | staff_id, code_hash(Argon2id), used_at, created_at | staff_id | 一次性 |
 | `audit_logs`（框架） | actor_type, actor_id, action, resource, resource_id, before/after_json, reason, ip, user_agent, trace_id | — | 只追加 |
 
@@ -79,14 +79,14 @@
 **R1 口令**
 1. 规范化 NFC，不截断；>1024 字节直接判失败。
 2. 最短：已启用或角色要求 MFA 时 8 位，否则 15 位；最长 128 位；不设组成规则。
-3. 拒绝：内置常见口令表、重复字符（≤2 种字符）、包含账号名 / 姓名 / 系统名 / `ADMIN_PASSWORD_BLOCKLIST` 词；配置了泄露检查钩子时拒绝命中口令（钩子异常默认放行，可配置为 5020 拒绝）。
+3. 拒绝：内置常见口令表、重复字符（≤2 种字符）、包含账号名 / 姓名 / 系统名 / `[admin_rbac] password_blocklist_extra` 词；配置了泄露检查钩子时拒绝命中口令（钩子异常默认放行，可配置为 5020 拒绝）。
 4. 哈希 Argon2id（m=19456 KiB, t=2, p=1，可调高）；旧格式（框架 `argon2$` / `pbkdf2_sha256$`）登录成功后自动重哈希。
 5. 管理员新建员工与重置口令时只由系统生成临时口令（20 位随机），仅本次响应返回一次（不写入幂等记录），72 小时内有效，首次登录只能改密。
 6. 改密必须提交当前口令；新口令不能与当前相同；改密后撤销其他会话并轮换当前会话。
 
 **R2 登录**
 1. 账号不存在 / 口令错误 / 停用 / 临时口令过期：同为 4010 `invalid username or password`；账号不存在时执行一次假哈希。
-2. 节流按规范化账号名：`login_failure_window_seconds`（900）内失败 `login_max_failures`（5）次 → 锁定 `login_lock_seconds`（900）秒，再次锁定时长翻倍（封顶 86400）；锁定期间任何口令都返回 4290 + Retry-After；成功登录清零（含锁定级别）。
+2. 节流按规范化账号名：`login_failure_window_seconds`（900）内失败 `login_max_failures`（5）次 → 锁定 `login_lock_seconds`（900）秒（运行配置 `[admin_rbac]`，可热加载），再次锁定时长翻倍（封顶 86400）；锁定期间任何口令都返回 4290 + Retry-After；成功登录清零（含锁定级别）。
 3. 配置了人机验证钩子时，窗口内失败 ≥ `captcha_after_failures`（3）次后必须带 `captcha_token`，否则 4010 + `captcha_required=true`。
 4. 每次尝试写登录日志（因素、成功、内部原因、IP、UA）；锁定时发 `staff.locked`。
 5. 已绑定 MFA：口令通过只签发 5 分钟 `mfa_token`；第二步失败同样计入节流；口令阶段不清零计数。
@@ -95,7 +95,7 @@
 1. TOTP：SHA1、6 位、30 秒、允许 ±1 步；成功时条件 UPDATE `mfa_last_step < step`，同一或更早时间步的码一律拒绝（防重放，并发下只有一个成功）。
 2. 密钥 160 bit，加密存储；绑定先生成待确认密钥，用一个有效码确认后启用，并生成 10 个恢复码（`XXXXX-XXXXX`，约 50 bit，Argon2id 存储，只返回一次）。
 3. 恢复码一次性（条件 UPDATE `used_at IS NULL`）；可重新生成（旧码全部失效）；使用后发 `staff.recovery_code_used`。
-4. 必须 MFA：角色 `mfa_required`（种子：超级管理员、财务）或持有 `ADMIN_MFA_REQUIRED_PERMISSIONS` 中任一码（默认 staff:write、role:write、after_sale:approve、after_sale:refund、payment:refund、report:export、wallet:adjust、wallet:refund、member_card:adjust、member_card:refund、member:reveal；授予的 `module:*` 覆盖其中的码也算），或 `ADMIN_MFA_REQUIRED_ALL=true`。未绑定的员工登录后是受限会话，只能 me / 改密 / 绑定 MFA / 登出，其他接口 4011 `mfa_enrollment_required`。
+4. 必须 MFA：角色 `mfa_required`（种子：超级管理员、财务）或持有 `[admin_rbac] mfa_required_permissions` 中任一码（默认 staff:write、role:write、after_sale:approve、after_sale:refund、payment:refund、report:export、wallet:adjust、wallet:refund、member_card:adjust、member_card:refund、member:reveal；授予的 `module:*` 覆盖其中的码也算），或 `[admin_rbac] mfa_required_all=true`。未绑定的员工登录后是受限会话，只能 me / 改密 / 绑定 MFA / 登出，其他接口 4011 `mfa_enrollment_required`。
 5. 自行关闭 MFA：需新鲜认证 + 当前 TOTP；角色要求 MFA 时 4220。
 6. 重置他人 MFA：必须是另一名管理员（自己 4030）、必须填原因、需新鲜认证；清密钥与恢复码、撤销其全部会话、发 `staff.mfa_reset`。
 
@@ -142,6 +142,8 @@ POST /auth/login ─ 锁定? ──是──> 4290 Retry-After
 **员工状态**：`active ⇄ disabled`（停用 / 启用，条件 UPDATE，重复操作 4090）；任意 → `deleted`（软删除，终态，不可恢复，账号名不复用）。
 
 ## 6 接口
+
+agent（`SPEC.md` §16）：本模块全部接口为 `no`（认证、账号与权限不交给智能体）。
 
 前缀 `/api/v1/admin`；写接口（员工 / 角色）必带 `Idempotency-Key`（作用域 `staff:{id}` + 操作）；“新鲜”= 需 300 秒内完成认证；agent 标记一律 no。
 
@@ -212,37 +214,55 @@ POST /auth/login ─ 锁定? ──是──> 4290 Retry-After
 
 ## 9 配置
 
-| 环境变量 | 默认 | 说明 |
+运行参数写在 `backend/config/runtime/*.toml`，字段说明（类型、范围、能否热加载、是否下发客户端）在 `00-framework/code/luzback/runtime_config.py`；模块经 `luzback.module_config.ModuleConfig` 读取，热加载后下一次读取即生效。环境变量只放秘密与部署参数；迁移前的环境变量名仍设置着时，启动会打 `config.unknown_env` 警告并指出新键。测试用 `set_config(...)` 或 `luzback.testing.override_runtime(...)` 注入运行参数（写进一份测试用运行配置，测试结束撤销）。
+
+### 9.1 环境变量（秘密与部署参数）
+
+| 变量 | 默认 | 说明 |
 |---|---|---|
-| `ADMIN_SESSION_IDLE_SECONDS` | 900 | 空闲超时 |
-| `ADMIN_SESSION_ABSOLUTE_SECONDS` | 28800 | 绝对超时 |
-| `ADMIN_SESSION_TOUCH_SECONDS` | 60 | last_seen 刷新粒度 |
-| `ADMIN_SESSION_BIND_UA` | true | 会话绑定 UA |
-| `ADMIN_MAX_SESSIONS` | 5 | 每人有效会话上限 |
-| `ADMIN_FRESH_AUTH_SECONDS` | 300 | 新鲜认证窗口 |
-| `ADMIN_MFA_CHALLENGE_SECONDS` | 300 | mfa_token 有效期 |
-| `ADMIN_LOGIN_MAX_FAILURES` | 5（回落 `LUZ_LOGIN_MAX_FAILURES`） | 窗口内失败阈值 |
-| `ADMIN_LOGIN_FAILURE_WINDOW_SECONDS` | 900 | 计数窗口 |
-| `ADMIN_LOGIN_LOCK_SECONDS` | 900（回落 `LUZ_LOGIN_LOCK_SECONDS`） | 首次锁定时长 |
-| `ADMIN_LOGIN_LOCK_MAX_SECONDS` | 86400 | 锁定封顶；也是锁定级别衰减时间 |
-| `ADMIN_CAPTCHA_AFTER_FAILURES` | 3 | 需验证码的失败次数（需注入钩子） |
-| `ADMIN_PASSWORD_MIN_MFA` / `ADMIN_PASSWORD_MIN_NO_MFA` / `ADMIN_PASSWORD_MAX` | 8 / 15 / 128 | 口令长度 |
-| `ADMIN_PASSWORD_BLOCKLIST` | 空 | 业务禁用词（逗号分隔） |
-| `ADMIN_PASSWORD_BREACH_FAIL_CLOSED` | false | 泄露检查异常时是否拒绝 |
-| `ADMIN_ARGON2_MEMORY_KIB` / `ADMIN_ARGON2_TIME_COST` / `ADMIN_ARGON2_PARALLELISM` | 19456 / 2 / 1 | 只可调高 |
-| `ADMIN_TEMP_PASSWORD_TTL_SECONDS` | 259200 | 临时口令有效期 |
-| `ADMIN_TOTP_ISSUER` | `LUZ_SERVICE_NAME` | otpauth issuer |
-| `ADMIN_TOTP_DRIFT_STEPS` | 1 | 允许漂移步数 |
-| `ADMIN_RECOVERY_CODE_COUNT` | 10 | 恢复码数量 |
-| `ADMIN_MFA_REQUIRED_ALL` | false | 所有员工强制 MFA |
-| `ADMIN_MFA_REQUIRED_PERMISSIONS` | staff:write,role:write,after_sale:approve,after_sale:refund,payment:refund,report:export,wallet:adjust,wallet:refund,member_card:adjust,member_card:refund,member:reveal | 持有（含通配覆盖）即强制 MFA |
-| `ADMIN_LOGIN_LOG_RETENTION_DAYS` | 180 | 登录日志保留 |
-| `ADMIN_EXPORT_MAX_ROWS` | 50000 | 同步导出上限（超出 4225） |
+| `ADMIN_TOTP_ISSUER` | LUZ_SERVICE_NAME | otpauth issuer（验证器 App 里显示的名称） |
 | `LUZ_FIELD_KEY` | 框架 | 手机号 / TOTP 密钥加密 |
+
+### 9.2 运行配置键
+
+| 键 | 默认 | 范围 | 热加载 | 下发客户端 | 说明（含单位） |
+|---|---|---|---|---|---|
+| `[admin_rbac] session_idle_seconds` | 900 | 60–86400 | 是 | 否 | 后台会话空闲超时（秒，OWASP 15–30 分钟）（原 `ADMIN_SESSION_IDLE_SECONDS`） |
+| `[admin_rbac] session_absolute_seconds` | 28_800 | 300–604800 | 是 | 否 | 后台会话绝对期限（秒，OWASP 4–8 小时）（原 `ADMIN_SESSION_ABSOLUTE_SECONDS`） |
+| `[admin_rbac] session_touch_seconds` | 60 | 1–3600 | 是 | 否 | 会话活跃时间最多多久写一次库（秒）（原 `ADMIN_SESSION_TOUCH_SECONDS`） |
+| `[admin_rbac] session_bind_user_agent` | true | true / false | 是 | 否 | 会话绑定浏览器标识，换了即失效（原 `ADMIN_SESSION_BIND_UA`） |
+| `[admin_rbac] max_sessions_per_staff` | 5 | 1–50 | 是 | 否 | 每个员工最多同时几个会话（原 `ADMIN_MAX_SESSIONS`） |
+| `[admin_rbac] fresh_auth_seconds` | 300 | 60–3600 | 是 | 否 | 资金与敏感操作要求最近认证的时间窗（秒）（原 `ADMIN_FRESH_AUTH_SECONDS`） |
+| `[admin_rbac] mfa_challenge_seconds` | 300 | 60–1800 | 是 | 否 | 口令通过后完成第二因素的期限（秒）（原 `ADMIN_MFA_CHALLENGE_SECONDS`） |
+| `[admin_rbac] login_max_failures` | 5 | 1–100 | 是 | 否 | 窗口内连续登录失败几次锁定账号（NIST 上限 100）（原 `ADMIN_LOGIN_MAX_FAILURES`） |
+| `[admin_rbac] login_failure_window_seconds` | 900 | 60–86400 | 是 | 否 | 登录失败计数窗口（秒）（原 `ADMIN_LOGIN_FAILURE_WINDOW_SECONDS`） |
+| `[admin_rbac] login_lock_seconds` | 900 | 1–86400 | 是 | 否 | 首次锁定时长（秒），再次锁定逐次加倍到上限（原 `ADMIN_LOGIN_LOCK_SECONDS`） |
+| `[admin_rbac] login_lock_max_seconds` | 86_400 | 60–604800 | 是 | 否 | 锁定时长上限（秒），也是锁定级别的衰减时间（原 `ADMIN_LOGIN_LOCK_MAX_SECONDS`） |
+| `[admin_rbac] captcha_after_failures` | 3 | 0–100 | 是 | 否 | 连续失败几次后要求人机验证（0 = 不要求）（原 `ADMIN_CAPTCHA_AFTER_FAILURES`） |
+| `[admin_rbac] password_min_length_mfa` | 8 | 8–64 | 是 | 否 | 已绑定第二因素时口令最短长度（位，NIST 不少于 8）（原 `ADMIN_PASSWORD_MIN_MFA`） |
+| `[admin_rbac] password_min_length_no_mfa` | 15 | 8–128 | 是 | 否 | 只用口令时最短长度（位，NIST 不少于 15）（原 `ADMIN_PASSWORD_MIN_NO_MFA`） |
+| `[admin_rbac] password_max_length` | 128 | 64–1024 | 是 | 否 | 口令最长长度（位，至少允许 64）（原 `ADMIN_PASSWORD_MAX`） |
+| `[admin_rbac] password_blocklist_extra` | [] | 文本列表 | 是 | 否 | 额外禁用的口令（如店名、品牌名）（原 `ADMIN_PASSWORD_BLOCKLIST`） |
+| `[admin_rbac] password_breach_fail_closed` | false | true / false | 是 | 否 | 泄露口令检查服务不可用时拒绝设置口令（原 `ADMIN_PASSWORD_BREACH_FAIL_CLOSED`） |
+| `[admin_rbac] argon2_memory_kib` | 19_456 | 7168–1048576 | 是 | 否 | Argon2id 内存参数（KiB，OWASP 最低 19 MiB）（原 `ADMIN_ARGON2_MEMORY_KIB`） |
+| `[admin_rbac] argon2_time_cost` | 2 | 1–10 | 是 | 否 | Argon2id 迭代次数（原 `ADMIN_ARGON2_TIME_COST`） |
+| `[admin_rbac] argon2_parallelism` | 1 | 1–16 | 是 | 否 | Argon2id 并行度（原 `ADMIN_ARGON2_PARALLELISM`） |
+| `[admin_rbac] temp_password_ttl_seconds` | 259_200 | 3600–604800 | 是 | 否 | 临时口令有效期（秒）（原 `ADMIN_TEMP_PASSWORD_TTL_SECONDS`） |
+| `[admin_rbac] totp_drift_steps` | 1 | 0–2 | 是 | 否 | TOTP 前后各允许几个 30 秒步长的漂移（原 `ADMIN_TOTP_DRIFT_STEPS`） |
+| `[admin_rbac] recovery_code_count` | 10 | 5–20 | 是 | 否 | 每次生成几个恢复码（原 `ADMIN_RECOVERY_CODE_COUNT`） |
+| `[admin_rbac] mfa_required_all` | false | true / false | 是 | 否 | 全部员工必须绑定第二因素（原 `ADMIN_MFA_REQUIRED_ALL`） |
+| `[admin_rbac] mfa_required_permissions` | [staff:write, role:write, after_sale:approve, after_sale:refund, payment:refund, report:export, wallet:adjust, wallet:refund, member_card:adjust, member_card:refund, member:reveal] | 文本列表 | 是 | 否 | 持有这些权限码（含 module:* 覆盖）的员工必须绑定第二因素（原 `ADMIN_MFA_REQUIRED_PERMISSIONS`） |
+| `[admin_rbac] login_log_retention_days` | 186 | 184–3650 | 是 | 否 | 登录日志保留（天，网络安全法不少于 6 个月，6 个月最长 184 天）（原 `ADMIN_LOGIN_LOG_RETENTION_DAYS`） |
+| `[admin_rbac] export_max_rows` | 50_000 | 1–1000000 | 是 | 否 | 后台单次导出最多多少行（原 `ADMIN_EXPORT_MAX_ROWS`） |
+| `[rate_limit] login_per_min` | 5 | 1–1000 | 是 | 否 | 登录接口每个 IP 每分钟次数（会员登录与后台登录各自计数） |
+| `[rate_limit] admin_mfa_per_min` | 10 | 1–1000 | 是 | 否 | 后台第二因素校验每个 IP 每分钟次数 |
+| `[rate_limit] admin_reauth_per_min` | 10 | 1–1000 | 是 | 否 | 后台敏感操作重新认证每个 IP 每分钟次数 |
 
 定时任务（`jobs.py: JOBS`，`luzback.scheduler.Job` 元组，25-jobs 读取）：`admin_rbac.purge_sessions`（1 小时，删 30 天前撤销 / 过期会话）、`admin_rbac.purge_login_logs`（1 天）、`admin_rbac.purge_throttles`（1 小时）。
 
 部署：每次发布在 `alembic upgrade head` 后执行 `python -m admin_rbac.bootstrap --seed`（导入全部已启用模块登记权限码，再同步 `admin_permissions` 与缺失的内置角色，幂等）；首次部署 `python -m admin_rbac.bootstrap <账号> [姓名]` 创建首个超级管理员（打印一次性临时口令；已有在职超管时拒绝）。
+
+安全事件：登录失败 `security.authn_login_fail`、锁定 `security.authn_login_lock`、权限不足与门店越界 `security.authz_fail`（只记员工内部编号 `staff:<id>` 与来源 IP，不记用户名与口令）；员工请求的 `http.request` 汇总行带 `user_ref` 与单门店员工的 `store_id`。
 
 ## 10 错误码
 
@@ -260,7 +280,7 @@ POST /auth/login ─ 锁定? ──是──> 4290 Retry-After
 | 导出超限 | 4225 | `total` |
 | 泄露检查不可用（fail-closed） | 5020 | — |
 
-## 11 测试清单（`code/tests/`，共 115 个）
+## 11 测试清单（`code/tests/`）
 
 | 文件 | 覆盖 |
 |---|---|
@@ -288,7 +308,7 @@ POST /auth/login ─ 锁定? ──是──> 4290 Retry-After
 
 | 类型 | 内容 |
 |---|---|
-| 配置项 | §9 全部环境变量；代码中 `admin_rbac.set_config(**overrides)` |
+| 配置项 | §9：运行参数在 `[admin_rbac]`；`admin_rbac.set_config(...)` 只给启动与测试 |
 | 权限码 | 业务模块 `declare_permissions("module", [(code, 描述)])`；`seed.py:CATALOG` 只登记尚无代码模块的标准码（报表、配送、桌台排队、商品、库存、积分、活动、评价、门店、知识库、员工、设置） |
 | 内置角色 | `seed.py:BUILTIN_ROLES`：super_admin（`*`）、store_manager、front_desk、finance、operator，模式为精确码或 `module:*`（原样存储，不依赖模块导入顺序），覆盖 member / order / payment / after_sale / wallet / coupon / lottery / notification / member_card 等模块；只在首次种子时写入，之后在后台编辑 |
 | 钩子 | `set_breach_checker(fn(pw)->bool)`（泄露口令库，如 Pwned Passwords k-匿名）；`set_captcha_verifier(fn(token, ip)->bool)`（人机验证）；`set_clock(fn)`（测试） |

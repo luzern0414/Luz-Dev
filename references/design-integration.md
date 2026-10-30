@@ -6,17 +6,17 @@
 
 ## 1. 设计产物与稳定 ID
 
-Luz System 会话目录 `D:\Codes\skill输出\Luz-System\NNN-项目\`：
+Luz System 会话目录 `D:\Codes\skill输出\Luz-System\NNN-项目\`：成品 HTML 在根目录，过程文件都在 `raw/` 下（早期会话没有 `raw/`，`design_intake.py` 两种都认）。
 
 | 文件 | 内容 |
 |---|---|
-| `99-delivery/MANIFEST.json` | 会话、各阶段文件路径 |
-| `99-delivery/APPROVALS.json` | 各阶段状态、批准人、时间、文件 SHA-256；原型另有浏览器验收截图哈希 |
-| `01-system/03-system-architecture.html` | 功能、页面、导航、组件、操作、数据实体、流程、状态、集成、角色 |
-| `01-system/04-system-design.html` | 系统设计（页面细节、状态、权限） |
-| `02-visual/visual-board.html` | 视觉方向与令牌 |
-| `03-prototype/interactive-prototype.html` | 可交互原型（模拟数据） |
-| `HANDOFF.json`（可选） | 页面、流程、组件、素材、接口意图、假设、证据 |
+| `raw/99-delivery/MANIFEST.json` | 会话、各阶段文件路径 |
+| `raw/99-delivery/APPROVALS.json` | 各阶段状态、批准人、时间、文件 SHA-256；原型另有浏览器验收截图哈希 |
+| `raw/01-system/03-system-architecture.html` | 功能、页面、导航、组件、操作、数据实体、流程、状态、集成、角色 |
+| `raw/01-system/04-system-design.html` | 系统设计（页面细节、状态、权限） |
+| `raw/02-visual/visual-board.html` | 视觉方向与令牌 |
+| `raw/03-prototype/interactive-prototype.html` | 可交互原型（模拟数据） |
+| `HANDOFF.json`（可选，交给其他团队时才有） | 页面、流程、组件、素材、接口意图、假设、证据；没有时以上面的批准文件和绑定表为准 |
 
 | ID | 含义 | Luz Dev 的对应工作 |
 |---|---|---|

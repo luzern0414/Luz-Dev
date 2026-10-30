@@ -94,4 +94,4 @@
 |---|---|---|
 | 1 | | |
 
-## 10 验收（按底座 §17 检查清单逐项核对，并复制 `../backend/SPEC.md` §18 与 `$LUZ_DESIGN_ROOT/references/quality-review.md` 与 `$LUZ_DESIGN_ROOT/contracts/HANDOFF.md` 勾选）
+## 10 验收（按底座 §17 检查清单逐项核对，并复制 `../backend/SPEC.md` §18 应用验收；界面侧按 Luz-System `references/agent-design.html` 的质量门禁与 `references/handoff.md` 勾选）

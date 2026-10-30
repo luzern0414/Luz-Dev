@@ -20,10 +20,10 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-from luzback import AppError, ErrorCode, get_db, get_settings, idempotency_key, ok, run_idempotent
-from luzback.app import client_ip
+from luzback import AppError, ErrorCode, current_config, get_db, get_settings, idempotency_key, ok, run_idempotent
+from luzback.app import bind_identity, client_ip
 from luzback.db import get_session_factory
-from luzback.ratelimit import FixedWindowLimiter, RateLimitRule
+from luzback.ratelimit import RateLimitRule, fixed_window
 from luzback.security import NonceStore, verify_service_signature
 
 from admin_rbac import Staff, declare_permissions, require_permission
@@ -88,8 +88,12 @@ def _sms() -> SmsSender:
 _bearer = HTTPBearer(auto_error=False)
 
 
-def current_claims(creds: HTTPAuthorizationCredentials | None = Depends(_bearer), db: Any = Depends(get_db)) -> dict:
-    """令牌校验 + 会话有效性。CONTRACTS 允许直接调用 current_claims(creds)：此时自开会话做会话检查。"""
+def current_claims(creds: HTTPAuthorizationCredentials | None = Depends(_bearer), db: Any = Depends(get_db),
+                   request: Request = None) -> dict:  # type: ignore[assignment]
+    """令牌校验 + 会话有效性。CONTRACTS 允许直接调用 current_claims(creds)：此时自开会话做会话检查。
+
+    经 FastAPI 调用时把会员内部编号写进请求上下文（请求汇总行 http.request 带 user_ref）。
+    """
     if creds is None:
         raise AppError(ErrorCode.UNAUTHORIZED, "missing bearer token")
     claims = service.decode_access(creds.credentials)
@@ -98,6 +102,8 @@ def current_claims(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)
     else:
         with get_session_factory()() as own:
             service.assert_session_active(own, claims)
+    if isinstance(request, Request):
+        bind_identity(request, user_ref=claims.get("sub"))
     return claims
 
 
@@ -119,22 +125,24 @@ async def service_call(request: Request) -> str | None:
     verify_service_signature(
         secret, request.method, request.url.path, request.headers.get("X-Timestamp", ""),
         request.headers.get("X-Nonce", ""), body, request.headers.get("X-Signature", ""), _nonces,
-        skew_seconds=s.service_signature_skew_seconds,
+        skew_seconds=current_config().auth.service_signature_skew_s,
     )
     return name
 
 
 def rate_limit_rules(settings=None) -> list[RateLimitRule]:
-    """登录 / 短信 / 刷新限流声明（按 IP）；按手机号与每日上限在 service 内用数据库计数。"""
-    s = settings or get_settings()
+    """登录 / 短信 / 刷新限流声明（按 IP）；按手机号与每日上限在 service 内用数据库计数。
+
+    次数取运行配置 [rate_limit] login_per_min、sms_send_per_min、refresh_per_min（热加载生效）；settings 参数保留兼容，不再使用。
+    """
     return [
-        RateLimitRule("identity_login", FixedWindowLimiter(s.rate_login_per_minute, 60), path_prefix="/api/v1/app/auth/login",
+        RateLimitRule("identity_login", fixed_window(lambda cfg: cfg.rate_limit.login_per_min), path_prefix="/api/v1/app/auth/login",
                       methods=("POST",), key_fn=client_ip, retry_after=60),
-        RateLimitRule("identity_sms_login", FixedWindowLimiter(s.rate_login_per_minute, 60),
+        RateLimitRule("identity_sms_login", fixed_window(lambda cfg: cfg.rate_limit.login_per_min),
                       path_prefix="/api/v1/app/auth/sms/login", methods=("POST",), key_fn=client_ip, retry_after=60),
-        RateLimitRule("identity_sms_send", FixedWindowLimiter(5, 60), path_prefix="/api/v1/app/auth/sms/send",
-                      methods=("POST",), key_fn=client_ip, retry_after=60),
-        RateLimitRule("identity_refresh", FixedWindowLimiter(30, 60), path_prefix="/api/v1/app/auth/refresh",
+        RateLimitRule("identity_sms_send", fixed_window(lambda cfg: cfg.rate_limit.sms_send_per_min),
+                      path_prefix="/api/v1/app/auth/sms/send", methods=("POST",), key_fn=client_ip, retry_after=60),
+        RateLimitRule("identity_refresh", fixed_window(lambda cfg: cfg.rate_limit.refresh_per_min), path_prefix="/api/v1/app/auth/refresh",
                       methods=("POST",), key_fn=client_ip, retry_after=60),
     ]
 

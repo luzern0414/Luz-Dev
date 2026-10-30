@@ -43,7 +43,7 @@ def create_review(db: Session, user_id: int, order_id: int, rating: int, content
     if order is None:
         raise AppError(ErrorCode.NOT_FOUND, "order not found")
     if order.user_id != user_id:
-        raise AppError(ErrorCode.FORBIDDEN, "not your order")
+        raise AppError(ErrorCode.NOT_FOUND, "order not found")  # 他人订单与不存在一样返回 4040，不泄露存在性（SPEC §5）
     if order.status != COMPLETED:
         raise AppError(ErrorCode.BUSINESS_RULE, "only completed orders can be reviewed")
     review = Review(order_id=order_id, user_id=user_id, rating=rating, content=content,

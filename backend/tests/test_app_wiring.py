@@ -31,6 +31,10 @@ EXPECTED_ROUTES = {
     "admin_rbac": ("POST", "/api/v1/admin/auth/login"),
     "wechat_mp": ("POST", "/api/v1/webhooks/wechat-mp/push"),
     "member_card": ("GET", "/api/v1/app/member-cards/products"),
+    "app_settings": ("GET", "/api/v1/app/config"),
+    "app_settings-content": ("GET", "/api/v1/app/content"),
+    "app_settings-admin": ("PUT", "/api/v1/admin/content/texts/{key}"),
+    "app_settings-internal": ("POST", "/internal/config/reload"),
 }
 
 PROBE = r"""
@@ -48,7 +52,9 @@ for router in appmod.discover_routers(s):  # 与 build() 交给 create_app 的�
 schema_paths = sorted(appmod.app.openapi()["paths"])  # 应用里实际挂上的（文档可见的）路径
 rules = [r.name for r in appmod.build_rate_rules(s)]
 api_modules = [name for name in appmod.module_packages(s) if appmod._api_module(name) is not None]
-print(json.dumps({"routes": routes, "schema_paths": schema_paths, "rules": rules, "api_modules": api_modules}))
+from luzback.logging import flush_logging
+flush_logging()  # 启动日志先写完，探针输出单独成行
+sys.stdout.write(json.dumps({"routes": routes, "schema_paths": schema_paths, "rules": rules, "api_modules": api_modules}) + "\n")
 """
 
 
@@ -65,7 +71,12 @@ def _run(code_or_args: list[str], tmp_path: Path) -> str:
 @pytest.fixture(scope="module")
 def wiring(tmp_path_factory):
     out = _run(["-c", PROBE], tmp_path_factory.mktemp("app"))
-    return json.loads(out.strip().splitlines()[-1])
+    # 应用启动日志也写 stdout（JSON 一行一条，经队列异步写出，可能晚于探针输出）：按内容找探针那一行
+    for line in reversed(out.strip().splitlines()):
+        data = json.loads(line)
+        if "routes" in data:
+            return data
+    raise AssertionError("probe output not found")
 
 
 def test_every_module_with_api_is_mounted(wiring):
@@ -134,3 +145,14 @@ def test_jobs_list_covers_every_module(tmp_path):
     for expected_topic in ("payment.succeeded", "refund.succeeded", "lottery.prize_won", "order.cancelled"):
         assert expected_topic in subs, expected_topic
     assert "payment.refunded" not in subs  # 旧主题名：退款结果统一为 refund.succeeded / refund.failed / refund.abnormal
+
+
+def test_runtime_config_module_is_always_on():
+    """运行配置接口与加载记录（app_settings）不受 LUZ_FEATURES 影响：只启用 identity 时也装配。"""
+    sys.path[:0] = [str(BACKEND / "00-framework" / "code"), *map(str, sorted(BACKEND.glob("*/code")))]
+    from jobs.runner import module_packages
+    from luzback.config import Settings
+
+    packages = module_packages(Settings(features=("identity",)))
+    assert "app_settings" in packages and "identity" in packages
+    assert "order" not in packages

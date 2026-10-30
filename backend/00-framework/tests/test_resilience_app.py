@@ -12,7 +12,7 @@ from luzback.config import Settings
 from luzback.errors import AppError, ErrorCode
 from luzback.ratelimit import FixedWindowLimiter, RateLimitRule
 from luzback.resilience import Bulkhead, BreakerRegistry, CircuitBreaker, CircuitOpenError, TransientError, UpstreamError, resilient, retry_call
-from luzback.testing import FakeClock
+from luzback.testing import FakeClock, make_config_store
 
 
 def test_breaker_opens_half_opens_and_closes():
@@ -118,8 +118,8 @@ def _app():
     clock = FakeClock(0)
     rules = [RateLimitRule("login", FixedWindowLimiter(2, 60, clock=clock), path_prefix="/api/v1/app/login",
                            methods=("POST",), key_fn=lambda r: "ip", retry_after=60)]
-    settings = Settings(max_body_bytes=100)
-    app = create_app([router], settings=settings, rate_rules=rules)
+    store = make_config_store(values={"http": {"max_body_kb": 1}})  # 请求体上限是运行参数
+    app = create_app([router], settings=Settings(), rate_rules=rules, config=store)
     return app
 
 
@@ -135,7 +135,7 @@ def test_app_envelopes_headers_and_errors():
     assert missing.status_code == 400 and "Idempotency-Key" in missing.json()["message"]
     good = client.post("/api/v1/app/write", headers={"Idempotency-Key": "3fa85f64-5717-4562-b3fc-2c963f66afa6"})
     assert good.json()["data"].startswith("3fa85f64")
-    big = client.post("/api/v1/app/write", content=b"x" * 200, headers={"Content-Length": "200", "Idempotency-Key": "3fa85f64-5717-4562"})
+    big = client.post("/api/v1/app/write", content=b"x" * 2000, headers={"Content-Length": "2000", "Idempotency-Key": "3fa85f64-5717-4562"})
     assert big.status_code == 413 and big.json()["code"] == 4001
 
 

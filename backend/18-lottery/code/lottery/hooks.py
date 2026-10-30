@@ -110,14 +110,26 @@ def set_member_display(fn: MemberDisplay | None) -> None:
 
 
 def limiters() -> tuple[FixedWindowLimiter | None, FixedWindowLimiter | None]:
-    """进程内固定窗口限流（每分钟）；多实例部署换成 Redis 实现（同 allow 接口）通过 set_limiters 注入。"""
+    """进程内固定窗口限流（每分钟）；多实例部署换成 Redis 实现（同 allow 接口）通过 set_limiters 注入。
+
+    次数取运行配置 [lottery] member_draws_per_minute / ip_draws_per_minute（0 = 不限），热加载后下一次判断就按新值。
+    """
     global _member_limiter, _ip_limiter
     cfg = get_config()
-    if _member_limiter is None and cfg.member_draws_per_minute > 0:
-        _member_limiter = FixedWindowLimiter(cfg.member_draws_per_minute, 60)
-    if _ip_limiter is None and cfg.ip_draws_per_minute > 0:
-        _ip_limiter = FixedWindowLimiter(cfg.ip_draws_per_minute, 60)
-    return _member_limiter, _ip_limiter
+    _member_limiter = _limiter(_member_limiter, cfg.member_draws_per_minute)
+    _ip_limiter = _limiter(_ip_limiter, cfg.ip_draws_per_minute)
+    return (_member_limiter if cfg.member_draws_per_minute > 0 else None,
+            _ip_limiter if cfg.ip_draws_per_minute > 0 else None)
+
+
+def _limiter(current, limit: int):
+    if limit <= 0:
+        return current
+    if current is None:
+        return FixedWindowLimiter(limit, 60)
+    if isinstance(current, FixedWindowLimiter) and current.limit != limit:
+        current.limit = limit  # 计数保留，阈值换新
+    return current
 
 
 def set_limiters(member=None, ip=None) -> None:

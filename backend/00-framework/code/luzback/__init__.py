@@ -1,4 +1,4 @@
-"""luzback：后端基础框架（配置、数据库、错误码、安全、幂等、发件箱、弹性、队列、审计、分页、任务、应用工厂）。"""
+"""luzback：后端基础框架（部署配置与运行配置、日志与链路、数据库、错误码、安全、幂等、发件箱、弹性、队列、审计、分页、任务、应用工厂）。"""
 from .app import create_app, idempotency_key, optional_idempotency_key
 from .audit import AuditLog, write_audit
 from .config import Settings, get_settings, register_production_check, reload_settings
@@ -11,10 +11,11 @@ from .listing import Field, ListSpec, escape_like
 from .pagination import decode_cursor, encode_cursor, parse_limit, parse_page, parse_sort
 from .resilience import Bulkhead, BreakerRegistry, CircuitBreaker, CircuitOpenError, TransientError, UpstreamError, resilient, retry_call
 from .responses import cursor_page, offset_page, ok
+from .runtime_loader import ConfigStore, config_for, config_store, current_config, use_snapshot
 from .security import create_token, decode_token, hash_password, mask_phone, verify_password
 from .statemachine import StateMachine
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 
 __all__ = [
     "create_app", "idempotency_key", "optional_idempotency_key",
@@ -28,6 +29,7 @@ __all__ = [
     "decode_cursor", "encode_cursor", "parse_limit", "parse_page", "parse_sort",
     "Bulkhead", "BreakerRegistry", "CircuitBreaker", "CircuitOpenError", "TransientError", "UpstreamError", "resilient", "retry_call",
     "cursor_page", "offset_page", "ok",
+    "ConfigStore", "config_for", "config_store", "current_config", "use_snapshot",
     "create_token", "decode_token", "hash_password", "mask_phone", "verify_password",
     "StateMachine",
 ]

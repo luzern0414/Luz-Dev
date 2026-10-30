@@ -147,9 +147,9 @@ def test_purchase_rules(db, doubles):
     assert reason_of(lambda: svc.create_order(db, 1, pid, 5, at=T0))[1] == "per_member_limit"
     single = product(db, store_scope="single", store_id=7)
     assert reason_of(lambda: svc.create_order(db, 1, single, 5, at=T0))[1] == "store_not_applicable"
-    mconfig.CONFIG.stop_prepaid = True
+    mconfig.set_config(stop_prepaid=True)
     assert reason_of(lambda: svc.create_order(db, 2, single, 7, at=T0))[1] == "prepaid_stopped"
-    mconfig.CONFIG.stop_prepaid = False
+    mconfig.set_config(stop_prepaid=False)
     doubles.fail = True
     order = svc.create_order(db, 2, single, 7)
     db.commit()
@@ -573,7 +573,7 @@ def test_transferred_card_refunds_offline(db):
 
 
 def test_auto_approve_config(db):
-    mconfig.CONFIG.refund_requires_approval = False
+    mconfig.set_config(refund_requires_approval=False)
     card = buy(db, product(db))
     assert svc.request_refund(db, card, "customer", "x", "user:1", user_id=1, at=T0)["status"] == "processing"
 
